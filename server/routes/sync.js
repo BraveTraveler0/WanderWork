@@ -60,7 +60,11 @@ router.get('/airtable/test', async (req, res) => {
       });
     }
 
-    const url = `https://api.airtable.com/v0/${baseId}/FreshJobs?maxRecords=1`;
+    const jobsTable = process.env.AIRTABLE_JOBS_TABLE_ID || process.env.AIRTABLE_JOBS_TABLE || 'FreshJobs';
+    const jobsView = process.env.AIRTABLE_JOBS_VIEW_ID || process.env.AIRTABLE_JOBS_VIEW || '';
+    const params = new URLSearchParams({ maxRecords: '1' });
+    if (jobsView) params.append('view', jobsView);
+    const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(jobsTable)}?${params.toString()}`;
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,

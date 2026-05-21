@@ -12,6 +12,8 @@ const mongoose = require('mongoose');
 // Configuration
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_JOBS_TABLE = process.env.AIRTABLE_JOBS_TABLE_ID || process.env.AIRTABLE_JOBS_TABLE || 'FreshJobs';
+const AIRTABLE_JOBS_VIEW = process.env.AIRTABLE_JOBS_VIEW_ID || process.env.AIRTABLE_JOBS_VIEW || '';
 const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
 const MONGO_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/aon';
 const crypto = require('crypto');
@@ -149,12 +151,16 @@ const updateAirtableCandidateFields = async (recordId, fields) => {
 
 // Table names and IDs in Airtable
 const TABLES = {
-  JOBS: 'FreshJobs',
+  JOBS: AIRTABLE_JOBS_TABLE,
   CANDIDATES: 'Candidates',
   APPLICATIONS: 'Applications',
   SUBMISSIONS_LOG: 'SubmissionsLog',
   APPLY_QUEUE: 'ApplyQueue',
   CONTACTS: 'Contacts',
+};
+
+const TABLE_VIEWS = {
+  [TABLES.JOBS]: AIRTABLE_JOBS_VIEW,
 };
 
 /**
@@ -173,6 +179,8 @@ async function fetchFromAirtable(tableName) {
     do {
       const params = new URLSearchParams();
       params.append('pageSize', '100');
+      const view = TABLE_VIEWS[tableName];
+      if (view) params.append('view', view);
       if (offset) params.append('offset', offset);
 
       const response = await fetch(`${url}?${params.toString()}`, {
