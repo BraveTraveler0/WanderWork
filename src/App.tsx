@@ -433,8 +433,7 @@ function App() {
     return new URLSearchParams(window.location.search).get('signup') === 'true'
   })
   const [showForgotPassword, setShowForgotPassword] = useState(false)
-  const buildFallbackCandidate = (): Candidate | null => {
-    if (!_user?.email) return null
+  const buildFallbackCandidate = (): Candidate => {
     const storedProfileRaw = getMigratedStorageItem('wanderworkProfile', ['wanderHireProfile'])
     let storedProfile: any = null
     if (storedProfileRaw) {
@@ -444,13 +443,33 @@ function App() {
         storedProfile = null
       }
     }
-    const displayName = _user.displayName || storedProfile?.name || _user.email
+
+    const storedUserRaw = getMigratedStorageItem('wanderworkUser', ['wanderHireUser'])
+    let storedUser: any = _user
+    if (!storedUser && storedUserRaw) {
+      try {
+        storedUser = JSON.parse(storedUserRaw)
+      } catch {
+        storedUser = null
+      }
+    }
+
+    const displayName =
+      storedUser?.displayName ||
+      storedProfile?.fullName ||
+      storedProfile?.name ||
+      storedUser?.email ||
+      storedProfile?.email ||
+      'Wanderwork Member'
     const nameParts = String(displayName || '').trim().split(' ')
-    const firstName = nameParts[0] || 'User'
-    const lastName = nameParts.slice(1).join(' ') || ''
+    const firstName = storedProfile?.firstName || storedUser?.firstName || nameParts[0] || 'Wanderwork'
+    const lastName = storedProfile?.lastName || storedUser?.lastName || nameParts.slice(1).join(' ') || 'Member'
+    const resumeUrl = typeof storedProfile?.resume === 'string'
+      ? storedProfile.resume
+      : storedProfile?.resume?.url || storedProfile?.resumeLink || ''
     return {
-      _id: _user._id || _user.id,
-      email: _user.email,
+      _id: storedUser?._id || storedUser?.id || 'local-profile',
+      email: storedUser?.email || storedProfile?.email || '',
       firstName,
       lastName,
       phone: storedProfile?.phone || '',
@@ -465,7 +484,7 @@ function App() {
         storedProfile.calendly ? { urlName: 'Calendly', urlAddress: storedProfile.calendly } : null
       ].filter(Boolean) : [],
       resume: storedProfile?.resume || {},
-      resumeLink: storedProfile?.resume,
+      resumeLink: resumeUrl,
       status: 'active',
       paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     }
@@ -893,10 +912,8 @@ function App() {
   }
 
   if (currentPage === 'profile') {
-    const profileCandidate = safeData?.Candidates?.[0]
-    if (profileCandidate) {
-      return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} />
-    }
+    const profileCandidate = safeData?.Candidates?.[0] || buildFallbackCandidate()
+    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} />
   }
 
   console.log('About to render main dashboard, loading:', loading, 'data:', !!data, 'transformedJobs:', transformedJobs.length)

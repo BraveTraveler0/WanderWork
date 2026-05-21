@@ -29,7 +29,7 @@ function parseExperience(text: string): ExperienceEntry[] {
     const rest = lines.slice(1)
     for (const line of rest) {
       if (!entry.company && !dateRe.test(line.slice(0, 6))) {
-        const parts = line.split('·').map((p) => p.trim())
+        const parts = line.split(/\s*(?:\u00b7|\u00c2\u00b7|\|| - )\s*/).map((p) => p.trim())
         entry.company = parts[0]
         if (parts[1]) entry.type = parts[1]
         continue
@@ -84,6 +84,59 @@ function extractSummary(resumeText: string): string {
     out.push(lines[i])
   }
   return out.join('\n').trim()
+}
+
+function toTextArray(value: unknown): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => toTextArray(item)).map((item) => item.trim()).filter(Boolean)
+  }
+  if (typeof value === 'object') {
+    const item = value as any
+    const text = item.title || item.name || item.value || item.label || item.urlAddress || ''
+    return text ? [String(text).trim()] : []
+  }
+  return String(value).split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function getLocationText(value: unknown): string {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  const loc = Array.isArray(value) ? value[0] : value
+  if (!loc || typeof loc !== 'object') return ''
+  const location = loc as any
+  return [
+    location.locationName,
+    [location.city, location.state].filter(Boolean).join(', '),
+    location.country,
+  ].filter(Boolean)[0] || ''
+}
+
+function getProfileLinks(candidate: any) {
+  const links = Array.isArray(candidate.urls) ? candidate.urls : []
+  const normalized = links
+    .map((link: any) => ({
+      urlName: link?.urlName || link?.name || link?.label || 'Link',
+      urlAddress: link?.urlAddress || link?.url || link?.href || '',
+    }))
+    .filter((link: any) => link.urlAddress)
+
+  const directLinks = [
+    ['LinkedIn', candidate.linkedin || candidate.linkedinUrl || candidate.linkedInUrl],
+    ['Portfolio', candidate.portfolio || candidate.portfolioUrl],
+    ['GitHub', candidate.github || candidate.githubUrl],
+    ['Calendly', candidate.calendly || candidate.calendlyUrl],
+  ]
+    .filter(([, url]) => url)
+    .map(([urlName, urlAddress]) => ({ urlName, urlAddress }))
+
+  return [...normalized, ...directLinks]
+}
+
+function getResumeUrl(candidate: any): string {
+  if (typeof candidate.resumeLink === 'string') return candidate.resumeLink
+  if (typeof candidate.resume === 'string') return candidate.resume
+  return candidate.resume?.url || candidate.resume?.urlAddress || ''
 }
 
 function InitialAvatar({ name, size = 72 }: { name: string; size?: number }) {
@@ -157,29 +210,29 @@ function EmptyState({ message }: { message: string }) {
 
 export default function ProfilePage({ candidate, onBack }: { candidate: Candidate; onBack?: () => void }) {
   const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const candidateData = candidate as any
 
-  const fullName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ')
-  const headline = candidate.targetRoles?.[0] || ''
-  const locationStr = (() => {
-    const loc = candidate.location?.[0]
-    if (!loc) return ''
-    return [loc.city, loc.state].filter(Boolean).join(', ')
-  })()
+  const firstName = candidateData.firstName || candidateData.first_name || ''
+  const lastName = candidateData.lastName || candidateData.last_name || ''
+  const fullName = [firstName, lastName].filter(Boolean).join(' ') || candidateData.name || 'Wanderwork Member'
+  const targetRoles = toTextArray(candidateData.targetRoles || candidateData.target_roles || candidateData.targetRole)
+  const headline = targetRoles[0] || candidateData.title || 'Remote job seeker'
+  const locationStr = getLocationText(candidateData.location)
 
-  const allSkills = [...new Set([...(candidate.skills || []), ...(candidate.skills_2 || [])])]
+  const allSkills = [...new Set([...toTextArray(candidateData.skills), ...toTextArray(candidateData.skills_2)])]
 
-  const summary = extractSummary(candidate.resume_text || '')
-  const experiences = parseExperience(candidate.work_experience || '')
-  const educations = parseEducation(candidate.education || '')
+  const summary = candidateData.summary || candidateData.bio || extractSummary(candidateData.resume_text || '')
+  const experiences = parseExperience(candidateData.work_experience || candidateData.experience || '')
+  const educations = parseEducation(candidateData.education || '')
 
-  const links = (candidate.urls || []).filter((u: any) => u?.urlAddress)
+  const links = getProfileLinks(candidateData)
 
   const summaryLimit = 300
   const summaryTrimmed = summary.length > summaryLimit && !summaryExpanded
     ? summary.slice(0, summaryLimit) + '...'
     : summary
 
-  const hasResume = !!(candidate.resumeLink || candidate.resume_text)
+  const hasResume = !!(getResumeUrl(candidateData) || candidateData.resume_text)
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
@@ -247,9 +300,9 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
-            {candidate.profileImage ? (
+            {candidateData.profileImage ? (
               <img
-                src={candidate.profileImage}
+                src={candidateData.profileImage}
                 alt={fullName}
                 style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
               />
@@ -302,14 +355,15 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
                 fontFamily: 'Manrope',
               }}
             >
-              Upload your resume in Settings → your work experience, education, and skills will auto-fill here.
+              Upload your resume in Settings {'->'} your work experience, education, and skills will auto-fill here.
             </div>
           )}
         </div>
 
         {/* About */}
-        {summary && (
-          <Section icon={<User size={18} />} title="About">
+        <Section icon={<User size={18} />} title="About">
+          {summary ? (
+            <>
             <p
               style={{
                 fontSize: 14,
@@ -339,13 +393,16 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
                 {summaryExpanded ? 'show less' : '...see more'}
               </button>
             )}
-          </Section>
-        )}
+            </>
+          ) : (
+            <EmptyState message="No summary yet - upload your resume to auto-fill." />
+          )}
+        </Section>
 
         {/* Experience */}
         <Section icon={<Briefcase size={18} />} title="Experience">
           {experiences.length === 0 ? (
-            <EmptyState message="No experience entries yet — upload your resume to auto-fill." />
+            <EmptyState message="No experience entries yet - upload your resume to auto-fill." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               {experiences.map((exp, i) => (
@@ -378,7 +435,7 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
                       </div>
                       {(exp.company || exp.type) && (
                         <div style={{ fontSize: 13, color: '#444', marginBottom: 2 }}>
-                          {[exp.company, exp.type].filter(Boolean).join(' · ')}
+                          {[exp.company, exp.type].filter(Boolean).join(' - ')}
                         </div>
                       )}
                       {exp.dates && (
@@ -402,7 +459,7 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
         {/* Education */}
         <Section icon={<GraduationCap size={18} />} title="Education">
           {educations.length === 0 ? (
-            <EmptyState message="No education entries yet — upload your resume to auto-fill." />
+            <EmptyState message="No education entries yet - upload your resume to auto-fill." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               {educations.map((edu, i) => (
@@ -459,7 +516,7 @@ export default function ProfilePage({ candidate, onBack }: { candidate: Candidat
         {/* Skills */}
         <Section icon={<Wrench size={18} />} title="Skills">
           {allSkills.length === 0 ? (
-            <EmptyState message="No skills yet — upload your resume or add them in Settings." />
+            <EmptyState message="No skills yet - upload your resume or add them in Settings." />
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {allSkills.map((skill) => (
