@@ -584,7 +584,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
           <button
             onClick={() => setShowInterestedOnly((v) => !v)}
             className="flex items-center gap-3 px-2 py-1 rounded-[12px] transition-colors"
-            style={{ border: '1px solid #306770', background: showInterestedOnly ? '#30677010' : 'transparent' }}
+            style={{ border: '1px solid #306770', background: 'white' }}
           >
             <span className="text-[12px]" style={{ color: '#306770' }}>Interested</span>
             <div className="relative w-[32px] h-[22px]">
@@ -765,6 +765,20 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
 
       {/* Job Cards */}
       <div className="flex flex-col gap-5">
+        {showInterestedOnly && visibleJobs.length === 0 && (
+          <div className="rounded-[15px] bg-white p-6 text-center border" style={{ borderColor: '#E5E7EB' }}>
+            <p className="text-[14px] font-medium" style={{ color: '#306770' }}>
+              Nothing to see here yet! Favorite your next dream job and it'll show up here.
+            </p>
+          </div>
+        )}
+        {!showInterestedOnly && showMatchedOnly && visibleJobs.length === 0 && (
+          <div className="rounded-[15px] bg-white p-6 text-center border" style={{ borderColor: '#E5E7EB' }}>
+            <p className="text-[14px] font-medium" style={{ color: '#306770' }}>
+              Nothing to see here yet, Come back later to catch your dream job!
+            </p>
+          </div>
+        )}
         {visibleJobs.map((job: any, _jobIndex: number) => {
           const isInterested = isJobInterested(job)
           const isNew = isNewJob(job)
