@@ -86,18 +86,28 @@ const getDocumentUrl = (doc: any) => {
   return doc.url || doc.link || doc.href || ''
 }
 
+const getSavedJson = <T,>(key: string, fallback: T): T => {
+  try {
+    const saved = localStorage.getItem(key)
+    if (!saved) return fallback
+    return JSON.parse(saved)
+  } catch {
+    localStorage.removeItem(key)
+    return fallback
+  }
+}
+
 const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpdate }: SettingsPageProps) => {
   const candidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
-  const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem('wanderworkProfile')
-    return saved ? JSON.parse(saved) : {
+  const [profile, setProfile] = useState<any>(() => {
+    return getSavedJson('wanderworkProfile', {
       fullName: 'John Doe',
       email: 'john@example.com',
       phone: '+1 (555) 123-4567',
       location: 'San Francisco, CA',
       resume: null,
       coverLetter: null,
-    }
+    })
   })
 
   const [storedPassword, setStoredPassword] = useState(() => localStorage.getItem('wanderworkPassword') || 'password123')
@@ -109,10 +119,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const [notifications, setNotifications] = useState<{ jobAlerts: boolean; weeklyDigest: boolean }>(() => {
-    try {
-      const saved = localStorage.getItem('wanderworkNotifications')
-      return saved ? JSON.parse(saved) : { jobAlerts: true, weeklyDigest: true }
-    } catch { return { jobAlerts: true, weeklyDigest: true } }
+    return getSavedJson('wanderworkNotifications', { jobAlerts: true, weeklyDigest: true })
   })
   const [upgradeLoading, setUpgradeLoading] = useState<StripePlan | null>(null)
   const handleUpgrade = async (plan: StripePlan) => {
