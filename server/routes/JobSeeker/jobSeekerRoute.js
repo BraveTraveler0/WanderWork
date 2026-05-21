@@ -106,4 +106,7 @@ router.get('/test-email', async (req, res) => {
     }
 })
 
+router.route('/send-welcome-email')
+    .post(jobSeekerController.sendPlanWelcomeEmail)
+
 module.exports = router

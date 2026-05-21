@@ -46,6 +46,10 @@ export interface Candidate {
   recruiterContactsLeft?: number;
   recruiterContactsMax?: number;
   recruiterContactsUpdatedAt?: string;
+  resume_text?: string;
+  work_experience?: string;
+  education?: string;
+  skills_2?: string[];
 }
 
 export interface Application {
@@ -176,7 +180,11 @@ export async function uploadCandidateResume(email: string, file: File): Promise<
     method: 'POST',
     body: form
   });
-  if (!res.ok) throw new Error(`Upload failed ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try { const j = await res.json(); if (j?.message) msg = j.message; } catch {}
+    throw new Error(msg);
+  }
   return res.json();
 }
 

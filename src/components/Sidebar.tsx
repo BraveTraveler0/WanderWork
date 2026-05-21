@@ -1,4 +1,4 @@
-import { ChevronDown, Pencil, X, Check, Upload } from 'lucide-react'
+import { ChevronDown, Eye, Pencil, X, Check, Upload } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { updateCandidateSkills, updateJobSeeker, uploadCandidateResume } from '../api/jobseeker.ts'
 
@@ -6,6 +6,25 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
   const [isExpanded, setIsExpanded] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
   const candidate = data?.Candidates?.[0]
+
+  const getDocumentName = (doc: any, fallback = 'Resume.docx') => {
+    if (!doc) return fallback
+    if (typeof doc === 'string') {
+      try {
+        if (/^https?:\/\//i.test(doc)) {
+          return decodeURIComponent(new URL(doc).pathname.split('/').pop() || fallback)
+        }
+      } catch {}
+      return doc
+    }
+    return doc.originalname || doc.filename || doc.name || fallback
+  }
+
+  const getDocumentUrl = (doc: any) => {
+    if (!doc) return ''
+    if (typeof doc === 'string' && /^https?:\/\//i.test(doc)) return doc
+    return doc.url || doc.link || doc.href || ''
+  }
   
   const [profile, setProfile] = useState<any>(() => {
     const rawCandidate = data?.Candidates?.[0]
@@ -20,7 +39,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       portfolio: rawCandidate.urls?.find((u: any) => u.urlName === 'Portfolio')?.urlAddress || 'LinkedinURL.com',
       github: rawCandidate.urls?.find((u: any) => u.urlName === 'GitHub')?.urlAddress || 'GithubURL.com',
       calendly: rawCandidate.urls?.find((u: any) => u.urlName === 'Calendly')?.urlAddress || 'CalendlyURL.com',
-      resume: rawCandidate.resumeLink || rawCandidate.resume?.filename || 'Resume.docx'
+      resume: rawCandidate.resume || rawCandidate.resumeLink || null
     } : {
       name: 'User',
       title: 'Job Seeker',
@@ -32,7 +51,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       portfolio: 'LinkedinURL.com',
       github: 'GithubURL.com',
       calendly: 'CalendlyURL.com',
-      resume: 'Resume.docx'
+      resume: null
     }
   })
 
@@ -53,7 +72,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
         portfolio: rawCandidate.urls?.find((u: any) => u.urlName === 'Portfolio')?.urlAddress || 'LinkedinURL.com',
         github: rawCandidate.urls?.find((u: any) => u.urlName === 'GitHub')?.urlAddress || 'GithubURL.com',
         calendly: rawCandidate.urls?.find((u: any) => u.urlName === 'Calendly')?.urlAddress || 'CalendlyURL.com',
-        resume: rawCandidate.resumeLink || rawCandidate.resume?.filename || 'Resume.docx'
+        resume: rawCandidate.resume || rawCandidate.resumeLink || null
       }
       setProfile(newProfile)
       setEditForm(newProfile)
@@ -162,16 +181,28 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     if (!file || !profile.email) return
     setResumeUploading(true)
     try {
-      await uploadCandidateResume(profile.email, file)
-      const newProfile = { ...profile, resume: file.name }
+      const result = await uploadCandidateResume(profile.email, file)
+      const uploadedResume = result?.candidate?.resume || result?.candidate?.resumeLink || {
+        filename: file.name,
+        originalname: file.name,
+      }
+      const newProfile = { ...profile, resume: uploadedResume }
       setProfile(newProfile)
       localStorage.setItem('wanderworkProfile', JSON.stringify(newProfile))
-      onCandidateUpdate?.({ resumeLink: file.name })
+      onCandidateUpdate?.(result?.candidate || { resume: uploadedResume, resumeLink: getDocumentUrl(uploadedResume) })
     } catch (err) {
       console.warn('Resume upload failed', err)
     } finally {
       setResumeUploading(false)
       if (resumeInputRef.current) resumeInputRef.current.value = ''
+    }
+  }
+
+  const openResume = () => {
+    const resumeDoc = profile.resume || candidate?.resume || candidate?.resumeLink
+    const url = getDocumentUrl(resumeDoc)
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
   }
 
@@ -385,7 +416,29 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
           <div className="w-full lg:w-[210px] group/resume" style={{ fontFamily: 'Manrope', color: '#787878' }}>
             <p className="text-[12px] mb-1">Resume</p>
             <div className="flex items-center gap-2">
-              <p className="text-[16px] flex-1 truncate" title={profile.resume}>{profile.resume || 'No file uploaded'}</p>
+              <button
+                type="button"
+                onClick={openResume}
+                disabled={!getDocumentUrl(profile.resume || candidate?.resume || candidate?.resumeLink)}
+                className="text-[16px] flex-1 truncate text-left disabled:cursor-default"
+                title={getDocumentName(profile.resume || candidate?.resume || candidate?.resumeLink, 'No file uploaded')}
+                style={{ color: '#787878' }}
+              >
+                {profile.resume || candidate?.resume || candidate?.resumeLink
+                  ? getDocumentName(profile.resume || candidate?.resume || candidate?.resumeLink)
+                  : 'No file uploaded'}
+              </button>
+              <button
+                onClick={openResume}
+                disabled={!getDocumentUrl(profile.resume || candidate?.resume || candidate?.resumeLink)}
+                title="View uploaded resume"
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 opacity-0 group-hover/resume:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ background: '#EEF4F5', color: '#306770', border: '1px solid #C8DDE0' }}
+                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = '#D4E8EC' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#EEF4F5' }}
+              >
+                <Eye size={13} />
+              </button>
               <button
                 onClick={() => resumeInputRef.current?.click()}
                 disabled={resumeUploading}
@@ -523,9 +576,9 @@ const InfoField = ({ label, value, wide, hasArrow, onEdit }: { label: string, va
         }
       }}
     >
-      <p className="text-[12px] mb-1">{label}</p>
+      <p className="text-[12px] mb-1" style={{ color: '#787878' }}>{label}</p>
       <div className="flex items-center justify-between">
-        <p className={`text-[16px] ${wide ? 'lg:w-[230px]' : ''}`}>{value}</p>
+        <p className={`text-[13px] ${wide ? 'lg:w-[230px]' : ''}`} style={{ color: '#1A1A2E' }}>{value}</p>
         <div className="flex items-center gap-2">
           {hasArrow && <ChevronDown size={16} style={{ color: '#306770' }} />}
           {!hasArrow && (

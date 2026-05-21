@@ -648,7 +648,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
                 <select
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value)}
-                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[150px] sm:w-[170px] lg:w-[160px]"
+                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[150px] sm:w-[170px] lg:w-[160px] outline-none"
                   style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
                 >
                   <option value="today">Today</option>
@@ -1055,17 +1055,19 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
                   e.stopPropagation()
                   onCustomRequest()
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-[10px] border-2 transition-all hover:shadow-md"
-                style={{ 
-                  borderColor: '#306770', 
-                  color: '#306770', 
+                className="flex items-center gap-2 px-4 py-2 rounded-[10px] transition-all"
+                style={{
+                  border: '1px solid rgba(48,103,112,0.2)',
+                  color: '#306770',
                   background: 'white'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#30677010'
+                  e.currentTarget.style.border = '1.5px solid #306770'
+                  e.currentTarget.style.background = '#30677008'
                   e.currentTarget.style.transform = 'translateY(-1px)'
                 }}
                 onMouseLeave={(e) => {
+                  e.currentTarget.style.border = '1px solid rgba(48,103,112,0.2)'
                   e.currentTarget.style.background = 'white'
                   e.currentTarget.style.transform = 'translateY(0)'
                 }}

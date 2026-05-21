@@ -4,23 +4,14 @@
  */
 
 const asyncHandler = require('express-async-handler');
-const mongoose = require('mongoose');
-
-// Use dynamic models to avoid strict schema validation
-const getCandidateModel = () => {
-  return mongoose.models.Candidate || 
-         mongoose.model('Candidate', new mongoose.Schema({}, { 
-           strict: false, 
-           collection: 'jobseeker.candidates' 
-         }));
-};
+const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
 
 /**
  * Map Tally field labels to MongoDB candidate schema
  */
 const FIELD_MAPPING = {
-  'First Name': 'first_name',
-  'Last Name': 'last_name',
+  'First Name': 'firstName',
+  'Last Name': 'lastName',
   'Email': 'email',
   'Email Address': 'email',
   'Phone': 'phone',
@@ -28,23 +19,38 @@ const FIELD_MAPPING = {
   'Location': 'location',
   'City': 'city',
   'State': 'state',
-  'Target Role': 'target_role',
-  'Desired Role': 'target_role',
-  'Job Title': 'target_role',
+  'Target Role': 'targetRoles',
+  'Desired Role': 'targetRoles',
+  'Job Title': 'targetRoles',
   'Seniority': 'seniority',
   'Experience Level': 'seniority',
   'Skills': 'skills',
-  'LinkedIn': 'linkedin_url',
-  'LinkedIn URL': 'linkedin_url',
-  'Portfolio': 'portfolio_url',
-  'Portfolio URL': 'portfolio_url',
-  'Website': 'portfolio_url',
-  'Calendly': 'calendly_url',
-  'Calendly URL': 'calendly_url',
-  'Resume Link': 'resume_link',
-  'Resume': 'resume_link',
+  'LinkedIn': 'linkedin',
+  'LinkedIn URL': 'linkedin',
+  'Portfolio': 'portfolio',
+  'Portfolio URL': 'portfolio',
+  'Website': 'portfolio',
+  'Calendly': 'calendly',
+  'Calendly URL': 'calendly',
+  'Resume Link': 'resumeLink',
+  'Resume': 'resumeLink',
   'Resume Text': 'resume_text',
   'Resume Content': 'resume_text',
+};
+
+const asArray = (value) => {
+  if (Array.isArray(value)) return value.flatMap(asArray).filter(Boolean);
+  if (typeof value === 'string') {
+    return value.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return value ? [String(value)] : [];
+};
+
+const extractUploadUrl = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return extractUploadUrl(value[0]);
+  return value.url || value.link || value.href || value.name || value.filename || '';
 };
 
 /**
@@ -52,15 +58,8 @@ const FIELD_MAPPING = {
  */
 const transformTallyData = (tallyPayload) => {
   const fields = tallyPayload.data?.fields || [];
-  const candidateData = {
-    source: 'tally',
+  const raw = {
     status: 'processing',
-    tokens_balance: 100,
-    tokens_used: 0,
-    synced: false,
-    createdAt: tallyPayload.data?.createdAt || new Date().toISOString(),
-    tallyResponseId: tallyPayload.data?.responseId,
-    tallySubmissionId: tallyPayload.data?.submissionId,
   };
 
   // Map Tally fields to candidate schema
@@ -73,28 +72,64 @@ const transformTallyData = (tallyPayload) => {
       value = Array.isArray(value) ? value : [value];
     }
 
-    // Skills: split comma-separated values into array
-    if (mappedKey === 'skills' && typeof value === 'string') {
-      value = value.split(',').map(s => s.trim()).filter(Boolean);
+    if (['skills', 'targetRoles', 'seniority'].includes(mappedKey)) {
+      value = asArray(value);
+    }
+
+    if (mappedKey === 'resumeLink') {
+      value = extractUploadUrl(value);
     }
 
     // Location: handle as string or create location object
     if (mappedKey === 'location' && typeof value === 'string') {
-      candidateData.location = value;
+      raw.location = value;
     } else if (mappedKey === 'city' || mappedKey === 'state') {
-      if (!candidateData.location) candidateData.location = {};
-      candidateData.location[mappedKey] = value;
+      if (!raw.location || typeof raw.location === 'string') raw.location = { locationName: raw.location || '' };
+      raw.location[mappedKey] = value;
     } else {
-      candidateData[mappedKey] = value;
+      raw[mappedKey] = value;
     }
   });
 
-  // Generate candidate_id from email if not present
-  if (candidateData.email && !candidateData.candidate_id) {
-    candidateData.candidate_id = `tally_${candidateData.email.split('@')[0]}_${Date.now()}`;
-  }
+  const email = String(raw.email || '').trim().toLowerCase();
+  const emailName = email.split('@')[0] || 'Candidate';
+  const locationName = typeof raw.location === 'string'
+    ? raw.location
+    : raw.location?.locationName || [raw.location?.city, raw.location?.state].filter(Boolean).join(', ');
 
-  return candidateData;
+  const urls = [
+    raw.linkedin ? { urlName: 'LinkedIn', urlAddress: raw.linkedin } : null,
+    raw.portfolio ? { urlName: 'Portfolio', urlAddress: raw.portfolio } : null,
+    raw.calendly ? { urlName: 'Calendly', urlAddress: raw.calendly } : null,
+  ].filter(Boolean);
+
+  const resumeLink = raw.resumeLink || '';
+
+  return {
+    firstName: raw.firstName || emailName,
+    lastName: raw.lastName || 'Candidate',
+    email,
+    phone: raw.phone || 'Not provided',
+    location: [{ locationName: locationName || 'Remote', city: raw.location?.city || locationName || 'Remote', state: raw.location?.state || '' }],
+    targetRoles: asArray(raw.targetRoles),
+    seniority: asArray(raw.seniority),
+    skills: asArray(raw.skills),
+    urls,
+    resume: resumeLink ? { url: resumeLink, filename: resumeLink.split('/').pop() || 'Resume' } : {},
+    resumeLink,
+    resume_text: raw.resume_text || '',
+    status: 'active',
+    paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    tokenBalance: 30,
+    tokensUsed: 0,
+    creditsBalance: 30,
+    creditsUsed: 0,
+    plan: 'free',
+    recruiterContactsLeft: 10,
+    recruiterContactsUpdatedAt: new Date(),
+    tallyResponseId: tallyPayload.data?.responseId,
+    tallySubmissionId: tallyPayload.data?.submissionId,
+  };
 };
 
 /**
@@ -126,9 +161,9 @@ const handleTallySubmission = asyncHandler(async (req, res) => {
     const candidateData = transformTallyData(req.body);
     console.log('📝 Transformed candidate data:', {
       email: candidateData.email,
-      first_name: candidateData.first_name,
-      last_name: candidateData.last_name,
-      target_role: candidateData.target_role,
+      firstName: candidateData.firstName,
+      lastName: candidateData.lastName,
+      targetRoles: candidateData.targetRoles,
     });
 
     // Validate required fields
@@ -139,19 +174,14 @@ const handleTallySubmission = asyncHandler(async (req, res) => {
       });
     }
 
-    // Get or create candidate model
-    const Candidate = getCandidateModel();
-
     // Check if candidate already exists
-    const existingCandidate = await Candidate.findOne({ 
-      email: candidateData.email 
-    });
+    const existingCandidate = await Candidates.findOne({ email: candidateData.email });
 
     let candidate;
     if (existingCandidate) {
       // Update existing candidate
       console.log('✓ Updating existing candidate:', candidateData.email);
-      candidate = await Candidate.findOneAndUpdate(
+      candidate = await Candidates.findOneAndUpdate(
         { email: candidateData.email },
         { 
           ...candidateData,
@@ -162,7 +192,7 @@ const handleTallySubmission = asyncHandler(async (req, res) => {
     } else {
       // Create new candidate
       console.log('✓ Creating new candidate:', candidateData.email);
-      candidate = await Candidate.create(candidateData);
+      candidate = await Candidates.create(candidateData);
     }
 
     console.log('✅ Candidate saved to MongoDB:', candidate._id);

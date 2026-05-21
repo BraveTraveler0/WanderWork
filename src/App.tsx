@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Users } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
@@ -6,9 +6,14 @@ import JobFeed from './components/JobFeed'
 import StatsPanel from './components/StatsPanel'
 import SettingsPage from './components/SettingsPage'
 import LoginPage from './components/LoginPage'
+import SignupPage from './components/SignupPage'
+import ForgotPasswordPage from './components/ForgotPasswordPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import TermsOfServicePage from './components/TermsOfServicePage'
 import PlansPage from './components/PlansPage'
+import ProfilePage from './components/ProfilePage'
+
+const LandingPage = lazy(() => import('./landing/LandingPage'))
 import {
   getAllJobSeekerData,
   getJobs,
@@ -80,9 +85,20 @@ const seedJobs: Job[] = [
   }
 ]
 
+const JOB_BOARDS = new Set([
+  'linkedin', 'indeed', 'glassdoor', 'monster', 'ziprecruiter', 'wellfound', 'angellist',
+  'greenhouse', 'lever', 'workday', 'ashby', 'smartrecruiters', 'jobvite', 'icims',
+  'bamboohr', 'recruitee', 'workable', 'personio', 'teamtailor', 'jobs', 'careers',
+  'remote', 'remoteok', 'weworkremotely', 'builtin', 'dice', 'simplyhired',
+])
+
 const isUnknownCompany = (value?: string) => {
   if (!value) return true
-  return /^(unknown|n\/a|na|none|null|undefined|\-|tbd)$/i.test(value.trim())
+  const v = value.trim().toLowerCase()
+  if (/^(unknown|n\/a|na|none|null|undefined|\-|tbd)$/i.test(v)) return true
+  // Treat job board names stored as company by scrapers as unknown
+  if (JOB_BOARDS.has(v)) return true
+  return false
 }
 
 const inferCompanyFromUrl = (url: string) => {
@@ -180,13 +196,36 @@ const inferCompanyFromDescription = (description: string, jobTitle?: string) => 
   return best
 }
 
+const cleanCompanyName = (raw: string): string => {
+  // Strip junk patterns like "Oriient About Oriient", "Acme Inc About Acme Inc"
+  let s = raw.trim()
+  // Remove trailing "About <anything>" suffixes
+  s = s.replace(/\s+About\s+.+$/i, '').trim()
+  // Remove leading "About <Company>" prefixes
+  s = s.replace(/^About\s+/i, '').trim()
+  // Remove "@ CompanyName" suffixes in job titles that leaked into company field
+  s = s.replace(/\s*@\s*.+$/, '').trim()
+  return s
+}
+
 const inferCompanyName = (company: string | undefined, description: string, url: string, title?: string) => {
-  if (!isUnknownCompany(company)) return company?.trim() || ''
+  if (!isUnknownCompany(company)) return cleanCompanyName(company?.trim() || '')
   const fromDescription = inferCompanyFromDescription(description, title)
-  if (fromDescription) return fromDescription
+  if (fromDescription) return cleanCompanyName(fromDescription)
   const fromUrl = inferCompanyFromUrl(url)
   if (fromUrl) return fromUrl
   return company?.trim() || 'Unknown'
+}
+
+const cleanLocationString = (raw: string): string => {
+  // If it looks like a sentence/description rather than a real location, fall back to Remote
+  const descriptionLike = /\b(we|our|the company|globally|across|worldwide|seeking|hiring|looking|team|opportunity)\b/i
+  if (descriptionLike.test(raw) && raw.length > 40) return 'Remote'
+  // Strip "About X" or trailing company names that leaked in
+  let s = raw.replace(/\s*-\s*(Remote|Hybrid|On-site)$/i, (_, type) => ` - ${type}`).trim()
+  // If it's very long and contains a dash followed by Remote, keep just "Remote"
+  if (/^\s*remote\s*$/i.test(s)) return 'Remote'
+  return s
 }
 
 // Transform backend job data to component format
@@ -194,35 +233,42 @@ function transformJob(job: Job, index: number) {
   const locationString = (() => {
     const locVal: any = (job as any).location
     if (Array.isArray(locVal)) {
-      return locVal
+      const parts = locVal
         .map((loc: Location) => [loc?.city, loc?.state].filter(Boolean).join(', '))
         .filter(Boolean)
-        .join(' / ')
+      if (parts.length) return parts.join(' / ')
     }
-    if (typeof locVal === 'string') return locVal
+    if (typeof locVal === 'string') return cleanLocationString(locVal)
     return 'Remote'
   })()
 
   const rawDate = (job as any).datePosted || (job as any).postedAt || (job as any).postedDate || (job as any).date_posted || null
-  
+
   // Try parsing the date - handle various formats
   let parsedDate = null
   if (rawDate) {
     parsedDate = new Date(rawDate)
-    // If invalid, try adding 'Z' for UTC
     if (isNaN(parsedDate.getTime()) && typeof rawDate === 'string') {
       parsedDate = new Date(rawDate + 'Z')
     }
-    // Still invalid? Try as timestamp
     if (isNaN(parsedDate.getTime()) && !isNaN(Number(rawDate))) {
       parsedDate = new Date(Number(rawDate))
     }
   }
-  
   if (parsedDate && isNaN(parsedDate.getTime())) parsedDate = null
 
-  const dateStr = parsedDate ? parsedDate.toISOString() : null
-  const daysAgo = parsedDate ? Math.floor((Date.now() - parsedDate.getTime()) / (1000 * 60 * 60 * 24)) : null
+  // Fallback: extract creation timestamp from MongoDB ObjectId (first 4 bytes = unix seconds)
+  const objectIdDate = (() => {
+    const id = (job as any)._id
+    if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
+      return new Date(parseInt(id.substring(0, 8), 16) * 1000)
+    }
+    return null
+  })()
+
+  const dateStr = parsedDate ? parsedDate.toISOString() : (objectIdDate?.toISOString() ?? null)
+  const effectiveDate = parsedDate ?? objectIdDate
+  const daysAgo = effectiveDate ? Math.floor((Date.now() - effectiveDate.getTime()) / (1000 * 60 * 60 * 24)) : null
 
   const description = (() => {
     const isDateLike = (value: string) => {
@@ -345,7 +391,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'accountsettings' | 'personal' | 'payment' | 'upgrade'>('dashboard')
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade'>('dashboard')
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
   const [showMenu, setShowMenu] = useState(false)
   const [hamburgerHovered, setHamburgerHovered] = useState(false)
@@ -378,10 +424,15 @@ function App() {
   const [_token, setToken] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
-  const [loggedOut, setLoggedOut] = useState<boolean>(() => {
+  const [showLogin, setShowLogin] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return new URLSearchParams(window.location.search).get('login') === 'true'
   })
+  const [showSignup, setShowSignup] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('signup') === 'true'
+  })
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const buildFallbackCandidate = (): Candidate | null => {
     if (!_user?.email) return null
     const storedProfileRaw = getMigratedStorageItem('wanderworkProfile', ['wanderHireProfile'])
@@ -567,8 +618,8 @@ function App() {
         Jobs: payload.jobs,
         Candidates: payload.candidates,
       })
-      // Only auto-select on desktop (lg breakpoint = 1024px+)
-      if (jobsMapped.length > 0 && window.innerWidth >= 1024) {
+      // Auto-select first job on tablet and desktop (md = 768px+)
+      if (jobsMapped.length > 0 && window.innerWidth >= 768) {
         setSelectedJobId((current) => current ?? jobsMapped[0].id)
       }
     }
@@ -720,6 +771,7 @@ function App() {
 
   // Menu dropdown component
   const menuItems = [
+    { label: 'My Profile',      action: () => { setCurrentPage('profile'); setShowMenu(false) } },
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
     { label: 'Privacy Policy',  action: () => { setCurrentPage('privacy'); setShowMenu(false) } },
@@ -729,7 +781,7 @@ function App() {
       localStorage.removeItem('wanderworkUser')
       setUser(null)
       setToken(null)
-      setLoggedOut(true)
+      setShowLogin(false)
       setShowMenu(false)
     }},
   ]
@@ -778,16 +830,49 @@ function App() {
     </div>
   )
 
-  // Show login page only when user explicitly logs out
-  if (loggedOut) {
-    return <LoginPage onLogin={(userData, authToken) => {
-      setUser(userData)
-      setToken(authToken)
-      setLoggedOut(false)
-      if (window.location.search.includes('login=true')) {
-        window.history.replaceState({}, '', window.location.pathname)
-      }
-    }} />
+  // Show landing page when unauthenticated and not explicitly navigating to login
+  if (!_token && !showLogin && !showSignup) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f4f4' }} />}>
+        <LandingPage onSignIn={() => setShowLogin(true)} onSignUp={() => setShowSignup(true)} />
+      </Suspense>
+    )
+  }
+
+  if (showSignup) {
+    return <SignupPage
+      onSignup={(userData, authToken) => {
+        setUser(userData)
+        setToken(authToken)
+        setShowSignup(false)
+        setShowLogin(false)
+        if (window.location.search.includes('signup=true')) {
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+      }}
+      onSignIn={() => { setShowSignup(false); setShowLogin(true) }}
+      onBackToLanding={() => setShowSignup(false)}
+    />
+  }
+
+  // Show login / forgot-password pages
+  if (showLogin) {
+    if (showForgotPassword) {
+      return <ForgotPasswordPage onBack={() => setShowForgotPassword(false)} />
+    }
+    return <LoginPage
+      onLogin={(userData, authToken) => {
+        setUser(userData)
+        setToken(authToken)
+        setShowLogin(false)
+        if (window.location.search.includes('login=true')) {
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+      }}
+      onForgotPassword={() => setShowForgotPassword(true)}
+      onBackToLanding={() => setShowLogin(false)}
+      onCreateAccount={() => { setShowLogin(false); setShowSignup(true) }}
+    />
   }
 
   // Render different pages
@@ -804,7 +889,14 @@ function App() {
   }
 
   if (currentPage === 'plans') {
-    return <PlansPage />
+    return <PlansPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
+  }
+
+  if (currentPage === 'profile') {
+    const profileCandidate = safeData?.Candidates?.[0]
+    if (profileCandidate) {
+      return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} />
+    }
   }
 
   console.log('About to render main dashboard, loading:', loading, 'data:', !!data, 'transformedJobs:', transformedJobs.length)
@@ -843,9 +935,9 @@ function App() {
                 onClick={() => setShowMenu(!showMenu)}
                 onMouseEnter={() => setHamburgerHovered(true)}
                 onMouseLeave={() => setHamburgerHovered(false)}
-                className="p-2 rounded-lg transition-all duration-300 hover:bg-[#306770]/10"
+                className="p-2 rounded-full transition-all duration-300 hover:bg-[#306770]/10"
               >
-                <svg width="32" height="27" viewBox="0 0 50 42" fill="none">
+                <svg width="16" height="13" viewBox="0 0 50 42" fill="none">
                   <rect width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
                   <rect y="18" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
                   <rect y="36" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
@@ -867,7 +959,7 @@ function App() {
         />
       )}
 
-      <div className="max-w-[1460px] mx-auto p-4 sm:p-6 lg:h-[calc(100vh-65px)] lg:overflow-hidden lg:flex lg:flex-col">
+      <div className="max-w-[1460px] mx-auto p-4 sm:p-6 md:h-[calc(100vh-65px)] md:overflow-hidden md:flex md:flex-col">
         {/* Main Content */}
         {error && (
           <div className="p-4 rounded-lg bg-red-100 text-red-700 mb-4">
@@ -880,47 +972,43 @@ function App() {
             <p style={{ color: '#787878' }}>Loading your data...</p>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row xl:flex-row gap-4 lg:gap-3 xl:gap-5 lg:flex-1 lg:min-h-0">
+          <div className="flex flex-col md:flex-row gap-4 md:gap-3 xl:gap-5 md:flex-1 md:min-h-0">
             <Sidebar data={safeData} onProfileImageChange={setProfileImage} onCandidateUpdate={handleCandidateUpdate} />
             
-            {/* Mobile: Show either job list or job details */}
-            <div className="flex-1 lg:flex-[1.65] xl:flex-[1.8] overflow-hidden min-h-[60vh] lg:min-h-0">
-              {/* Job Feed - hidden when job selected on mobile */}
-              <div className={selectedJobId !== null ? 'hidden lg:block h-full' : 'block h-full'}>
-                <JobFeed 
-                  onSelectJob={setSelectedJobId} 
-                  selectedJobId={selectedJobId} 
-                  data={safeData} 
-                  jobs={transformedJobs} 
+            {/* Job Feed (always visible on md+, hidden on mobile when viewing details) */}
+            <div className="flex-1 md:flex-[1.65] xl:flex-[1.8] min-h-[60vh] md:min-h-0 md:overflow-hidden">
+              <div className={selectedJobId !== null ? 'hidden md:block h-full' : 'block h-full'}>
+                <JobFeed
+                  onSelectJob={setSelectedJobId}
+                  selectedJobId={selectedJobId}
+                  data={safeData}
+                  jobs={transformedJobs}
                   showNewOnly={showNewOnly}
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
                 />
               </div>
-              
-              {/* Job Details - shown when selected on mobile */}
+
+              {/* Mobile-only: full-screen job details with back button */}
               {selectedJobId !== null && (
-                <div className="lg:hidden flex flex-col h-full" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)' }}>
-                  {/* Mobile Header with Back Button */}
+                <div className="md:hidden flex flex-col" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)' }}>
                   <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: '#DCDCDC' }}>
                     <button
                       onClick={() => setSelectedJobId(null)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#306770" strokeWidth="2">
-                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
                       </svg>
                     </button>
                     <h2 className="text-[18px] font-bold" style={{ color: '#306770', fontFamily: 'Manrope' }}>
                       Job Details
                     </h2>
                   </div>
-                  
-                  {/* Mobile Details */}
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <StatsPanel 
-                      jobId={selectedJobId} 
-                      onClose={() => setSelectedJobId(null)} 
-                      data={safeData} 
+                  <div className="p-4 pb-24">
+                    <StatsPanel
+                      jobId={selectedJobId}
+                      onClose={() => setSelectedJobId(null)}
+                      data={safeData}
                       jobs={transformedJobs}
                       onNewJobsClick={() => setShowNewOnly(true)}
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
@@ -929,9 +1017,9 @@ function App() {
                 </div>
               )}
             </div>
-            
-            {/* Desktop: Stats Panel */}
-            <div className="hidden lg:flex lg:flex-col lg:w-[520px] xl:w-[540px] 2xl:w-[620px] lg:shrink-0 lg:h-full lg:min-h-0 lg:overflow-y-auto no-scrollbar">
+
+            {/* Tablet + Desktop: Stats Panel sidebar */}
+            <div className="hidden md:flex md:flex-col md:w-[320px] lg:w-[480px] xl:w-[520px] 2xl:w-[600px] md:shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar md:pl-2 xl:pl-3">
               {displayedJobId !== null && (
                 <StatsPanel
                   jobId={displayedJobId}
@@ -946,7 +1034,7 @@ function App() {
           </div>
         )}
         {/* Footer */}
-        <footer className="mt-10 border-t pt-6 lg:hidden" style={{ borderColor: '#DCDCDC' }}>
+        <footer className="mt-10 border-t pt-6 md:hidden" style={{ borderColor: '#DCDCDC' }}>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[12px] sm:text-[13px]" style={{ color: '#787878', fontFamily: 'Manrope' }}>
             <div className="flex items-center gap-2">
               <span style={{ color: '#306770', letterSpacing: '3px' }}>WANDER<span style={{ opacity: 0.45 }}>/</span>WORK</span>

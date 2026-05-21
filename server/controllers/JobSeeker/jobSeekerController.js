@@ -890,11 +890,14 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
         return res.status(404).json({ message: 'Candidate not found.' });
     }
 
-    const creditBalance = Number.isFinite(candidate.tokenBalance) ? candidate.tokenBalance
-        : Number.isFinite(candidate.creditsBalance) ? candidate.creditsBalance
-            : 0;
-    if (creditBalance <= 0) {
-        return res.status(402).json({ message: 'Insufficient credits to re-upload resume.' });
+    const hasExistingResume = !!(candidate.resumeLink || candidate.resume);
+    if (hasExistingResume) {
+        const creditBalance = Number.isFinite(candidate.tokenBalance) ? candidate.tokenBalance
+            : Number.isFinite(candidate.creditsBalance) ? candidate.creditsBalance
+                : 0;
+        if (creditBalance < 3) {
+            return res.status(402).json({ message: 'Insufficient credits. Re-uploading a resume costs 3 credits.' });
+        }
     }
 
     const ext = path.extname(file.originalname || '').toLowerCase();
@@ -916,10 +919,10 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     };
 
     const nextTokenBalance = Number.isFinite(candidate.tokenBalance)
-        ? Math.max(0, (candidate.tokenBalance || 0) - 1)
+        ? Math.max(0, (candidate.tokenBalance || 0) - 3)
         : candidate.tokenBalance;
     const nextCreditsBalance = Number.isFinite(candidate.creditsBalance)
-        ? Math.max(0, (candidate.creditsBalance || 0) - 1)
+        ? Math.max(0, (candidate.creditsBalance || 0) - 3)
         : candidate.creditsBalance;
 
     candidate.resumeLink = resumeLink;
@@ -929,11 +932,11 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     candidate.resume_updated_at = new Date();
     if (Number.isFinite(candidate.tokenBalance)) {
         candidate.tokenBalance = nextTokenBalance;
-        candidate.tokensUsed = (candidate.tokensUsed || 0) + 1;
+        candidate.tokensUsed = (candidate.tokensUsed || 0) + 3;
     }
     if (Number.isFinite(candidate.creditsBalance)) {
         candidate.creditsBalance = nextCreditsBalance;
-        candidate.creditsUsed = (candidate.creditsUsed || 0) + 1;
+        candidate.creditsUsed = (candidate.creditsUsed || 0) + 3;
     }
 
     await candidate.save();
@@ -1023,13 +1026,51 @@ const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
     res.json({ candidate });
 });
 
+function markdownToEmailHtml(text) {
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const lines = text.split('\n')
+    const out = []
+    let inList = false
+    for (const raw of lines) {
+        const line = raw.trimEnd()
+        // Horizontal rule
+        if (/^---+$/.test(line.trim())) {
+            if (inList) { out.push('</ul>'); inList = false }
+            out.push('<hr style="border:none;border-top:1px solid #e4e8ee;margin:14px 0;">')
+            continue
+        }
+        // Bullet point
+        if (/^[-•]\s+/.test(line)) {
+            if (!inList) { out.push('<ul style="margin:4px 0 4px 0;padding-left:20px;">'); inList = true }
+            const bulletText = esc(line.replace(/^[-•]\s+/, ''))
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+            out.push(`<li style="margin:2px 0;font-size:14px;line-height:1.7;color:#2D2D2D;">${bulletText}</li>`)
+            continue
+        }
+        if (inList) { out.push('</ul>'); inList = false }
+        // Blank line
+        if (!line.trim()) { out.push('<div style="height:8px;"></div>'); continue }
+        // ALL CAPS section header (short line, mostly uppercase letters)
+        const trimmed = line.trim()
+        if (/^[A-Z][A-Z\s\/&\-]{2,}$/.test(trimmed) && trimmed.length <= 40) {
+            out.push(`<div style="font-weight:700;font-size:12px;letter-spacing:0.1em;color:#306770;margin-top:20px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e4e8ee;">${esc(trimmed)}</div>`)
+            continue
+        }
+        // Regular line — apply inline formatting
+        const formatted = esc(line)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+        out.push(`<div style="font-size:14px;line-height:1.7;color:#2D2D2D;">${formatted}</div>`)
+    }
+    if (inList) out.push('</ul>')
+    return out.join('\n')
+}
+
 function buildDocumentEmailHtml({ greeting, docLabel, jobTitle, company, content, hasAttachment }) {
     const PRIMARY = '#306770'
     const BG = '#F2F4F8'
-    const safeContent = (content || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
+    const htmlContent = markdownToEmailHtml(content || '')
     return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1046,7 +1087,7 @@ function buildDocumentEmailHtml({ greeting, docLabel, jobTitle, company, content
           </p>
         </td></tr>
         <tr><td style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #E4E8EE;">
-          <pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-family:Arial,sans-serif;font-size:14px;line-height:1.8;color:#2D2D2D;">${safeContent}</pre>
+          <div style="font-family:Arial,sans-serif;">${htmlContent}</div>
         </td></tr>
         ${hasAttachment ? `
         <tr><td style="padding-top:16px;text-align:center;">
@@ -1221,8 +1262,17 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     // Generate AI content in parallel
     const [resumeRaw, coverLetterRaw] = await Promise.all([
         resume ? callOpenAI(
-            'You are an ATS-safe resume writer. Write the full resume using ONLY real facts provided — never invent or use bracket placeholders like [Your Email], [Previous Employer], [Your Degree], [Month, Year], etc. If a piece of information (employer, date, degree) is not provided, omit that line entirely rather than using a placeholder. Use the candidate\'s contact info, work experience, and education exactly as given. Output plain text only.',
-            `${jobContext}\n\n${candidateContext}\n\nWrite the complete tailored resume. Use real data only. Omit any section where you have no real data rather than leaving placeholders.`,
+            `You are an expert resume writer producing ATS-optimized resumes. Write the candidate's complete tailored resume using ONLY the real data provided — never invent employers, dates, degrees, or any other details. If a data point is missing, omit that section entirely.
+
+STRICT FORMATTING RULES — follow exactly:
+- Do NOT use markdown. No asterisks (*), pound signs (#), underscores (_), or backticks.
+- Section headers must be in ALL CAPS on their own line (e.g. WORK EXPERIENCE, EDUCATION, SKILLS, SUMMARY)
+- Bullet points must start with a hyphen and space: "- "
+- Separate sections with a single blank line
+- Never use bracket placeholders like [Company Name] or [Your Degree]
+
+Tailor every bullet point to match the target job description — highlight specific skills and accomplishments that directly address the role's requirements.`,
+            `${jobContext}\n\n${candidateContext}\n\nWrite the complete tailored resume. Every bullet point should connect the candidate's real experience to the requirements of this specific role. Use only real data from above.`,
             2000
         ) : Promise.resolve(null),
         coverLetter ? callOpenAI(
@@ -1607,6 +1657,37 @@ const ImportData = asyncHandler(async (req, res) => {
 });
 
 
+const sendPlanWelcomeEmail = asyncHandler(async (req, res) => {
+    const { email, plan } = req.body || {};
+    if (!email || !plan) {
+        return res.status(400).json({ message: 'email and plan are required.' });
+    }
+    if (!['pro', 'premium'].includes(plan.toLowerCase())) {
+        return res.status(400).json({ message: 'plan must be "pro" or "premium".' });
+    }
+
+    const candidate = await Candidates.findOne({ email: String(email).toLowerCase() });
+    const firstName = candidate?.firstName || '';
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sgMail = require('@sendgrid/mail');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { proWelcomeEmail, premiumWelcomeEmail } = require('../../utils/mail.templates');
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    const template = plan.toLowerCase() === 'pro'
+        ? proWelcomeEmail(firstName)
+        : premiumWelcomeEmail(firstName);
+
+    try {
+        await sgMail.send({ to: email, ...template });
+        res.json({ sent: true });
+    } catch (err) {
+        console.error('Welcome email failed:', err.response?.body || err.message);
+        res.status(500).json({ message: 'Failed to send welcome email.', error: err.message });
+    }
+});
+
 module.exports =
 {
     getEverything,
@@ -1632,4 +1713,5 @@ module.exports =
     ImportData,
     purgeJunkJobs,
     backfillCandidateResumeFields,
+    sendPlanWelcomeEmail,
 }

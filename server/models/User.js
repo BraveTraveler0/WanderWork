@@ -170,6 +170,19 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    plan: {
+        type: String,
+        enum: ['starter', 'pro', 'premium'],
+        default: 'starter'
+    },
+    stripeSubscriptionId: {
+        type: String,
+        default: null
+    },
+    planExpiresAt: {
+        type: Date,
+        default: null
+    },
     xp: {
         type: Number,
         default: 0,

@@ -190,7 +190,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         </div>
         <StatCard
           number={recruiterContactsLeft.toString()}
-          label="Daily Recruiter Contacts"
+          label="Recruiters Left"
           onClick={onRecruiterContactsClick}
           clickable
         />
@@ -340,8 +340,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           <div 
             key={(selectedJob as any).id ?? jobId}
             className="stats-panel-enter bg-white rounded-[16px] lg:rounded-[20px] p-5 lg:p-6 xl:p-10"
-            style={{ 
-              boxShadow: '199px 270px 94px 0px rgba(0,0,0,0), 127px 173px 86px 0px rgba(0,0,0,0.01), 71px 97px 72px 0px rgba(0,0,0,0.05), 32px 43px 54px 0px rgba(0,0,0,0.09), 8px 11px 29px 0px rgba(0,0,0,0.1)'
+            style={{
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.05)'
             }}
           >
 

@@ -1,4 +1,5 @@
-import { motion, useMotionValue, useSpring, useTransform, useScroll } from "motion/react";
+// @ts-nocheck
+import { motion, useSpring, useTransform, useScroll, useInView } from "motion/react";
 import { useState, useRef } from "react";
 import svgPaths from "./svg-7rnbkzp1in";
 import imgMenu from "figma:asset/d0a9d673c5d94c18dd17c1643bd59c4d61742e78.png";
@@ -14,15 +15,32 @@ import img202509012312PaperChaosUnleashedSimpleCompose01K430Tytefj6R4Ne752Vcfsze
 import imgBeachComputerLaptopVpnRf from "figma:asset/17f56f62fc64ae1bb34eb9d3cd457cef5c9b04c3.png";
 import imgPlayaChenRioCozumel from "figma:asset/727bb285cb25e44e8a2e2ed68ca5c149c445f1a7.png";
 
-function Group58() {
+function Group58({ onSignIn }: { onSignIn?: () => void }) {
   return (
     <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-10 py-6">
       <p className="font-bold text-[#306770] text-[32px] tracking-[4px]" style={{ fontFamily: 'Manrope, sans-serif', lineHeight: '1' }}>
         WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
       </p>
-      <div className="h-[40px] w-[40px] flex-shrink-0">
-        <img alt="Menu" className="size-full object-contain" src={imgMenu} />
-      </div>
+      <button
+        onClick={onSignIn}
+        style={{
+          background: '#306770',
+          color: 'white',
+          border: 'none',
+          borderRadius: '12px',
+          padding: '10px 28px',
+          fontSize: '15px',
+          fontWeight: '600',
+          fontFamily: 'Manrope, sans-serif',
+          cursor: 'pointer',
+          boxShadow: '0 4px 14px rgba(48,103,112,0.35)',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#245460')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#306770')}
+      >
+        Sign In
+      </button>
     </header>
   );
 }
@@ -45,13 +63,12 @@ function Group22() {
 
 function Group23() {
   return (
-    <motion.div 
-      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative w-[189px] cursor-pointer"
+    <motion.div
+      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#fade3e] w-[189px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <Group21 />
-      <Group22 />
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-neutral-900">Go Premium</p>
     </motion.div>
   );
 }
@@ -91,13 +108,12 @@ function Group40() {
 
 function Group24() {
   return (
-    <motion.div 
-      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer"
+    <motion.div
+      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#306770] shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <Group20 />
-      <Group40 />
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Start Receiving Matches</p>
     </motion.div>
   );
 }
@@ -574,9 +590,14 @@ function Frame3() {
   );
 }
 
+const VIDEO_ID = "dQw4w9WgXcQ"
+
 function Frame41() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isInView = useInView(containerRef, { once: true, margin: "200px" })
   return (
-    <motion.div 
+    <motion.div
+      ref={containerRef}
       className="h-[706px] relative shrink-0 w-full max-w-[1440px]"
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
@@ -584,14 +605,17 @@ function Frame41() {
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
       <div className="absolute inset-0 overflow-hidden rounded-[20px] bg-gray-900">
-        <iframe
-          className="absolute inset-0 w-full h-full"
-          src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&loop=1&playlist=dQw4w9WgXcQ&controls=0&modestbranding=1&rel=0"
-          title="Video background"
-          frameBorder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
+        {isInView && (
+          <iframe
+            className="absolute inset-0 w-full h-full"
+            src={`https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${VIDEO_ID}&controls=0&rel=0&playsinline=1`}
+            title="Video background"
+            frameBorder="0"
+            loading="lazy"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+          />
+        )}
       </div>
       <Frame1 />
       <Frame3 />
@@ -747,28 +771,29 @@ function Group52() {
 
 function Group16() {
   return (
-    <motion.div 
-      className="grid-cols-[max-content] grid-rows-[max-content] inline-grid place-items-start relative shrink-0 cursor-pointer"
+    <motion.div
+      className="relative shrink-0 cursor-pointer"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <div className="[grid-area:1_/_1] bg-[#306770] h-[70px] ml-0 mt-0 rounded-[15px] w-[234px]" />
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[30px] leading-[24px] ml-[37px] mt-[21.25px] relative text-[16px] text-white w-[160px]">Get My Daily Matches</p>
+      <div className="bg-[#306770] h-[70px] rounded-[15px] w-[234px] flex items-center justify-center">
+        <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-white">Get My Daily Matches</p>
+      </div>
     </motion.div>
   );
 }
 
 function Group17() {
   return (
-    <motion.div 
-      className="grid-cols-[max-content] grid-rows-[max-content] inline-grid place-items-start relative shrink-0 cursor-pointer"
+    <motion.div
+      className="relative shrink-0 cursor-pointer"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <div className="[grid-area:1_/_1] bg-[#dfe3e6] h-[70px] ml-0 mt-0 relative rounded-[15px] w-[189px]">
+      <div className="bg-[#dfe3e6] h-[70px] rounded-[15px] w-[189px] flex items-center justify-center relative">
         <div aria-hidden="true" className="absolute border border-[#cccccc] border-solid inset-[-1px] pointer-events-none rounded-[16px]" />
+        <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-neutral-900">Learn More</p>
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[30px] leading-[24px] ml-[53px] mt-[20px] relative text-[16px] text-neutral-900 w-[83px]">Learn More</p>
     </motion.div>
   );
 }
@@ -806,21 +831,17 @@ function Frame48() {
   );
 }
 
-function Frame4() {
-  return <div className="[grid-area:1_/_1] bg-[rgba(255,255,255,0.8)] h-[917px] ml-0 mt-0 rounded-[20px] w-[1501px]" />;
-}
-
 function Group15() {
   return (
-    <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-0 mt-0 place-items-start relative">
-      <Frame4 />
+    <div className="[grid-area:1_/_1] ml-0 mt-0 rounded-[20px] overflow-hidden h-[980px] w-[1461px]">
+      <img alt="" className="w-full h-full object-cover" src={imgPlayaChenRioCozumel} />
     </div>
   );
 }
 
 function Group2() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-0 mt-0 place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -830,15 +851,15 @@ function Group2() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.474px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">Where do jobs come from?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">We scan job boards, company career pages, and hiring platforms daily. Every listing is filtered for remote roles that match your skills and target titles — no manual searching required.</p>
     </motion.div>
   );
 }
 
 function Group5() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-0 mt-[276.486px] place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -848,15 +869,15 @@ function Group5() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.474px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">How does outreach work?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Our AI drafts personalized emails to recruiters on your behalf. You review each message before it sends so you stay in control. We handle the legwork — you collect the replies.</p>
     </motion.div>
   );
 }
 
 function Group6() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[465.224px] mt-0 place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -866,15 +887,15 @@ function Group6() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.474px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">What are tokens?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Tokens are credits that power our AI tools — resume tailoring, cover letter generation, and recruiter email drafts each use a small amount. Free accounts get a monthly allowance; Premium plans include far more.</p>
     </motion.div>
   );
 }
 
 function Group13() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[465.224px] mt-[276.486px] place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -884,15 +905,15 @@ function Group13() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.474px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">Will my resume beat ATS?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Yes. Our AI reads each job description and rewrites your resume with the exact keywords ATS systems screen for. Over 90% of companies filter applicants through ATS before a human ever sees the application.</p>
     </motion.div>
   );
 }
 
 function Group8() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[930.449px] mt-0 place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -902,15 +923,15 @@ function Group8() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.16px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.475px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">Is it free to start?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Yes — sign up and start receiving daily remote job matches at no cost. Premium unlocks higher token limits, unlimited AI document generation, and expanded recruiter outreach.</p>
     </motion.div>
   );
 }
 
 function Group14() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[930.449px] mt-[276.486px] place-items-start relative"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -920,8 +941,8 @@ function Group14() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.16px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[308.289px]">Get Fresh Jobs .</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[44.475px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344.147px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et `}</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49.477px] leading-[82px] ml-[115.777px] mt-[11.875px] relative text-[24px] text-black w-[268px]">What jobs do you source?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">We focus exclusively on remote and location-flexible roles across tech, design, marketing, ops, finance, and more. Every listing is verified to be genuinely remote — no bait-and-switch.</p>
     </motion.div>
   );
 }
@@ -943,7 +964,7 @@ function Group51() {
   return (
     <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
       <Group15 />
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[99.814px] leading-[82px] ml-[63.697px] mt-[78.613px] relative text-[46px] text-black w-[265.664px]">FAQ’s</p>
+      <p className="[grid-area:1_/_1] font-[‘Manrope:Regular’,_sans-serif] font-normal leading-[82px] ml-[63.697px] mt-[78.613px] relative text-[80px] text-black w-[400px]">FAQ’s</p>
       <Group50 />
     </div>
   );
@@ -1052,20 +1073,21 @@ function Group41() {
 
 function Frame5() {
   return (
-    <motion.div 
+    <motion.div
       className="absolute bg-white h-[287.197px] left-[918.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
-      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[84px] leading-[40px] left-[166px] text-[#5e5e5e] text-[0px] top-[166px] w-[215px]">
-        <p className="mb-0 text-[24px]">— James L</p>
-        <p className="text-[16px]">Engineer</p>
+      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— David K.</p>
+        <p className="text-[15px] text-[#5e5e5e]">Product Designer</p>
       </div>
-      <div className="absolute left-[49px] rounded-[100px] size-[94px] top-[156px]" data-name="Rectangle">
-        <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[100px] size-full" src={imgRectangle} />
+      <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#4a7fa5' }}>DK</div>
+      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[110px] leading-[36px] left-[33px] text-[#5e5e5e] text-[22px] top-[40px] w-[415px]">"From application to offer in 3 weeks. The ATS resume optimization is a game-changer."</p>
+      <div className="absolute left-[239px] top-[211px] flex items-center gap-1">
+        <span style={{ color: '#FCE03D', fontSize: '18px', lineHeight: 1 }}>★</span>
+        <span className="font-['Manrope:Regular',_sans-serif] text-[#5e5e5e] text-[16px]">5.0</span>
       </div>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[100px] leading-[40px] left-[33px] text-[#5e5e5e] text-[24px] top-[47px] w-[381px]">“I finally stopped guessing what recruiters want. Such a timesaver”</p>
-      <Group41 />
     </motion.div>
   );
 }
@@ -1095,20 +1117,21 @@ function Group65() {
 
 function Frame10() {
   return (
-    <motion.div 
+    <motion.div
       className="absolute bg-white h-[287.197px] left-[61.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
-      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[84px] leading-[40px] left-[166px] text-[#5e5e5e] text-[0px] top-[166px] w-[215px]">
-        <p className="mb-0 text-[24px]">— James L</p>
-        <p className="text-[16px]">Engineer</p>
+      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— Tammy W.</p>
+        <p className="text-[15px] text-[#5e5e5e]">Marketing Director</p>
       </div>
-      <div className="absolute left-[49px] rounded-[100px] size-[94px] top-[156px]" data-name="Rectangle">
-        <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[100px] size-full" src={imgRectangle} />
+      <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#8b5e3c' }}>TW</div>
+      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[110px] leading-[36px] left-[33px] text-[#5e5e5e] text-[22px] top-[40px] w-[415px]">"The AI matched me with roles I actually wanted. Landed 3 interviews in my first week."</p>
+      <div className="absolute left-[239px] top-[211px] flex items-center gap-1">
+        <span style={{ color: '#FCE03D', fontSize: '18px', lineHeight: 1 }}>★</span>
+        <span className="font-['Manrope:Regular',_sans-serif] text-[#5e5e5e] text-[16px]">4.6</span>
       </div>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[100px] leading-[40px] left-[33px] text-[#5e5e5e] text-[24px] top-[47px] w-[381px]">“I finally stopped guessing what recruiters want. Such a timesaver”</p>
-      <Group65 />
     </motion.div>
   );
 }
@@ -1155,20 +1178,21 @@ function Group66() {
 
 function Frame12() {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] bg-white h-[287.197px] ml-0 mt-0 overflow-clip relative rounded-[20px] w-[481.83px]"
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
-      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[84px] leading-[40px] left-[166px] text-[#5e5e5e] text-[0px] top-[166px] w-[215px]">
-        <p className="mb-0 text-[24px]">— James L</p>
-        <p className="text-[16px]">Engineer</p>
+      <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— James L.</p>
+        <p className="text-[15px] text-[#5e5e5e]">Software Engineer</p>
       </div>
-      <div className="absolute left-[49px] rounded-[100px] size-[94px] top-[156px]" data-name="Rectangle">
-        <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[100px] size-full" src={imgRectangle} />
+      <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#306770' }}>JL</div>
+      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[110px] leading-[36px] left-[33px] text-[#5e5e5e] text-[22px] top-[40px] w-[415px]">"I finally stopped guessing what recruiters want. Recruiter replies started coming in within days."</p>
+      <div className="absolute left-[239px] top-[211px] flex items-center gap-1">
+        <span style={{ color: '#FCE03D', fontSize: '18px', lineHeight: 1 }}>★</span>
+        <span className="font-['Manrope:Regular',_sans-serif] text-[#5e5e5e] text-[16px]">4.8</span>
       </div>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[100px] leading-[40px] left-[33px] text-[#5e5e5e] text-[24px] top-[47px] w-[381px]">“I finally stopped guessing what recruiters want. Such a timesaver”</p>
-      <Group66 />
     </motion.div>
   );
 }
@@ -1190,10 +1214,11 @@ function Group48() {
       viewport={{ once: true, margin: "-100px" }}
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
-      <div className="[grid-area:1_/_1] h-[721.494px] ml-0 mt-0 relative w-[1461px]" data-name="20250901_2312_Paper Chaos Unleashed_simple_compose_01k430tytefj6r4ne752vcfsze 1">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <img alt="" className="absolute h-[303.82%] left-[-1.35%] max-w-none top-[-174.5%] w-[100.02%]" src={img202509012312PaperChaosUnleashedSimpleCompose01K430Tytefj6R4Ne752Vcfsze1} />
-        </div>
+      <div className="[grid-area:1_/_1] h-[721.494px] ml-0 mt-0 relative w-[1461px]">
+        <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none">
+          <source src="/ResumeRain.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-black/50" />
       </div>
       <Group10 />
       <Group11 />
@@ -1230,13 +1255,12 @@ function Group68() {
 
 function Group69() {
   return (
-    <motion.div 
-      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative w-[189px] cursor-pointer"
+    <motion.div
+      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#fade3e] w-[189px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <Group67 />
-      <Group68 />
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-neutral-900">Go Premium</p>
     </motion.div>
   );
 }
@@ -1276,13 +1300,12 @@ function Group73() {
 
 function Group74() {
   return (
-    <motion.div 
-      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer"
+    <motion.div
+      className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#306770] shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <Group72 />
-      <Group73 />
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Start Receiving Matches</p>
     </motion.div>
   );
 }
@@ -1348,7 +1371,7 @@ function Frame43() {
         <span>{`Start getting remote jobs daily straight to your inbox `}</span>
         <span className="text-[#306770]">Free!</span>
       </p>
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[87px] leading-[40px] relative shrink-0 text-[24px] text-black w-[435px]">{`AI finds remote jobs from around the net and sends you the jobs `}</p>
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[87px] leading-[40px] relative shrink-0 text-[24px] text-black w-[435px]">We surface remote roles from across the web and deliver the ones that match — straight to your dashboard.</p>
       <Group39 />
     </motion.div>
   );
@@ -1386,15 +1409,6 @@ function Frame50() {
   );
 }
 
-function Group76() {
-  return (
-    <div className="absolute contents font-['Manrope:Regular',_sans-serif] font-normal leading-[24px] left-[626px] text-[#306770] text-[16px] top-[34px]">
-      <p className="absolute h-[32.843px] left-[626px] top-[34px] w-[121.429px]">{`Privacy Policy `}</p>
-      <p className="absolute h-[32.843px] left-[859.24px] top-[34px] w-[146.677px]">Terms of Service</p>
-      <p className="absolute h-[32.843px] left-[1117.73px] top-[34px] w-[144.272px]">Copyright 2025</p>
-    </div>
-  );
-}
 
 function Frame13() {
   return (
@@ -1418,7 +1432,7 @@ function Group59() {
 
 function Frame49() {
   return (
-    <div className="absolute content-stretch flex flex-col gap-[124px] items-center left-0 top-[137px] w-[1461px]">
+    <div className="content-stretch flex flex-col gap-[124px] items-center w-[1461px] mt-[137px]">
       <Frame50 />
       <Group59 />
     </div>
@@ -1470,15 +1484,9 @@ function Frame42() {
   );
 }
 
-export default function JobSeekerLanding() {
+export default function JobSeekerLanding({ scale = 1, onSignIn: _onSignIn }: { scale?: number; onSignIn?: () => void }) {
   return (
     <div className="relative shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] w-full min-h-screen pb-20 overflow-x-hidden" data-name="Job Seeker Landing">
-      <div className="absolute h-[868px] top-[3545px] -z-10" style={{ left: 0, width: '100vw' }} data-name="playa-chen-rio-cozumel">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <img alt="" className="absolute h-full left-0 max-w-none top-0 w-full object-cover" src={imgPlayaChenRioCozumel} />
-        </div>
-      </div>
-      <Group58 />
       <Frame49 />
       <Frame42 />
     </div>

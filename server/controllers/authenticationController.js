@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler')
 const User = require('../models/User')
+const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
 const jwtUtils = require('../utils/jwtUtils')
 const bcrypt = require('bcrypt')
 const Achievements = require('../models/achievements')
@@ -125,7 +126,27 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
 const createNewUser = asyncHandler(async (req, res) => {
-  const { email, password, displayName, profimage, backimage, ageVerified, event } = req.body;
+  const {
+    email,
+    password,
+    displayName,
+    profimage,
+    backimage,
+    ageVerified,
+    event,
+    firstName,
+    lastName,
+    phone,
+    location,
+    targetRole,
+    targetRoles,
+    seniority,
+    skills,
+    linkedinUrl,
+    portfolioUrl,
+    githubUrl,
+    calendlyUrl,
+  } = req.body;
 
   console.log(email)
 
@@ -183,7 +204,26 @@ const createNewUser = asyncHandler(async (req, res) => {
         "Nature & Science"
         ]
 
-    const userObject = { email, password: hashedPwd, stars: 5, achievements: userAchievements, tags, displayName, profimage, backimage, ageVerified, event };
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const safeFirstName = String(firstName || displayName || normalizedEmail.split('@')[0] || 'User').trim();
+    const safeLastName = String(lastName || 'Candidate').trim();
+    const roleList = Array.isArray(targetRoles)
+      ? targetRoles
+      : String(targetRole || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const seniorityList = Array.isArray(seniority)
+      ? seniority
+      : String(seniority || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const skillList = Array.isArray(skills)
+      ? skills
+      : String(skills || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const urls = [
+      linkedinUrl ? { urlName: 'LinkedIn', urlAddress: linkedinUrl } : null,
+      portfolioUrl ? { urlName: 'Portfolio', urlAddress: portfolioUrl } : null,
+      githubUrl ? { urlName: 'GitHub', urlAddress: githubUrl } : null,
+      calendlyUrl ? { urlName: 'Calendly', urlAddress: calendlyUrl } : null,
+    ].filter(Boolean);
+
+    const userObject = { email: normalizedEmail, password: hashedPwd, stars: 5, achievements: userAchievements, tags, displayName: displayName || `${safeFirstName} ${safeLastName}`.trim(), profimage, backimage, ageVerified, event };
 
     // Create and store new user
     const user = await User.create(userObject);
@@ -194,6 +234,33 @@ const createNewUser = asyncHandler(async (req, res) => {
     // Add the generated token to the user's collection
     user.token = token;
     await user.save();
+
+    const existingCandidate = await Candidates.findOne({ email: normalizedEmail });
+    const candidatePayload = {
+      firstName: safeFirstName,
+      lastName: safeLastName,
+      email: normalizedEmail,
+      phone: phone || 'Not provided',
+      location: [{ locationName: location || 'Remote', city: location || 'Remote' }],
+      targetRoles: roleList,
+      seniority: seniorityList,
+      skills: skillList,
+      urls,
+      resume: {},
+      resumeLink: '',
+      status: 'active',
+      paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      tokenBalance: 30,
+      tokensUsed: 0,
+      creditsBalance: 30,
+      creditsUsed: 0,
+      plan: 'free',
+      recruiterContactsLeft: 10,
+      recruiterContactsUpdatedAt: new Date(),
+    };
+    const candidate = existingCandidate
+      ? await Candidates.findOneAndUpdate({ email: normalizedEmail }, { $set: candidatePayload }, { new: true })
+      : await Candidates.create(candidatePayload);
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid user data received' });
@@ -210,10 +277,14 @@ const createNewUser = asyncHandler(async (req, res) => {
 
     console.log('fire')
 
-    await sgMail.send(emailMessage);
+    try {
+      if (SENDGRID_API_KEY) await sgMail.send(emailMessage);
+    } catch (mailError) {
+      console.warn('Verification email failed:', mailError.message);
+    }
 
     // Respond with the JWT token in addition to the success message
-    res.status(201).json({ user: { ...user._doc, password: undefined, token } });
+    res.status(201).json({ user: { ...user._doc, password: undefined, token }, token, candidate });
 
   } catch (error) {
     console.error(error);
@@ -320,12 +391,40 @@ const forgotPassword = asyncHandler(async (req, res) => {
             const resetToken = jwtUtils.generateToken(user);
 
             // Include this token in the recovery email
-            const resetLink = `https://www.aonverse.com/auth/reset?token=${resetToken}`;
+            const appUrl = process.env.APP_URL || 'http://localhost:5173';
+            const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
+            const displayName = user.displayName || user.email.split('@')[0];
             const emailMessage = {
                 to: user.email,
-                from: 'support@aontechnology.io',
-                subject: "Forgot your password? No problem!",
-                html: `<p>Hello ${user.name},</p><p>You've forgotten your password! No worries, click <a href="${resetLink}">here</a> to reset your password.</p>`,
+                from: process.env.EMAIL_FROM || 'support@wanderwork.ai',
+                subject: "Reset your Wander/Work password",
+                html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F4F4F4;font-family:Manrope,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F4F4;padding:40px 0">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+        <tr><td style="background:#306770;padding:32px 40px;text-align:center">
+          <p style="margin:0;color:#FFFFFF;font-size:22px;font-weight:700;letter-spacing:4px">WANDER<span style="opacity:0.6">/</span>WORK</p>
+        </td></tr>
+        <tr><td style="padding:40px">
+          <p style="color:#1a1a1a;font-size:18px;font-weight:600;margin:0 0 12px">Hi ${displayName},</p>
+          <p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 28px">We received a request to reset your Wander/Work password. Click the button below to create a new one. This link expires in 1 hour.</p>
+          <div style="text-align:center;margin:0 0 28px">
+            <a href="${resetLink}" style="display:inline-block;background:#306770;color:#FFFFFF;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:10px">Reset My Password</a>
+          </div>
+          <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:0">If you didn't request this, you can safely ignore this email — your password won't change.<br><br>If the button above doesn't work, copy this link into your browser:<br><a href="${resetLink}" style="color:#306770;word-break:break-all">${resetLink}</a></p>
+        </td></tr>
+        <tr><td style="background:#F9FAFB;padding:20px 40px;text-align:center">
+          <p style="margin:0;color:#9CA3AF;font-size:12px">© 2026 Wander/Work, Inc. · <a href="https://wanderwork.ai/privacy" style="color:#9CA3AF">Privacy</a> · <a href="https://wanderwork.ai/terms" style="color:#9CA3AF">Terms</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
             };
 
             // Send the email to the user

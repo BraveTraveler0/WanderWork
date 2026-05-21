@@ -1,16 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 interface LoginPageProps {
   onLogin: (user: any, token: string) => void
+  onForgotPassword?: () => void
+  onBackToLanding?: () => void
+  onCreateAccount?: () => void
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState('darrienccarter@gmail.com')
-  const [password, setPassword] = useState('password123')
+export default function LoginPage({ onLogin, onForgotPassword, onBackToLanding, onCreateAccount }: LoginPageProps) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mounted, setMounted] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => { setMounted(true) }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,12 +66,15 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#306770] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse animation-delay-2000"></div>
       </div>
 
-      <div className="relative z-10 w-full max-w-md">
+      <div
+        className="relative z-10 w-full max-w-md transition-all duration-700"
+        style={{ opacity: mounted ? 1 : 0, transform: mounted ? 'translateY(0)' : 'translateY(16px)' }}
+      >
         <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-8 md:p-10 border border-white/20">
           {/* Logo */}
           <div className="mb-8 text-center">
             <h1 className="text-3xl md:text-4xl font-bold text-[#306770] mb-2 tracking-wide break-words" style={{ lineHeight: '1.1' }}>WANDER<span style={{ opacity: 0.45 }}>/</span>WORK</h1>
-            <p className="text-gray-600 text-base">Sign in to your account</p>
+            <p className="text-gray-600 text-base">Work smarter, wander farther</p>
           </div>
 
           {/* Error Message */}
@@ -124,6 +133,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              <div className="flex justify-end mt-1">
+                <a href="#" onClick={(e) => { e.preventDefault(); onForgotPassword?.() }} className="text-xs text-[#306770] hover:underline">Forgot password?</a>
+              </div>
             </div>
 
             {/* Sign In Button */}
@@ -136,26 +148,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-8 p-4 bg-gradient-to-r from-[#306770]/5 to-[#306770]/10 rounded-xl border border-[#306770]/20">
-            <p className="text-xs font-semibold text-gray-700 mb-3">Demo Credentials:</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">Email:</span>
-                <code className="bg-white/60 px-3 py-1 rounded-lg text-xs text-[#306770] font-mono">darrienccarter@gmail.com</code>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">Password:</span>
-                <code className="bg-white/60 px-3 py-1 rounded-lg text-xs text-[#306770] font-mono">password123</code>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-600 mt-6">
-          First time? <a href="#" className="text-[#306770] font-semibold hover:underline">Create an account</a>
-        </p>
+        <div className="text-center mt-6 space-y-2">
+          <p className="text-sm text-gray-600">
+            First time? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.() }} className="text-[#306770] font-semibold hover:underline">Create an account</a>
+          </p>
+          {onBackToLanding && (
+            <p className="text-sm text-gray-500">
+              <a href="#" onClick={e => { e.preventDefault(); onBackToLanding() }} className="text-[#306770] hover:underline">
+                ← Return to landing page
+              </a>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

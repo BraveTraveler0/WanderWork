@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown } from 'lucide-react'
+import { createCheckoutSession, type Plan as StripePlan } from '../api/stripe'
 
 interface Plan {
   name: string
@@ -11,6 +12,7 @@ interface Plan {
   popular?: boolean
   badge?: string
   highlight?: string
+  stripePlan?: StripePlan
 }
 
 const faqs = [
@@ -50,7 +52,13 @@ function useInView(threshold = 0.15) {
   return { ref, visible }
 }
 
-function PlanCard({ plan, index, pageVisible }: { plan: Plan; index: number; pageVisible: boolean }) {
+function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
+  plan: Plan
+  index: number
+  pageVisible: boolean
+  onCheckout: () => void
+  loading: boolean
+}) {
   const [hovered, setHovered] = useState(false)
 
   const delay = 200 + index * 120
@@ -125,6 +133,8 @@ function PlanCard({ plan, index, pageVisible }: { plan: Plan; index: number; pag
       </div>
 
       <button
+        onClick={onCheckout}
+        disabled={loading}
         style={{
           width: '100%',
           padding: '13px 0',
@@ -132,16 +142,17 @@ function PlanCard({ plan, index, pageVisible }: { plan: Plan; index: number; pag
           fontWeight: 700,
           fontSize: 14,
           fontFamily: 'Manrope',
-          cursor: 'pointer',
+          cursor: loading ? 'not-allowed' : 'pointer',
           marginBottom: 28,
           transition: 'all 0.25s ease',
-          background: hovered ? '#36BF8F' : plan.popular ? '#306770' : '#FFFFFF',
-          color: hovered ? '#FFFFFF' : plan.popular ? '#FFFFFF' : '#306770',
-          border: hovered ? '1.5px solid #36BF8F' : plan.popular ? '1.5px solid #306770' : '1.5px solid #BFC8CC',
+          opacity: loading ? 0.65 : 1,
+          background: hovered && !loading ? '#36BF8F' : plan.popular ? '#306770' : '#FFFFFF',
+          color: hovered && !loading ? '#FFFFFF' : plan.popular ? '#FFFFFF' : '#306770',
+          border: hovered && !loading ? '1.5px solid #36BF8F' : plan.popular ? '1.5px solid #306770' : '1.5px solid #BFC8CC',
           letterSpacing: '0.3px',
         }}
       >
-        {plan.cta}
+        {loading ? 'Redirecting...' : plan.cta}
       </button>
 
       <div style={{ height: 1, background: '#F0F0F0', marginBottom: 24 }} />
@@ -223,8 +234,12 @@ function FaqItem({ item, index, visible }: { item: { q: string; a: string }; ind
   )
 }
 
-const PlansPage = ({ onBack }: { onBack?: () => void }) => {
+const PAYPAL_EMAIL = 'dcartercreative@gmail.com'
+
+const PlansPage = ({ onBack, userEmail }: { onBack?: () => void; userEmail?: string }) => {
   const [pageVisible, setPageVisible] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState<StripePlan | 'tokens' | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const faqSection = useInView(0.1)
 
   useEffect(() => {
@@ -233,6 +248,31 @@ const PlansPage = ({ onBack }: { onBack?: () => void }) => {
     })
     return () => cancelAnimationFrame(t)
   }, [])
+
+  const handleCheckout = async (plan: StripePlan) => {
+    setCheckoutLoading(plan)
+    setCheckoutError(null)
+    try {
+      const url = await createCheckoutSession(plan, userEmail || '')
+      window.location.href = url
+    } catch (err: any) {
+      setCheckoutError(err?.message || 'Could not start checkout. Please try again.')
+      setCheckoutLoading(null)
+    }
+  }
+
+  const handleTokenPurchase = () => {
+    const params = new URLSearchParams({
+      cmd: '_xclick',
+      business: PAYPAL_EMAIL,
+      amount: '1.00',
+      currency_code: 'USD',
+      item_name: 'Wander/Work Tokens (3)',
+      no_note: '1',
+      no_shipping: '1',
+    })
+    window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank')
+  }
 
   const plans: Plan[] = [
     {
@@ -244,22 +284,24 @@ const PlansPage = ({ onBack }: { onBack?: () => void }) => {
       cta: 'Get Tokens',
     },
     {
-      name: 'Premium',
+      name: 'Pro',
       price: 19,
       period: '/ mo',
       description: 'Our most popular plan for active job seekers.',
-      features: ['100 tokens per month', 'Priority matching', 'AI resume tailoring', 'Cover letter generator', 'Interview prep tools'],
-      cta: 'Go Premium',
+      features: ['100 tokens per month', '20 recruiter emails/day', 'Priority matching', 'AI resume tailoring', 'Cover letter generator'],
+      cta: 'Go Pro',
       popular: true,
       badge: 'Most Popular',
+      stripePlan: 'pro',
     },
     {
-      name: 'Unlimited',
+      name: 'Premium',
       price: 49,
       period: '/ mo',
       description: 'Maximum tools for serious career growth.',
-      features: ['Unlimited job applications', 'Premium job matches', 'Direct outreach tools', 'Priority support'],
-      cta: 'Go Unlimited',
+      features: ['200 tokens per month', '30 recruiter emails/day', 'Everything in Pro', 'Career coach access', 'Interview prep'],
+      cta: 'Go Premium',
+      stripePlan: 'premium',
     },
   ]
 
@@ -386,13 +428,39 @@ const PlansPage = ({ onBack }: { onBack?: () => void }) => {
             justifyContent: 'center',
             alignItems: 'flex-start',
             flexWrap: 'wrap',
-            marginBottom: 80,
+            marginBottom: checkoutError ? 24 : 80,
           }}
         >
           {plans.map((plan, i) => (
-            <PlanCard key={plan.name} plan={plan} index={i} pageVisible={pageVisible} />
+            <PlanCard
+              key={plan.name}
+              plan={plan}
+              index={i}
+              pageVisible={pageVisible}
+              onCheckout={plan.stripePlan ? () => handleCheckout(plan.stripePlan!) : handleTokenPurchase}
+              loading={!!checkoutLoading && checkoutLoading === (plan.stripePlan ?? 'tokens')}
+            />
           ))}
         </div>
+
+        {checkoutError && (
+          <div
+            style={{
+              maxWidth: 480,
+              margin: '0 auto 56px',
+              padding: '14px 20px',
+              borderRadius: 12,
+              background: '#FFF0F0',
+              border: '1px solid #F5C0C0',
+              color: '#B91C1C',
+              fontSize: 13,
+              fontFamily: 'Manrope',
+              textAlign: 'center',
+            }}
+          >
+            {checkoutError}
+          </div>
+        )}
 
         {/* Social proof strip */}
         <div

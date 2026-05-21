@@ -2,6 +2,64 @@ import { ArrowLeft, Check, CreditCard, Eye, Files, Upload, WalletCards, X } from
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
+import { createCheckoutSession, type Plan as StripePlan } from '../api/stripe'
+
+function renderMarkdown(text: string) {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let listItems: string[] = []
+  let k = 0
+
+  const renderInline = (str: string): React.ReactNode => {
+    const parts = str.split(/(\*\*[^*]+\*\*)/)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} style={{ color: '#1a1a1a', fontWeight: 700 }}>{part.slice(2, -2)}</strong>
+      }
+      if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(part.trim())) {
+        return <a key={i} href={`mailto:${part.trim()}`} style={{ color: '#306770' }}>{part}</a>
+      }
+      return part
+    })
+  }
+
+  const flushList = () => {
+    if (!listItems.length) return
+    elements.push(
+      <ul key={k++} style={{ listStyle: 'none', padding: 0, margin: '0 0 10px 0' }}>
+        {listItems.map((item, i) => (
+          <li key={i} style={{ display: 'flex', gap: 8, color: '#444', fontSize: 13, lineHeight: '1.6' }}>
+            <span style={{ color: '#306770', flexShrink: 0 }}>•</span>
+            <span>{renderInline(item)}</span>
+          </li>
+        ))}
+      </ul>
+    )
+    listItems = []
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed === '---') {
+      flushList()
+      elements.push(<hr key={k++} style={{ borderColor: '#E5E7EB', borderTopWidth: 1, margin: '14px 0' }} />)
+    } else if (trimmed.startsWith('- ')) {
+      listItems.push(trimmed.slice(2))
+    } else if (trimmed === '') {
+      flushList()
+    } else {
+      flushList()
+      const isBold = trimmed.startsWith('**') && trimmed.endsWith('**')
+      elements.push(
+        <p key={k++} style={{ margin: '0 0 4px 0', fontSize: isBold ? 14 : 13, lineHeight: '1.6', color: isBold ? '#222' : '#444' }}>
+          {renderInline(trimmed)}
+        </p>
+      )
+    }
+  }
+  flushList()
+  return elements
+}
 
 interface SettingsPageProps {
   onBack: () => void
@@ -50,11 +108,59 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
   })
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [notifications, setNotifications] = useState<{ jobAlerts: boolean; weeklyDigest: boolean }>(() => {
+    try {
+      const saved = localStorage.getItem('wanderworkNotifications')
+      return saved ? JSON.parse(saved) : { jobAlerts: true, weeklyDigest: true }
+    } catch { return { jobAlerts: true, weeklyDigest: true } }
+  })
+  const [upgradeLoading, setUpgradeLoading] = useState<StripePlan | null>(null)
+  const handleUpgrade = async (plan: StripePlan) => {
+    setUpgradeLoading(plan)
+    try {
+      const url = await createCheckoutSession(plan, profile.email)
+      window.location.href = url
+    } catch (err: any) {
+      await showAlert('Checkout Failed', err?.message || 'Could not start checkout. Please try again.')
+    } finally {
+      setUpgradeLoading(null)
+    }
+  }
+
+  const handleNotificationChange = (key: 'jobAlerts' | 'weeklyDigest', value: boolean) => {
+    const next = { ...notifications, [key]: value }
+    setNotifications(next)
+    localStorage.setItem('wanderworkNotifications', JSON.stringify(next))
+    if (userId) {
+      updateUser(userId, { notifications: next }).catch(e => console.warn('Failed to save notification prefs', e))
+    }
+  }
 
   const resumeFileRef = useRef<HTMLInputElement>(null)
   const coverLetterFileRef = useRef<HTMLInputElement>(null)
   const saveDebounceRef = useRef<number | null>(null)
   const [documentModal, setDocumentModal] = useState<DocumentModalState>(null)
+
+  type SiteModal = null | {
+    title: string
+    message: string
+    type: 'alert' | 'confirm'
+    onConfirm?: () => void
+    onCancel?: () => void
+  }
+  const [siteModal, setSiteModal] = useState<SiteModal>(null)
+  const showAlert = (title: string, message: string) =>
+    new Promise<void>(resolve =>
+      setSiteModal({ title, message, type: 'alert', onConfirm: () => { setSiteModal(null); resolve() } })
+    )
+  const showConfirm = (title: string, message: string) =>
+    new Promise<boolean>(resolve =>
+      setSiteModal({
+        title, message, type: 'confirm',
+        onConfirm: () => { setSiteModal(null); resolve(true) },
+        onCancel: () => { setSiteModal(null); resolve(false) },
+      })
+    )
 
   useEffect(() => {
     if (!candidate) return
@@ -120,10 +226,14 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     if (!file) return
 
     if (type === 'resume') {
-      const confirm = window.confirm(
-        "Are you sure you want to re-upload your resume? This may change your matches and costs 1 credit."
+      const hasResume = !!(profile.resume || profile.resumeLink)
+      const confirmed = await showConfirm(
+        'Upload Resume',
+        hasResume
+          ? 'Re-uploading your resume costs 3 credits and may change your job matches. Continue?'
+          : 'Upload your resume to unlock personalized job matches. Your first upload is free. Continue?'
       )
-      if (!confirm) {
+      if (!confirmed) {
         if (resumeFileRef.current) resumeFileRef.current.value = ''
         return
       }
@@ -135,9 +245,9 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
         setProfile(updated)
         localStorage.setItem('wanderworkProfile', JSON.stringify(updated))
         if (result?.candidate) onCandidateUpdate?.(result.candidate)
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Resume upload failed', err)
-        alert('Resume upload failed. Please try again.')
+        await showAlert('Upload Failed', err?.message || 'Resume upload failed. Please try again.')
         if (resumeFileRef.current) resumeFileRef.current.value = ''
         return
       }
@@ -483,58 +593,74 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[12px]" style={{ color: '#787878' }}>Current Password</label>
-                        <input
-                          type="password"
-                          value={passwordForm.current}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
-                          className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
-                          style={{ borderColor: '#DCDCDC', color: '#306770' }}
-                          autoComplete="current-password"
-                        />
+                    <div className="flex flex-col gap-0">
+
+                      {/* Step 1 — Verify current password */}
+                      <div className="rounded-[14px] p-5 mb-4" style={{ background: '#f9fafb', border: '1px solid #EBEBEB' }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: '#306770', letterSpacing: '1.5px' }}>Current Password</p>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[12px]" style={{ color: '#9ca3af' }}>Enter your current password to make changes</label>
+                          <input
+                            type="password"
+                            value={passwordForm.current}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 rounded-[10px] border text-[14px] bg-white"
+                            style={{ borderColor: '#DCDCDC', color: '#1f2937', outline: 'none' }}
+                            autoComplete="current-password"
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[12px]" style={{ color: '#787878' }}>New Password</label>
-                        <input
-                          type="password"
-                          value={passwordForm.next}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}
-                          className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
-                          style={{ borderColor: '#DCDCDC', color: '#306770' }}
-                          autoComplete="new-password"
-                        />
+
+                      {/* Step 2 — Set new password */}
+                      <div className="rounded-[14px] p-5" style={{ background: '#f9fafb', border: '1px solid #EBEBEB' }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: '#306770', letterSpacing: '1.5px' }}>New Password</p>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[12px]" style={{ color: '#9ca3af' }}>New password</label>
+                            <input
+                              type="password"
+                              value={passwordForm.next}
+                              onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}
+                              placeholder="Min. 8 characters"
+                              className="w-full px-4 py-3 rounded-[10px] border text-[14px] bg-white"
+                              style={{ borderColor: '#DCDCDC', color: '#1f2937', outline: 'none' }}
+                              autoComplete="new-password"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[12px]" style={{ color: '#9ca3af' }}>Confirm new password</label>
+                            <input
+                              type="password"
+                              value={passwordForm.confirm}
+                              onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                              placeholder="Re-enter new password"
+                              className="w-full px-4 py-3 rounded-[10px] border text-[14px] bg-white"
+                              style={{ borderColor: '#DCDCDC', color: '#1f2937', outline: 'none' }}
+                              autoComplete="new-password"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[12px]" style={{ color: '#787878' }}>Confirm New Password</label>
-                        <input
-                          type="password"
-                          value={passwordForm.confirm}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-                          className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
-                          style={{ borderColor: '#DCDCDC', color: '#306770' }}
-                          autoComplete="new-password"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2 justify-end">
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-3 mt-4">
                         <button
                           onClick={handleChangePassword}
-                          className="px-4 py-2 rounded-[10px] border transition-colors w-full"
-                          style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
+                          className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold transition-colors"
+                          style={{ background: '#306770', color: 'white', border: 'none' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#245460')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#306770')}
                         >
                           Update Password
                         </button>
                         <button
                           onClick={handleResetPasswordLink}
-                          className="px-4 py-2 rounded-[10px] text-[13px] transition-colors w-full"
-                          style={{ color: '#306770' }}
+                          className="text-[13px] transition-colors"
+                          style={{ color: '#306770', background: 'none', border: 'none', cursor: 'pointer' }}
                         >
-                          Send password reset link
+                          Send reset link instead
                         </button>
-                        <p className="text-[12px]" style={{ color: '#787878' }}>
-                          Password changes attempt server update if `wanderworkUserId` is set; otherwise stored locally.
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -543,11 +669,21 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: '#306770' }}>Notifications</h3>
                     <div className="flex flex-col gap-3">
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4" />
+                        <input
+                          type="checkbox"
+                          checked={notifications.jobAlerts}
+                          onChange={e => handleNotificationChange('jobAlerts', e.target.checked)}
+                          className="w-4 h-4"
+                        />
                         <span className="text-[14px]" style={{ color: '#787878' }}>Email notifications for new jobs</span>
                       </label>
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4" />
+                        <input
+                          type="checkbox"
+                          checked={notifications.weeklyDigest}
+                          onChange={e => handleNotificationChange('weeklyDigest', e.target.checked)}
+                          className="w-4 h-4"
+                        />
                         <span className="text-[14px]" style={{ color: '#787878' }}>Weekly job digest</span>
                       </label>
                     </div>
@@ -638,9 +774,14 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   <button
                     className="px-4 py-2 rounded-[10px] border transition-colors"
                     style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
-                    onClick={() => handlePaymentProviderChange(paymentProvider === 'stripe' ? 'paypal' : 'stripe')}
+                    onClick={() => window.open(
+                      paymentProvider === 'stripe'
+                        ? 'https://billing.stripe.com'
+                        : 'https://www.paypal.com/signin',
+                      '_blank', 'noopener,noreferrer'
+                    )}
                   >
-                    + Add {paymentProvider === 'stripe' ? 'PayPal' : 'Stripe'} Payment Method
+                    + Add {paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method
                   </button>
 
                   <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
@@ -661,40 +802,68 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                 <h2 className="text-[24px] font-semibold mb-2" style={{ color: '#306770' }}>Upgrade Your Plan</h2>
                 <p className="text-[14px] mb-6" style={{ color: '#787878' }}>Currently on <strong>Starter</strong> plan</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="border rounded-[15px] p-6" style={{ borderColor: '#DCDCDC' }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Starter — current plan */}
+                  <div className="border-2 rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#306770', borderStyle: 'dashed' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-[18px] font-semibold" style={{ color: '#306770' }}>Starter</h3>
+                      <span className="px-2 py-1 rounded-[8px] text-[10px] font-semibold" style={{ color: '#306770', background: '#30677015', border: '1px solid #306770' }}>Current Plan</span>
+                    </div>
+                    <p className="text-[24px] font-bold mb-4" style={{ color: '#306770' }}>$0<span style={{ fontSize: '14px', fontWeight: 'normal' }}>/mo</span></p>
+                    <ul className="flex flex-col gap-2 mb-6 text-[12px] flex-1" style={{ color: '#787878' }}>
+                      <li>✓ Daily job matches</li>
+                      <li>✓ 10 tokens/month</li>
+                      <li>✓ Basic resume upload</li>
+                      <li>✓ Job bookmarks</li>
+                    </ul>
+                    <button
+                      disabled
+                      className="w-full px-4 py-2 rounded-[10px] text-[12px]"
+                      style={{ border: '1px solid #DCDCDC', color: '#AAAAAA', background: '#F9F9F9', cursor: 'not-allowed' }}
+                    >
+                      Your Current Plan
+                    </button>
+                  </div>
+
+                  {/* Pro */}
+                  <div className="border rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#DCDCDC' }}>
                     <h3 className="text-[18px] font-semibold mb-2" style={{ color: '#306770' }}>Pro</h3>
                     <p className="text-[24px] font-bold mb-4" style={{ color: '#306770' }}>$19<span style={{ fontSize: '14px', fontWeight: 'normal' }}>/mo</span></p>
-                    <ul className="flex flex-col gap-2 mb-6 text-[12px]" style={{ color: '#787878' }}>
+                    <ul className="flex flex-col gap-2 mb-6 text-[12px] flex-1" style={{ color: '#787878' }}>
                       <li>✓ Unlimited job matches</li>
-                      <li>✓ 200 tokens/month</li>
-                      <li>✓ Priority support</li>
+                      <li>✓ 100 tokens/month</li>
+                      <li>✓ 20 recruiter emails/day</li>
                       <li>✓ Resume optimization</li>
                     </ul>
                     <button
                       className="w-full px-4 py-2 rounded-[10px] text-[12px] transition-colors"
-                      style={{ border: '1px solid #306770', color: '#306770', background: 'white' }}
+                      style={{ border: '1px solid #306770', color: '#306770', background: 'white', opacity: upgradeLoading === 'pro' ? 0.6 : 1 }}
+                      disabled={!!upgradeLoading}
+                      onClick={() => handleUpgrade('pro')}
                     >
-                      Upgrade to Pro
+                      {upgradeLoading === 'pro' ? 'Redirecting...' : 'Upgrade to Pro'}
                     </button>
                   </div>
 
-                  <div className="border-2 rounded-[15px] p-6" style={{ borderColor: '#306770', background: '#30677010' }}>
+                  {/* Premium */}
+                  <div className="border-2 rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#306770', background: '#30677010' }}>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-[18px] font-semibold" style={{ color: '#306770' }}>Premium</h3>
                       <span className="px-2 py-1 rounded-[8px] text-[10px] font-semibold" style={{ color: 'white', background: '#36BF8F' }}>Popular</span>
                     </div>
                     <p className="text-[24px] font-bold mb-4" style={{ color: '#306770' }}>$49<span style={{ fontSize: '14px', fontWeight: 'normal' }}>/mo</span></p>
-                    <ul className="flex flex-col gap-2 mb-6 text-[12px]" style={{ color: '#787878' }}>
+                    <ul className="flex flex-col gap-2 mb-6 text-[12px] flex-1" style={{ color: '#787878' }}>
                       <li>✓ Everything in Pro</li>
-                      <li>✓ 500 tokens/month</li>
+                      <li>✓ 200 tokens/month</li>
+                      <li>✓ 30 recruiter emails/day</li>
                       <li>✓ Career coach access</li>
-                      <li>✓ Custom cover letters</li>
                       <li>✓ Interview prep</li>
                     </ul>
                     <button
                       className="w-full px-4 py-2 rounded-[10px] text-[12px] text-white transition-colors"
-                      style={{ background: '#306770' }}
+                      style={{ background: '#306770', opacity: upgradeLoading === 'premium' ? 0.6 : 1 }}
+                      disabled={!!upgradeLoading}
+                      onClick={() => handleUpgrade('premium')}
                     >
                       Upgrade to Premium
                     </button>
@@ -705,8 +874,32 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
           </div>
         </div>
       </div>
+      {siteModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '32px 32px 28px', maxWidth: 420, width: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.18)', fontFamily: 'Manrope, sans-serif' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#306770', marginBottom: 12 }}>{siteModal.title}</h3>
+            <p style={{ fontSize: 14, color: '#787878', lineHeight: 1.65, marginBottom: 28 }}>{siteModal.message}</p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              {siteModal.type === 'confirm' && (
+                <button
+                  onClick={siteModal.onCancel}
+                  style={{ padding: '10px 22px', borderRadius: 10, border: '1.5px solid #DCDCDC', background: 'white', color: '#787878', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Manrope, sans-serif' }}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={siteModal.onConfirm}
+                style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#306770', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Manrope, sans-serif' }}
+              >
+                {siteModal.type === 'confirm' ? 'Continue' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {documentModal && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4" onClick={() => setDocumentModal(null)}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center px-4" style={{ background: 'rgba(48,103,112,0.18)', backdropFilter: 'blur(4px)' }} onClick={() => setDocumentModal(null)}>
           <div
             className="bg-white rounded-[18px] w-full max-w-[720px] max-h-[82vh] overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.16)]"
             style={{ fontFamily: 'Manrope' }}
@@ -752,7 +945,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                         )}
                       </div>
                       {!currentUrl && typeof current === 'string' && (
-                        <pre className="mt-3 max-h-[220px] overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed" style={{ color: '#787878' }}>{current}</pre>
+                        <div className="mt-3 max-h-[220px] overflow-y-auto">{renderMarkdown(current)}</div>
                       )}
                     </div>
 
@@ -782,7 +975,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                             )}
                           </div>
                           {generatedContent && (
-                            <pre className="max-h-[260px] overflow-y-auto whitespace-pre-wrap text-[12px] leading-relaxed" style={{ color: '#787878' }}>{generatedContent}</pre>
+                            <div className="max-h-[260px] overflow-y-auto">{renderMarkdown(generatedContent)}</div>
                           )}
                         </div>
                       )
