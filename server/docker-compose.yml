@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  aon-local:
+    image: mongo
+    container_name: aon-local
+    restart: always
+    networks:
+      - mongo_network
+    ports:
+      - "27017:27017"
+    command: ["mongod", "--replSet", "aon-replica-set", "--bind_ip_all"]
+    volumes:
+      - aon_local_data:/data/db
+
+  aon-local2:
+    image: mongo
+    container_name: aon-local2
+    restart: always
+    networks:
+      - mongo_network
+    ports:
+      - "27018:27017"
+    command: ["mongod", "--replSet", "aon-replica-set", "--bind_ip_all"]
+    volumes:
+      - aon_local2_data:/data/db
+
+  mongo-init:
+    image: mongo
+    container_name: mongo-init
+    depends_on:
+      - aon-local
+      - aon-local2
+    networks:
+      - mongo_network
+    volumes:
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+    entrypoint: ["bash", "-c", "sleep 10 && mongosh --host aon-local:27017 /docker-entrypoint-initdb.d/init-mongo.js"]
+
+networks:
+  mongo_network:
+
+volumes:
+  aon_local_data:
+  aon_local2_data:

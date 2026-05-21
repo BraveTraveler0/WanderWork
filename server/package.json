@@ -1,0 +1,47 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server",
+    "dev": "nodemon server",
+    "dev-debug": "nodemon --inspect server.js",
+    "delete-users-2023": "node deleteUsers.js",
+    "delete-posts-2023": "node deletePosts.js",
+    "delete-rankposts-2023": "node deleteRankPosts.js",
+    "delete-comments-2023": "node deleteComments.js",
+    "delete-missingpostrank": "node deleteMissingRank.js",
+    "delete-unmatched-posts": "node deleteMissingUserPost.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@sendgrid/mail": "^8.1.0",
+    "aws-sdk": "^2.1370.0",
+    "axios": "^1.4.0",
+    "bcrypt": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "express-async-handler": "^1.2.0",
+    "express-rate-limit": "^7.5.0",
+    "form-data": "^4.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^6.8.0",
+    "mongoose-sequence": "^5.3.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.7",
+    "nodemailer-smtp-transport": "^2.4.2",
+    "passport": "^0.6.0",
+    "passport-twitter": "^0.1.5",
+    "react-router-dom": "^6.21.2",
+    "stripe": "^15.8.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

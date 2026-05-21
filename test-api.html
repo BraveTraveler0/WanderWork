@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Wanderwork Backend</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #306770;
+        }
+        button {
+            background: #306770;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #2a5860;
+        }
+        .endpoint {
+            background: #f9f9f9;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #306770;
+            border-radius: 4px;
+        }
+        .endpoint h3 {
+            margin: 0 0 10px 0;
+            color: #306770;
+        }
+        pre {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+        }
+        .loading {
+            color: #999;
+            font-style: italic;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #388e3c;
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Wanderwork Backend API Test</h1>
+        <p>Click the buttons below to test your backend endpoints and see the JSON responses.</p>
+        <div class="endpoint">
+            <h3>🔧 Base URL</h3>
+            <p>Default is the hosted backend. Override via <code>?base=</code> query param.</p>
+            <p id="base-url-display"></p>
+        </div>
+
+        <!-- Test 1: Get All Data -->
+        <div class="endpoint">
+            <h3>1️⃣ GET /jobseeker/ (All Data)</h3>
+            <p>Fetches all JobSeeker data including profile, jobs, stats, etc.</p>
+            <button onclick="testGetAll()">Test GET /jobseeker/</button>
+            <div id="result-all"></div>
+        </div>
+
+        <!-- Test 2: Get Applications -->
+        <div class="endpoint">
+            <h3>2️⃣ GET /jobseeker/application (Applications)</h3>
+            <p>Fetches all job applications.</p>
+            <button onclick="testApplications()">Test GET /jobseeker/application</button>
+            <div id="result-apps"></div>
+        </div>
+
+        <!-- Test 3: Update (Demo) -->
+        <div class="endpoint">
+            <h3>3️⃣ PATCH /jobseeker/update (Update Data)</h3>
+            <p>Example PATCH request (will try to update with test data).</p>
+            <button onclick="testUpdate()">Test PATCH /jobseeker/update</button>
+            <div id="result-update"></div>
+        </div>
+
+        <!-- Test 4: Get Jobs -->
+        <div class="endpoint">
+            <h3>4️⃣ GET /jobseeker/job (Jobs)</h3>
+            <p>Fetches all jobs. Shows count and first 3 items.</p>
+            <button onclick="testJobs()">Test GET /jobseeker/job</button>
+            <div id="result-jobs"></div>
+        </div>
+
+        <!-- Test 5: Get Candidates -->
+        <div class="endpoint">
+            <h3>5️⃣ GET /jobseeker/candidate (Candidates)</h3>
+            <p>Fetches all candidates. Shows count and first 2 items.</p>
+            <button onclick="testCandidates()">Test GET /jobseeker/candidate</button>
+            <div id="result-candidates"></div>
+        </div>
+
+        <!-- Test 6: Users Search -->
+        <div class="endpoint">
+            <h3>6️⃣ GET /users/search (Search Users)</h3>
+            <p>Searches users by name using either <code>?q=</code> or <code>?search=</code>.</p>
+            <input id="user-query" type="text" placeholder="Enter name, e.g., Darrien Carter" style="width: 100%; padding: 8px; margin: 8px 0;" />
+            <button onclick="testUsersSearch()">Test Users Search</button>
+            <div id="result-users"></div>
+        </div>
+
+        <hr>
+        <p style="color: #999; font-size: 12px;">
+            📌 Copy the JSON output below and paste it in your conversation with the AI to wire up your components.
+        </p>
+    </div>
+
+    <script>
+        const DEFAULT_BASE = "https://application-server-cwqu.onrender.com";
+        const params = new URLSearchParams(window.location.search);
+        const BASE_URL = params.get("base") || DEFAULT_BASE;
+        document.addEventListener("DOMContentLoaded", () => {
+            const display = document.getElementById("base-url-display");
+            if (display) {
+                display.innerHTML = `<strong>Base:</strong> ${BASE_URL}`;
+            }
+        });
+
+        async function testGetAll() {
+            const resultDiv = document.getElementById("result-all");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+            try {
+                const response = await fetch(`${BASE_URL}/jobseeker/`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Success (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Error (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testApplications() {
+            const resultDiv = document.getElementById("result-apps");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+            try {
+                const response = await fetch(`${BASE_URL}/jobseeker/application`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Success (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Error (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testUpdate() {
+            const resultDiv = document.getElementById("result-update");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+            const testPayload = {
+                test: "This is a test update request"
+            };
+
+            try {
+                const response = await fetch(`${BASE_URL}/jobseeker/update`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(testPayload),
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Success (Status: ${response.status})</p>
+                        <p><strong>Sent:</strong></p>
+                        <pre>${JSON.stringify(testPayload, null, 2)}</pre>
+                        <p><strong>Received:</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Error (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testJobs() {
+            const resultDiv = document.getElementById("result-jobs");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+            try {
+                const response = await fetch(`${BASE_URL}/jobseeker/job`);
+                const data = await response.json();
+                const count = Array.isArray(data) ? data.length : (data?.length ?? 0);
+
+                if (response.ok) {
+                    const sample = Array.isArray(data) ? data.slice(0, 3) : data;
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Success (Status: ${response.status}) — Count: ${count}</p>
+                        <pre>${JSON.stringify(sample, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Error (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testCandidates() {
+            const resultDiv = document.getElementById("result-candidates");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+            try {
+                const response = await fetch(`${BASE_URL}/jobseeker/candidate`);
+                const data = await response.json();
+                const count = Array.isArray(data) ? data.length : (data?.length ?? 0);
+
+                if (response.ok) {
+                    const sample = Array.isArray(data) ? data.slice(0, 2) : data;
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Success (Status: ${response.status}) — Count: ${count}</p>
+                        <pre>${JSON.stringify(sample, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ Error (Status: ${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testUsersSearch() {
+            const resultDiv = document.getElementById("result-users");
+            resultDiv.innerHTML = '<p class="loading">Loading...</p>';
+            const name = document.getElementById("user-query").value || "Darrien Carter";
+
+            try {
+                const [respQ, respSearch] = await Promise.all([
+                    fetch(`${BASE_URL}/users/search?q=${encodeURIComponent(name)}`),
+                    fetch(`${BASE_URL}/users/search?search=${encodeURIComponent(name)}`)
+                ]);
+                const dataQ = await respQ.json().catch(() => ({}));
+                const dataSearch = await respSearch.json().catch(() => ({}));
+                resultDiv.innerHTML = `
+                    <p class="success">✅ Queried name: ${name}</p>
+                    <p><strong>?q= result (status ${respQ.status}):</strong></p>
+                    <pre>${JSON.stringify(dataQ, null, 2)}</pre>
+                    <p><strong>?search= result (status ${respSearch.status}):</strong></p>
+                    <pre>${JSON.stringify(dataSearch, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Network Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

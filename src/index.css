@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Manrope', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #f5f5f5;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: #f4f4f4;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes detailPanelReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+    filter: blur(3px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.002);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes subtlePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(48,103,112,0.0); }
+  50%       { box-shadow: 0 0 0 6px rgba(48,103,112,0.08); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.anim-fade-slide-up   { animation: fadeSlideUp   0.45s cubic-bezier(0.22,1,0.36,1) both; }
+.anim-fade-slide-right{ animation: fadeSlideRight 0.45s cubic-bezier(0.22,1,0.36,1) both; }
+.anim-fade-in         { animation: fadeIn         0.4s ease both; }
+
+.job-card-enter {
+  animation: fadeSlideUp 0.35s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+.stats-panel-enter {
+  animation: detailPanelReveal 0.52s cubic-bezier(0.22,1,0.36,1) both;
+  transform-origin: 50% 18%;
+  will-change: opacity, transform, filter;
+}
+
+.sidebar-enter {
+  animation: fadeSlideRight 0.45s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* Custom scrollbar — hidden until hover */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.25s;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #c9d0d5;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.custom-scrollbar:hover {
+  scrollbar-color: #c9d0d5 transparent;
+}
+
+/* Hide scrollbar on stats panel wrapper */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Looping arrow nudge for CTA button */
+@keyframes arrowNudge {
+  0%   { transform: translateX(0); }
+  40%  { transform: translateX(6px); }
+  60%  { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+
+.arrow-nudge {
+  display: inline-flex;
+  animation: arrowNudge 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Looping glow pulse for CTA button */
+@keyframes ctaGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(48,103,112,0); }
+  50%       { box-shadow: 0 0 16px 5px rgba(48,103,112,0.28); }
+}
+
+.cta-glow {
+  animation: ctaGlow 3s ease-in-out infinite;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
