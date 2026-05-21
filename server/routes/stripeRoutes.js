@@ -3,6 +3,7 @@ const router = express.Router();
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/User');
+const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
@@ -60,6 +61,62 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 });
 
+// POST /stripe/create-token-checkout-session
+// Body: { tokens: number, email: string }
+// Creates a one-time Stripe Checkout payment for token packs.
+router.post('/create-token-checkout-session', async (req, res) => {
+  const { tokens, email } = req.body || {};
+  const tokenQty = Number(tokens);
+
+  if (!Number.isInteger(tokenQty) || tokenQty < 1 || tokenQty > 1000) {
+    return res.status(400).json({ message: 'tokens must be a whole number between 1 and 1000.' });
+  }
+
+  const amountCents = Math.max(50, Math.round((tokenQty / 3) * 100));
+
+  try {
+    const normalizedEmail = email ? String(email).toLowerCase() : '';
+    const user = normalizedEmail ? await User.findOne({ email: normalizedEmail }) : null;
+
+    let customer = user?.stripeId || undefined;
+    if (!customer && normalizedEmail) {
+      const created = await stripe.customers.create({ email: normalizedEmail });
+      customer = created.id;
+      if (user) { user.stripeId = customer; await user.save(); }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      customer: customer || undefined,
+      customer_email: customer ? undefined : normalizedEmail || undefined,
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: amountCents,
+          product_data: {
+            name: `Wander/Work Tokens (${tokenQty})`,
+            description: 'AI resume, cover letter, and recruiter outreach credits',
+          },
+        },
+      }],
+      success_url: `${APP_URL}?checkout=success&type=tokens&tokens=${tokenQty}`,
+      cancel_url: `${APP_URL}?checkout=cancelled&type=tokens`,
+      metadata: {
+        type: 'tokens',
+        tokens: String(tokenQty),
+        email: normalizedEmail,
+      },
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Stripe token checkout session error:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ── POST /stripe/webhook ──────────────────────────────────────────────────────
 // Stripe sends raw body — must use express.raw() middleware (registered in server.js)
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -81,6 +138,15 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       const session = event.data.object;
       const email = session.metadata?.email || session.customer_email;
       const plan = session.metadata?.plan;
+      const tokenQty = Number(session.metadata?.tokens || 0);
+
+      if (session.metadata?.type === 'tokens' && email && Number.isFinite(tokenQty) && tokenQty > 0) {
+        await Candidate.findOneAndUpdate(
+          { email: String(email).toLowerCase() },
+          { $inc: { tokenBalance: tokenQty } },
+          { sort: { createdAt: -1 } }
+        );
+      }
 
       if (email && plan) {
         const user = await User.findOne({ email: String(email).toLowerCase() });

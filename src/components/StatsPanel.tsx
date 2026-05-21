@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ArrowRight, Users } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
+import { createTokenCheckoutSession } from '../api/stripe'
 
 const INTERESTED_KEY = 'wanderworkInterestedJobs'
 function loadInterestedOverrides(): Record<number, boolean> {
@@ -63,6 +64,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const [floatDelta, setFloatDelta] = useState<number | null>(null)
   const [floatKey, setFloatKey] = useState(0)
   const [creditBalanceOverride, setCreditBalanceOverride] = useState<number | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal'>('stripe')
+  const [tokenCheckoutLoading, setTokenCheckoutLoading] = useState(false)
+  const [tokenCheckoutError, setTokenCheckoutError] = useState<string | null>(null)
 
   const baseCredits = (() => {
     const tokenValue = firstCandidate?.tokenBalance ?? firstCandidate?.tokens
@@ -84,7 +88,20 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
   const tokenPrice = (tokenQty / 3).toFixed(2)
 
-  const purchase = async () => {
+  const openPayPalCheckout = () => {
+    const params = new URLSearchParams({
+      cmd: '_xclick',
+      business: 'dcartercreative@gmail.com',
+      amount: tokenPrice,
+      currency_code: 'USD',
+      item_name: `Wander/Work Tokens (${tokenQty})`,
+      no_note: '1',
+      no_shipping: '1',
+    })
+    window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank')
+  }
+
+  const addTokensLocally = async () => {
     const newTotal = currentTokens + tokenQty
     setCurrentTokens(newTotal)
     setShowTokensModal(false)
@@ -106,6 +123,27 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
     } catch (e) {
       // Swallow errors; UI remains responsive and local
       console.warn('Failed to persist token update', e)
+    }
+  }
+
+  const purchase = async () => {
+    if (tokenQty < 1 || tokenCheckoutLoading) return
+    setTokenCheckoutError(null)
+
+    if (paymentMethod === 'paypal') {
+      openPayPalCheckout()
+      await addTokensLocally()
+      return
+    }
+
+    setTokenCheckoutLoading(true)
+    try {
+      const email = firstCandidate?.email || data?.Candidates?.[0]?.email || ''
+      const url = await createTokenCheckoutSession(tokenQty, email)
+      window.location.href = url
+    } catch (err: any) {
+      setTokenCheckoutError(err?.message || 'Could not start Stripe checkout. Please try again.')
+      setTokenCheckoutLoading(false)
     }
   }
 
@@ -494,23 +532,53 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               <span className="text-[14px]" style={{ color: '#306770' }}>${tokenPrice}</span>
             </div>
 
-            <div className="flex items-center justify-between text-[13px] mb-6" style={{ color: '#787878' }}>
+            <div className="text-[13px] mb-6" style={{ color: '#787878' }}>
               <span>Payment Method</span>
-              <input
-                className="w-[140px] rounded-[8px] border px-3 py-2 text-[12px]"
-                style={{ borderColor: '#DCDCDC', color: '#787878' }}
-                defaultValue="Card 4451"
-              />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  className="rounded-[10px] border px-4 py-3 text-left transition-colors"
+                  style={{
+                    borderColor: paymentMethod === 'stripe' ? '#306770' : '#DCDCDC',
+                    background: paymentMethod === 'stripe' ? 'rgba(48,103,112,0.08)' : 'white',
+                    color: paymentMethod === 'stripe' ? '#306770' : '#787878',
+                  }}
+                  onClick={() => setPaymentMethod('stripe')}
+                >
+                  <span className="block text-[13px] font-semibold">Stripe</span>
+                  <span className="block text-[11px]">Card checkout</span>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-[10px] border px-4 py-3 text-left transition-colors"
+                  style={{
+                    borderColor: paymentMethod === 'paypal' ? '#306770' : '#DCDCDC',
+                    background: paymentMethod === 'paypal' ? 'rgba(48,103,112,0.08)' : 'white',
+                    color: paymentMethod === 'paypal' ? '#306770' : '#787878',
+                  }}
+                  onClick={() => setPaymentMethod('paypal')}
+                >
+                  <span className="block text-[13px] font-semibold">PayPal</span>
+                  <span className="block text-[11px]">PayPal account</span>
+                </button>
+              </div>
             </div>
+
+            {tokenCheckoutError && (
+              <div className="mb-4 rounded-[10px] border px-3 py-2 text-[12px]" style={{ borderColor: '#FCA5A5', color: '#B91C1C', background: '#FEF2F2' }}>
+                {tokenCheckoutError}
+              </div>
+            )}
 
             <button
               className="w-full rounded-[10px] border px-4 py-3 text-[13px] transition-colors"
               style={{ borderColor: '#306770', color: '#306770' }}
               onClick={purchase}
+              disabled={tokenCheckoutLoading || tokenQty < 1}
               onMouseEnter={(e) => (e.currentTarget.style.background = '#306770', e.currentTarget.style.color = 'white')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'white', e.currentTarget.style.color = '#306770')}
             >
-              Get Tokens
+              {tokenCheckoutLoading ? 'Opening Stripe...' : paymentMethod === 'stripe' ? 'Checkout with Stripe' : 'Checkout with PayPal'}
             </button>
           </div>
         </div>

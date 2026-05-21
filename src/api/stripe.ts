@@ -17,6 +17,21 @@ export async function createCheckoutSession(plan: Plan, email: string): Promise<
   return url;
 }
 
+export async function createTokenCheckoutSession(tokens: number, email: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}/stripe/create-token-checkout-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokens, email }),
+  });
+  if (!res.ok) {
+    let msg = `Token checkout failed (${res.status})`;
+    try { const j = await res.json(); if (j?.message) msg = j.message; } catch {}
+    throw new Error(msg);
+  }
+  const { url } = await res.json();
+  return url;
+}
+
 export async function openCustomerPortal(email: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/stripe/portal`, {
     method: 'POST',
