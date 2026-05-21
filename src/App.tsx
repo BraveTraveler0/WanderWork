@@ -473,7 +473,9 @@ function App() {
       firstName,
       lastName,
       phone: storedProfile?.phone || '',
-      location: storedProfile?.location ? [{ locationName: storedProfile.location, city: storedProfile.location }] : [],
+      location: storedProfile?.location
+        ? [{ locationName: storedProfile.location, city: storedProfile.location }]
+        : [{ locationName: 'New York, NY', city: 'New York', state: 'NY' }],
       targetRoles: storedProfile?.title ? [storedProfile.title] : [],
       seniority: [],
       skills: storedProfile?.skills ? String(storedProfile.skills).split(',').map((s: string) => s.trim()).filter(Boolean) : [],

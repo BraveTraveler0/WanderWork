@@ -121,7 +121,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
               <input className={inputClass} value={form.phone} onChange={(e) => setField('phone', e.target.value)} required autoComplete="tel" />
             </Field>
             <Field icon={<MapPin size={18} />} label="Location" required>
-              <input className={inputClass} value={form.location} onChange={(e) => setField('location', e.target.value)} required placeholder="Seattle, WA" />
+              <input className={inputClass} value={form.location} onChange={(e) => setField('location', e.target.value)} required placeholder="New York, NY" />
             </Field>
             <Field icon={<Briefcase size={18} />} label="Target Role" required>
               <input className={inputClass} value={form.targetRole} onChange={(e) => setField('targetRole', e.target.value)} required placeholder="Senior Product Designer" />

@@ -110,7 +110,7 @@ const transformTallyData = (tallyPayload) => {
     lastName: raw.lastName || 'Candidate',
     email,
     phone: raw.phone || 'Not provided',
-    location: [{ locationName: locationName || 'Remote', city: raw.location?.city || locationName || 'Remote', state: raw.location?.state || '' }],
+    location: [{ locationName: locationName || 'New York, NY', city: raw.location?.city || locationName || 'New York', state: raw.location?.state || (locationName ? '' : 'NY') }],
     targetRoles: asArray(raw.targetRoles),
     seniority: asArray(raw.seniority),
     skills: asArray(raw.skills),

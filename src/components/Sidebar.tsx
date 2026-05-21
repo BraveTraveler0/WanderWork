@@ -31,7 +31,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     return rawCandidate ? {
       name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
       title: rawCandidate.targetRoles?.[0] || 'Full Stack Developer',
-      location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'Location',
+      location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'New York, NY',
       email: rawCandidate.email || 'email@example.com',
       phone: rawCandidate.phone || '+1-000-000-0000',
       skills: Array.isArray(rawCandidate.skills) ? rawCandidate.skills.join(', ') : 'Skills',
@@ -43,7 +43,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     } : {
       name: 'User',
       title: 'Job Seeker',
-      location: 'Location',
+      location: 'New York, NY',
       email: 'email@example.com',
       phone: '+1-000-000-0000',
       skills: 'Skills',
@@ -64,7 +64,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       const newProfile = {
         name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
         title: rawCandidate.targetRoles?.[0] || 'Full Stack Developer',
-        location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'Location',
+        location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'New York, NY',
         email: rawCandidate.email || 'email@example.com',
         phone: rawCandidate.phone || '+1-000-000-0000',
         skills: Array.isArray(rawCandidate.skills) ? rawCandidate.skills.join(', ') : 'Skills',

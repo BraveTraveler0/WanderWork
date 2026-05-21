@@ -241,7 +241,7 @@ const createNewUser = asyncHandler(async (req, res) => {
       lastName: safeLastName,
       email: normalizedEmail,
       phone: phone || 'Not provided',
-      location: [{ locationName: location || 'Remote', city: location || 'Remote' }],
+      location: [{ locationName: location || 'New York, NY', city: location || 'New York', state: location ? '' : 'NY' }],
       targetRoles: roleList,
       seniority: seniorityList,
       skills: skillList,

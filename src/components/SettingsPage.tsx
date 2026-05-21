@@ -104,7 +104,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       fullName: 'John Doe',
       email: 'john@example.com',
       phone: '+1 (555) 123-4567',
-      location: 'San Francisco, CA',
+      location: 'New York, NY',
       resume: null,
       coverLetter: null,
     })
