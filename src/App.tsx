@@ -23,6 +23,20 @@ import {
   type Location,
 } from './api/jobseeker.ts'
 
+const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
+  if (typeof window === 'undefined') return null
+  const current = localStorage.getItem(key)
+  if (current !== null) return current
+  for (const oldKey of oldKeys) {
+    const oldValue = localStorage.getItem(oldKey)
+    if (oldValue !== null) {
+      localStorage.setItem(key, oldValue)
+      return oldValue
+    }
+  }
+  return null
+}
+
 // Seed data (mirrors seed-backend.js) to keep UI populated if backend is empty
 const seedJobs: Job[] = [
   {
@@ -348,12 +362,10 @@ function App() {
   }, [])
   const [showRecruiterNavModal, setShowRecruiterNavModal] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('wanderworkProfileImage')
+    return getMigratedStorageItem('wanderworkProfileImage', ['wanderHireProfileImage'])
   })
     const [_user, setUser] = useState<any | null>(() => {
-      if (typeof window === 'undefined') return null
-      const stored = localStorage.getItem('wanderworkUser')
+      const stored = getMigratedStorageItem('wanderworkUser', ['wanderHireUser'])
       if (!stored) return null
       try {
         return JSON.parse(stored)
@@ -364,13 +376,12 @@ function App() {
       }
     })
   const [_token, setToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('wanderworkToken')
+    return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
   const [loggedOut, setLoggedOut] = useState<boolean>(false)
   const buildFallbackCandidate = (): Candidate | null => {
     if (!_user?.email) return null
-    const storedProfileRaw = typeof window !== 'undefined' ? localStorage.getItem('wanderworkProfile') : null
+    const storedProfileRaw = getMigratedStorageItem('wanderworkProfile', ['wanderHireProfile'])
     let storedProfile: any = null
     if (storedProfileRaw) {
       try {

@@ -69,7 +69,8 @@ npm start
 .
 ├── src/                 # Frontend source
 ├── server/              # Express API and MongoDB models
-├── Wanderwork/           # Landing page app/assets
++-- Wanderwork/           # Canonical landing page app/assets
++-- Landing/              # Figma landing export/reference
 ├── .github/workflows/   # GitHub Actions
 ├── .env.example         # Frontend environment template
 └── package.json
