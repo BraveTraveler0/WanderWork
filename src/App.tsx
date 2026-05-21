@@ -378,7 +378,10 @@ function App() {
   const [_token, setToken] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
-  const [loggedOut, setLoggedOut] = useState<boolean>(false)
+  const [loggedOut, setLoggedOut] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('login') === 'true'
+  })
   const buildFallbackCandidate = (): Candidate | null => {
     if (!_user?.email) return null
     const storedProfileRaw = getMigratedStorageItem('wanderworkProfile', ['wanderHireProfile'])
@@ -781,6 +784,9 @@ function App() {
       setUser(userData)
       setToken(authToken)
       setLoggedOut(false)
+      if (window.location.search.includes('login=true')) {
+        window.history.replaceState({}, '', window.location.pathname)
+      }
     }} />
   }
 

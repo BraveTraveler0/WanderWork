@@ -16,14 +16,25 @@ The app automatically detects query parameters:
 - / shows the animated Wanderwork landing page
 - /?jobs=true shows the Figma landing/reference page
 
+## Login Integration
+
+The login button sends users to the dashboard login route:
+
+```bash
+?login=true
+```
+
+For local development from the landing app on port 3003, it redirects to:
+
+```bash
+http://localhost:5173/?login=true
+```
+
+For deployment, set `VITE_DASHBOARD_LOGIN_URL` in the `Wanderwork/` app if the dashboard is hosted on a different domain.
+
 ## Sign-Up Integration
 
-The sign-up button on the landing page redirects users to the Tally form:
-```
-https://tally.so/r/wLraG2
-```
-
-Users can fill in their information there, and the responses will be collected in your Tally account.
+The sign-up button currently scrolls users back to the hero CTA area.
 
 ## Customization
 
