@@ -63,33 +63,12 @@ function GlassmorphicBubble({
   width = "auto",
   height = "auto"
 }: GlassmorphicBubbleProps) {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const ref = useRef<HTMLDivElement>(null);
-  
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"]
+  const bubbleMotion = useParallaxHover({
+    yRange: parallaxY,
+    xRange: parallaxX,
+    mouseMultiplier,
+    hoverScale: 1.02,
   });
-
-  const smoothProgress = useSpring(scrollYProgress, { 
-    stiffness: 100, 
-    damping: 30, 
-    restDelta: 0.001 
-  });
-  
-  const scrollY = useTransform(smoothProgress, [0, 1], parallaxY);
-  const scrollX = useTransform(smoothProgress, [0, 1], parallaxX);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = (e.clientX - rect.left - rect.width / 2) / rect.width;
-    const mouseY = (e.clientY - rect.top - rect.height / 2) / rect.height;
-    setMousePosition({ x: mouseX, y: mouseY });
-  };
-
-  const handleMouseLeave = () => {
-    setMousePosition({ x: 0, y: 0 });
-  };
 
   const scrollAnimationProps = hasScrollEntry ? {
     initial: { 
@@ -101,24 +80,22 @@ function GlassmorphicBubble({
     transition: { duration: 0.8, delay: scrollDelay, ease: "easeOut" }
   } : {};
 
-  // Calculate final position with both scroll and mouse tracking
-  const finalX = useTransform(() => scrollX.get() + (-mousePosition.x * mouseMultiplier));
-  const finalY = useTransform(() => scrollY.get() + (-mousePosition.y * mouseMultiplier));
-
   return (
-    <motion.div 
-      ref={ref}
-      className={`bg-black/40 backdrop-blur-md border border-white/10 rounded-[20px] overflow-clip text-white ${className}`}
-      style={{ width, height, x: finalX, y: finalY }}
+    <motion.div
+      className={className}
+      style={{ width, height }}
       {...scrollAnimationProps}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      animate={{
-        scale: mousePosition.x !== 0 || mousePosition.y !== 0 ? 1.02 : 1,
-      }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
-      {content}
+      <motion.div
+        ref={bubbleMotion.ref}
+        className="w-full h-full bg-black/40 backdrop-blur-md border border-white/10 rounded-[20px] overflow-clip text-white"
+        style={{ x: bubbleMotion.x, y: bubbleMotion.y, scale: bubbleMotion.scale, willChange: 'transform' }}
+        onMouseMove={bubbleMotion.handleMouseMove}
+        onMouseLeave={bubbleMotion.handleMouseLeave}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+        {content}
+      </motion.div>
     </motion.div>
   );
 }
@@ -802,31 +779,60 @@ export default function LandingPageAnimated() {
             <div className="absolute inset-0 bg-gradient-to-r from-[#1f120c]/85 via-[#1f120c]/65 to-[#1f120c]/35" />
 
             {/* Main glass card */}
-            <div
-              className="absolute left-[48px] top-[96px] w-[420px] rounded-[18px] px-8 py-10"
-              style={{
-                background: 'rgba(47, 28, 18, 0.78)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                boxShadow: '0 24px 48px rgba(0,0,0,0.25)',
-              }}
-            >
-              <h2 className="text-white text-[30px] leading-[40px] font-normal mb-4">Frustrated by silence after applying?</h2>
-              <p className="text-white text-[16px] leading-[24px]">Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.</p>
-            </div>
+            <GlassmorphicBubble
+              className="absolute left-[48px] top-[96px] w-[420px]"
+              hasScrollEntry
+              scrollDirection="left"
+              scrollDelay={0.3}
+              parallaxY={[12, -12]}
+              parallaxX={[5, -5]}
+              mouseMultiplier={20}
+              content={
+                <div className="px-8 py-10" style={{ boxShadow: '0 24px 48px rgba(0,0,0,0.25)' }}>
+                  <motion.h2
+                    className="text-white text-[30px] leading-[40px] font-normal mb-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.7, delay: 0.5, ease: 'easeOut' }}
+                  >
+                    Frustrated by silence after applying?
+                  </motion.h2>
+                  <motion.p
+                    className="text-white text-[16px] leading-[24px]"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.7, delay: 0.7, ease: 'easeOut' }}
+                  >
+                    Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.
+                  </motion.p>
+                </div>
+              }
+            />
 
             {/* Bottom-right pill */}
-            <div
-              className="absolute right-[48px] bottom-[56px] w-[280px] rounded-[14px] px-6 py-4"
-              style={{
-                background: 'rgba(47, 28, 18, 0.78)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                boxShadow: '0 18px 36px rgba(0,0,0,0.2)',
-              }}
-            >
-              <p className="text-white text-[15px] leading-[22px]">Job search cut from hours a day → minutes a day.</p>
-            </div>
+            <GlassmorphicBubble
+              className="absolute right-[48px] bottom-[56px] w-[280px]"
+              hasScrollEntry
+              scrollDirection="right"
+              scrollDelay={0.5}
+              parallaxY={[-10, 10]}
+              parallaxX={[-6, 6]}
+              mouseMultiplier={15}
+              content={
+                <motion.div
+                  className="px-6 py-4"
+                  style={{ boxShadow: '0 18px 36px rgba(0,0,0,0.2)' }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.7, delay: 0.7, ease: 'easeOut' }}
+                >
+                  <p className="text-white text-[15px] leading-[22px]">Job search cut from hours a day -&gt; minutes a day.</p>
+                </motion.div>
+              }
+            />
           </motion.div>
 
           {/* Benefits - mobile/tablet retains existing flow */}
@@ -860,10 +866,18 @@ export default function LandingPageAnimated() {
               {/* Left image */}
               <div className="flex-shrink-0 w-[613px] h-[480px] rounded-[18px] overflow-hidden" style={{ boxShadow: '0 22px 48px rgba(0,0,0,0.18)' }}>
                 <img src={imgIstock} alt="Professional frustrated" className="w-full h-full object-cover" />
-                <div className="absolute left-[40px] bottom-[30px] w-[320px] rounded-[12px] px-6 py-4" style={{ background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-                  <p className="text-white text-[16px] leading-[22px] font-medium mb-1">Save Hours of your Time</p>
-                  <p className="text-white text-[13px] leading-[18px]">Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.</p>
-                </div>
+                <GlassmorphicBubble
+                  className="absolute left-[40px] bottom-[30px] w-[320px]"
+                  parallaxY={[15, -15]}
+                  parallaxX={[-5, 5]}
+                  mouseMultiplier={18}
+                  content={
+                    <div className="px-6 py-4">
+                      <p className="text-white text-[16px] leading-[22px] font-medium mb-1">Save Hours of your Time</p>
+                      <p className="text-white text-[13px] leading-[18px]">Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.</p>
+                    </div>
+                  }
+                />
               </div>
 
               {/* Right content */}
