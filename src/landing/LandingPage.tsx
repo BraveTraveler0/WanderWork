@@ -31,12 +31,12 @@ function LandingNavbar({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp:
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '16px 40px',
-        background: visible ? 'rgba(255,255,255,0.92)' : 'transparent',
+        background: visible ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.72)',
         backdropFilter: visible ? 'blur(12px)' : 'none',
         boxShadow: visible ? '0 1px 20px rgba(0,0,0,0.08)' : 'none',
         transition: 'background 0.3s, box-shadow 0.3s, backdrop-filter 0.3s',
-        pointerEvents: visible ? 'auto' : 'none',
-        opacity: visible ? 1 : 0,
+        pointerEvents: 'auto',
+        opacity: 1,
       }}
     >
       <p
