@@ -32,6 +32,18 @@ export async function createTokenCheckoutSession(tokens: number, email: string):
   return url;
 }
 
+export async function redeemPromoCode(code: string, email: string, tokens: number): Promise<{ tokenBalance: number; added: number }> {
+  const res = await fetch(`${BASE_URL}/stripe/redeem-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, email, tokens }),
+  });
+  let j: any = {};
+  try { j = await res.json(); } catch {}
+  if (!res.ok) throw new Error(j?.message || `Code redemption failed (${res.status})`);
+  return j;
+}
+
 export async function openCustomerPortal(email: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/stripe/portal`, {
     method: 'POST',

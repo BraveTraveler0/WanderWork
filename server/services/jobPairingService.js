@@ -36,15 +36,29 @@ function unique(values) {
   return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
 }
 
+// Minimum word length to avoid matching noise words from resume text
+const MIN_WORD_LEN = 4
+
+function wordsFromText(text) {
+  if (!text) return []
+  return normalizeText(text)
+    .split(' ')
+    .filter((w) => w.length >= MIN_WORD_LEN)
+}
+
 function candidateKeywords(candidate) {
+  // inferredKeywords are AI-extracted terms stored at resume upload time — highest quality
   const base = unique([
     ...toArray(candidate.skills),
     ...toArray(candidate.skills_2),
+    ...toArray(candidate.inferredKeywords),
     ...toArray(candidate.inferredSkills),
     ...toArray(candidate.inferred_skills),
     ...toArray(candidate.targetRoles),
-    candidate.work_experience,
-    candidate.education,
+    // Split resume text fields into individual words rather than treating as one giant phrase
+    ...wordsFromText(candidate.work_experience),
+    ...wordsFromText(candidate.education),
+    ...wordsFromText(candidate.summary),
   ])
 
   const expanded = []
@@ -122,7 +136,7 @@ function scoreJob(candidate, job, keywords) {
     score += 8
   }
 
-  const postedAt = new Date(job.datePosted || job.postedAt || job.createdAt || 0).getTime()
+  const postedAt = new Date(job.date_posted || job.datePosted || job.postedAt || job.createdAt || 0).getTime()
   if (postedAt) {
     const daysOld = Math.max(0, Math.floor((Date.now() - postedAt) / 86400000))
     if (daysOld <= 7) score += 10
@@ -145,7 +159,8 @@ function scoreJob(candidate, job, keywords) {
   }
 }
 
-async function pairCandidateJobs(candidateId, options = {}) {
+// Internal: accepts a pre-loaded jobs array to avoid redundant DB reads in pairAllCandidates
+async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(candidateId))) {
     throw new Error('Invalid candidate id')
   }
@@ -160,7 +175,6 @@ async function pairCandidateJobs(candidateId, options = {}) {
   }
 
   const keywords = candidateKeywords(candidate)
-  const jobs = await Jobs.find({}).lean()
   const scored = jobs
     .map((job) => ({ job, ...scoreJob(candidate, job, keywords) }))
     .filter((item) => item.score >= minScore)
@@ -204,12 +218,19 @@ async function pairCandidateJobs(candidateId, options = {}) {
   return { candidateId: String(candidate._id), totalJobs: jobs.length, paired: pairings.length, pairings }
 }
 
+async function pairCandidateJobs(candidateId, options = {}) {
+  const jobs = await Jobs.find({}).lean()
+  return _pairCandidateWithJobs(candidateId, jobs, options)
+}
+
 async function pairAllCandidates(options = {}) {
   const candidates = await Candidates.find({}).select('_id').lean()
+  // Load jobs once and reuse — avoids N full table scans
+  const jobs = await Jobs.find({}).lean()
   const results = []
   for (const candidate of candidates) {
     try {
-      results.push(await pairCandidateJobs(candidate._id, options))
+      results.push(await _pairCandidateWithJobs(candidate._id, jobs, options))
     } catch (error) {
       results.push({ candidateId: String(candidate._id), error: error.message })
     }

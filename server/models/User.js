@@ -158,6 +158,22 @@ const userSchema = new mongoose.Schema({
     token: {
         type: String
     },
+    failedLoginAttempts: {
+        type: Number,
+        default: 0
+    },
+    loginLockUntil: {
+        type: Date,
+        default: null
+    },
+    loginLockLevel: {
+        type: Number,
+        default: 0
+    },
+    lastFailedLoginAt: {
+        type: Date,
+        default: null
+    },
     xp: {
         type: Number,
         default: 0,

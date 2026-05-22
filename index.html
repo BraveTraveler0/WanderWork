@@ -4,13 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&display=swap" rel="stylesheet">
     <title>Wander/Work</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="initial-loader" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(145.48deg,#F9FAFB 0%,#F0F2F5 100%)">
+        <div style="width:48px;height:48px;border-radius:50%;border:4px solid #C8DDE0;border-top-color:#1e5560;animation:ww-spin 0.75s linear infinite"></div>
+        <p style="color:#787878;font-family:Manrope,sans-serif;font-size:14px;margin:0">Putting in Work</p>
+      </div>
+    </div>
+    <style>@keyframes ww-spin{to{transform:rotate(360deg)}}</style>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -50,7 +50,30 @@ app.use((req, res, next) => {
 
 
 app.use(checkConnection);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (filePath.endsWith('.docx')) {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    } else if (filePath.endsWith('.doc')) {
+      res.setHeader('Content-Type', 'application/msword');
+    }
+  }
+}));
+
+// Passport session (used by LinkedIn OAuth redirect flow)
+const passport = require('passport');
+const session = require('express-session');
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'ww-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 10 * 60 * 1000 }, // 10-min session for OAuth only
+}));
+app.use(passport.initialize());
+app.use(passport.session());
 
 // const rateLimit = require("express-rate-limit");
 
@@ -90,7 +113,8 @@ const routes = {
   '/jobseeker': './routes/JobSeeker/jobSeekerRoute',
   '/recruiter': './routes/JobSeeker/recruiterRoute',
   '/sync': './routes/sync',
-  '/tally': './routes/tallyWebhook'
+  '/tally': './routes/tallyWebhook',
+  '/oauth': './routes/oauthRoutes'
 };
 
 // Register routes

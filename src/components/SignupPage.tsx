@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type React from 'react'
-import { ArrowLeft, Briefcase, Link2, Lock, Mail, MapPin, Phone, Upload, User } from 'lucide-react'
+import { ArrowLeft, Briefcase, Eye, EyeOff, Link2, Lock, Mail, MapPin, Phone, Upload, User } from 'lucide-react'
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
+import { AnimatePresence, motion } from 'motion/react'
 import { uploadCandidateResume } from '../api/jobseeker'
 
 interface SignupPageProps {
@@ -14,8 +16,111 @@ const BASE_URL =
   (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
   'http://localhost:8000'
 
-export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: SignupPageProps) {
-  const [form, setForm] = useState({
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || ''
+
+const SIGNUP_STEPS = [
+  {
+    title: 'Account',
+    description: 'Start with the basics we need to create your secure login.',
+  },
+  {
+    title: 'Job Goals',
+    description: 'Tell us what kind of remote role you want so matches start with context.',
+  },
+  {
+    title: 'Resume',
+    description: 'Add links or a resume so your profile has proof behind the match.',
+  },
+]
+
+function GoogleSignupButton({ onSignup, onError }: { onSignup: (user: any, token: string) => void; onError: (message: string) => void }) {
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  const googleSignup = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setGoogleLoading(true)
+      try {
+        const response = await fetch(`${BASE_URL}/oauth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: tokenResponse.access_token }),
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data?.message || 'Google sign-up failed')
+
+        localStorage.setItem('wanderworkToken', data.token)
+        localStorage.setItem('wanderworkUser', JSON.stringify(data.user))
+        onSignup(data.user, data.token)
+      } catch (err: any) {
+        onError(err?.message || 'Google sign-up failed')
+      } finally {
+        setGoogleLoading(false)
+      }
+    },
+    onError: () => onError('Google sign-up was cancelled'),
+  })
+
+  return (
+    <button
+      type="button"
+      onClick={() => googleSignup()}
+      disabled={googleLoading}
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {googleLoading ? (
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+      )}
+      Continue with Google
+    </button>
+  )
+}
+
+function SocialSignupBox({ onSignup, onError }: { onSignup: (user: any, token: string) => void; onError: (message: string) => void }) {
+  const handleLinkedIn = () => {
+    window.location.href = `${BASE_URL}/oauth/linkedin`
+  }
+
+  return (
+    <div>
+      <p className="mb-3 text-center text-sm font-semibold text-[#306770]">Create your account faster</p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {GOOGLE_CLIENT_ID ? (
+          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+            <GoogleSignupButton onSignup={onSignup} onError={onError} />
+          </GoogleOAuthProvider>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleLinkedIn}
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#0077B5">
+            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+          </svg>
+          Continue with LinkedIn
+        </button>
+      </div>
+      <div className="mt-5 flex items-center gap-3">
+        <div className="h-px flex-1 bg-[#C8DEDE]" />
+        <span className="text-xs font-medium text-gray-500">or fill out your profile manually</span>
+        <div className="h-px flex-1 bg-[#C8DEDE]" />
+      </div>
+    </div>
+  )
+}
+
+type SignupField = keyof ReturnType<typeof getInitialSignupForm>
+
+function getInitialSignupForm() {
+  return {
     firstName: '',
     lastName: '',
     email: '',
@@ -28,17 +133,84 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     linkedinUrl: '',
     portfolioUrl: '',
     calendlyUrl: '',
-  })
+  }
+}
+
+export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: SignupPageProps) {
+  const [form, setForm] = useState(getInitialSignupForm)
+  const [showPassword, setShowPassword] = useState(false)
   const [resume, setResume] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupField, string>>>({})
+  const [step, setStep] = useState(0)
 
-  const setField = (field: keyof typeof form, value: string) => {
+  const setField = (field: SignupField, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+  }
+
+  const validateStep = (targetStep: number) => {
+    const requireValue = (value: string) => value.trim().length > 0
+    const nextFieldErrors: Partial<Record<SignupField, string>> = {}
+
+    if (targetStep === 0) {
+      if (!requireValue(form.firstName)) nextFieldErrors.firstName = 'First name is required.'
+      if (!requireValue(form.lastName)) nextFieldErrors.lastName = 'Last name is required.'
+      if (!requireValue(form.email)) nextFieldErrors.email = 'Email is required.'
+      if (!requireValue(form.password)) nextFieldErrors.password = 'Password is required.'
+      if (requireValue(form.password) && form.password.length < 8) nextFieldErrors.password = 'Use at least 8 characters.'
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors)
+        setError('Please fill in the highlighted fields to continue.')
+        return false
+      }
+    }
+
+    if (targetStep === 1) {
+      if (!requireValue(form.phone)) nextFieldErrors.phone = 'Phone number is required.'
+      if (!requireValue(form.location)) nextFieldErrors.location = 'Location is required.'
+      if (!requireValue(form.targetRole)) nextFieldErrors.targetRole = 'Target role is required.'
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors)
+        setError('Please fill in the highlighted fields to continue.')
+        return false
+      }
+    }
+
+    setFieldErrors({})
+    setError(null)
+    return true
+  }
+
+  const goNext = () => {
+    if (!validateStep(step)) return
+    setStep((current) => Math.min(current + 1, SIGNUP_STEPS.length - 1))
+  }
+
+  const goBack = () => {
+    setError(null)
+    setFieldErrors({})
+    setStep((current) => Math.max(current - 1, 0))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validateStep(0)) {
+      setStep(0)
+      return
+    }
+    if (!validateStep(1)) {
+      setStep(1)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -59,7 +231,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       localStorage.setItem('wanderworkUser', JSON.stringify(data.user))
 
       if (resume && form.email) {
-        await uploadCandidateResume(form.email, resume)
+        try { await uploadCandidateResume(form.email, resume) } catch { /* non-fatal */ }
       }
 
       onSignup(data.user, token)
@@ -71,6 +243,88 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   }
 
   const inputClass = 'w-full rounded-xl border border-gray-300 bg-gray-50/60 px-4 py-3 text-gray-900 outline-none transition focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#306770]'
+  const getInputClass = (field: SignupField) =>
+    `${inputClass} ${
+      fieldErrors[field]
+        ? 'border-red-400 bg-red-50/80 focus:border-red-400 focus:ring-red-200'
+        : ''
+    }`
+  const stepContent = [
+    (
+      <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
+        <Field icon={<User size={18} />} label="First Name" required error={fieldErrors.firstName}>
+          <input className={getInputClass('firstName')} value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} autoComplete="given-name" aria-invalid={Boolean(fieldErrors.firstName)} />
+        </Field>
+        <Field label="Last Name" required error={fieldErrors.lastName}>
+          <input className={getInputClass('lastName')} value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} autoComplete="family-name" aria-invalid={Boolean(fieldErrors.lastName)} />
+        </Field>
+        <Field icon={<Mail size={18} />} label="Email" required error={fieldErrors.email}>
+          <input className={getInputClass('email')} type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} autoComplete="email" aria-invalid={Boolean(fieldErrors.email)} />
+        </Field>
+        <Field icon={<Lock size={18} />} label="Password" required error={fieldErrors.password}>
+          <div className="relative">
+            <input className={getInputClass('password')} type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setField('password', e.target.value)} minLength={8} autoComplete="new-password" aria-invalid={Boolean(fieldErrors.password)} style={{ paddingRight: '2.75rem' }} />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-[#306770] transition-colors"
+              tabIndex={-1}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </Field>
+      </div>
+    ),
+    (
+      <>
+        <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
+          <Field icon={<Phone size={18} />} label="Phone Number" required error={fieldErrors.phone}>
+            <input className={getInputClass('phone')} value={form.phone} onChange={(e) => setField('phone', e.target.value)} autoComplete="tel" aria-invalid={Boolean(fieldErrors.phone)} />
+          </Field>
+          <Field icon={<MapPin size={18} />} label="Location" required error={fieldErrors.location}>
+            <input className={getInputClass('location')} value={form.location} onChange={(e) => setField('location', e.target.value)} placeholder="New York, NY" aria-invalid={Boolean(fieldErrors.location)} />
+          </Field>
+          <Field icon={<Briefcase size={18} />} label="Target Role" required error={fieldErrors.targetRole}>
+            <input className={getInputClass('targetRole')} value={form.targetRole} onChange={(e) => setField('targetRole', e.target.value)} placeholder="Senior Product Designer" aria-invalid={Boolean(fieldErrors.targetRole)} />
+          </Field>
+          <Field label="Seniority">
+            <input className={inputClass} value={form.seniority} onChange={(e) => setField('seniority', e.target.value)} placeholder="Senior, Lead" />
+          </Field>
+        </div>
+
+        <Field label="Skills" className="mt-8">
+          <textarea className={`${inputClass} min-h-[170px] resize-y`} value={form.skills} onChange={(e) => setField('skills', e.target.value)} placeholder="React, TypeScript, MongoDB" />
+        </Field>
+      </>
+    ),
+    (
+      <>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <Field icon={<Link2 size={18} />} label="LinkedIn URL">
+            <input className={inputClass} value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} />
+          </Field>
+          <Field label="Portfolio URL">
+            <input className={inputClass} value={form.portfolioUrl} onChange={(e) => setField('portfolioUrl', e.target.value)} />
+          </Field>
+          <Field label="Calendly URL">
+            <input className={inputClass} value={form.calendlyUrl} onChange={(e) => setField('calendlyUrl', e.target.value)} />
+          </Field>
+        </div>
+
+        <div className="mt-6">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">Upload your resume</label>
+          <label className="flex min-h-[130px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/70 px-4 text-center transition hover:border-[#306770] hover:bg-white">
+            <Upload size={24} className="mb-2 text-[#306770]" />
+            <span className="text-sm font-semibold text-gray-700">{resume ? resume.name : 'Click to choose a file or drag here'}</span>
+            <span className="mt-1 text-xs text-gray-500">PDF or DOCX. 10 MB max.</span>
+            <input type="file" className="hidden" accept=".pdf,.docx" onChange={(e) => setResume(e.target.files?.[0] || null)} />
+          </label>
+        </div>
+      </>
+    ),
+  ]
 
   return (
     <div className="min-h-screen bg-gray-100 p-4" style={{ fontFamily: "'Manrope', sans-serif" }}>
@@ -79,7 +333,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#63B08D] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-3xl py-8">
+      <div className="relative z-10 mx-auto w-full max-w-5xl py-8">
         {onBackToLanding && (
           <button
             onClick={onBackToLanding}
@@ -90,7 +344,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
           </button>
         )}
 
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-xl md:p-10">
+        <div className="mb-5 rounded-2xl border border-[#C8DEDE] bg-white/95 p-6 shadow-xl backdrop-blur-xl md:p-8">
           <div className="mb-8 text-center">
             <h1 className="mb-2 break-words text-3xl font-bold tracking-wide text-[#306770] md:text-4xl" style={{ lineHeight: 1.1 }}>
               WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
@@ -98,72 +352,94 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             <p className="text-base text-gray-600">Create your profile and start matching with remote jobs</p>
           </div>
 
+          <SocialSignupBox onSignup={onSignup} onError={setError} />
+        </div>
+
+        <form onSubmit={handleSubmit} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} className="rounded-2xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-xl md:p-12">
+          <div className="mb-6">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#306770]">Manual signup</p>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">Build your job seeker profile</h2>
+          </div>
+
+          <div className="mb-6">
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              {SIGNUP_STEPS.map((item, index) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={() => {
+                    if (index <= step) {
+                      setStep(index)
+                      setError(null)
+                      setFieldErrors({})
+                      return
+                    }
+                    if (index === step + 1 && validateStep(step)) setStep(index)
+                  }}
+                  className={`rounded-xl border px-3 py-3 text-left transition ${
+                    index === step
+                      ? 'border-[#306770] bg-[#306770] text-white shadow-md'
+                      : index < step
+                        ? 'border-[#C8DEDE] bg-[#EEF6F7] text-[#306770]'
+                        : 'border-gray-200 bg-white text-gray-500'
+                  }`}
+                >
+                  <span className="block text-xs font-bold uppercase tracking-wide">Step {index + 1}</span>
+                  <span className="block truncate text-sm font-semibold">{item.title}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-sm font-medium text-gray-600">{SIGNUP_STEPS[step].description}</p>
+          </div>
+
           {error && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50/95 p-4 text-sm font-medium text-red-800">
+            <div className="mb-5 rounded-xl border border-red-300 bg-red-50/95 p-4 text-sm font-semibold text-red-800">
               {error}
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <Field icon={<User size={18} />} label="First Name" required>
-              <input className={inputClass} value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} required autoComplete="given-name" />
-            </Field>
-            <Field label="Last Name" required>
-              <input className={inputClass} value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} required autoComplete="family-name" />
-            </Field>
-            <Field icon={<Mail size={18} />} label="Email" required>
-              <input className={inputClass} type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} required autoComplete="email" />
-            </Field>
-            <Field icon={<Lock size={18} />} label="Password" required>
-              <input className={inputClass} type="password" value={form.password} onChange={(e) => setField('password', e.target.value)} required minLength={8} autoComplete="new-password" />
-            </Field>
-            <Field icon={<Phone size={18} />} label="Phone Number" required>
-              <input className={inputClass} value={form.phone} onChange={(e) => setField('phone', e.target.value)} required autoComplete="tel" />
-            </Field>
-            <Field icon={<MapPin size={18} />} label="Location" required>
-              <input className={inputClass} value={form.location} onChange={(e) => setField('location', e.target.value)} required placeholder="New York, NY" />
-            </Field>
-            <Field icon={<Briefcase size={18} />} label="Target Role" required>
-              <input className={inputClass} value={form.targetRole} onChange={(e) => setField('targetRole', e.target.value)} required placeholder="Senior Product Designer" />
-            </Field>
-            <Field label="Seniority">
-              <input className={inputClass} value={form.seniority} onChange={(e) => setField('seniority', e.target.value)} placeholder="Senior, Lead" />
-            </Field>
+          <div className="-mx-1 overflow-hidden px-1 pb-2">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ x: 52, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -52, opacity: 0 }}
+                transition={{ duration: 0.32, ease: 'easeOut' }}
+              >
+                {stepContent[step]}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
-          <Field label="Skills" className="mt-5">
-            <textarea className={`${inputClass} min-h-[120px] resize-y`} value={form.skills} onChange={(e) => setField('skills', e.target.value)} placeholder="React, TypeScript, MongoDB" />
-          </Field>
-
-          <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-3">
-            <Field icon={<Link2 size={18} />} label="LinkedIn URL">
-              <input className={inputClass} value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} />
-            </Field>
-            <Field label="Portfolio URL">
-              <input className={inputClass} value={form.portfolioUrl} onChange={(e) => setField('portfolioUrl', e.target.value)} />
-            </Field>
-            <Field label="Calendly URL">
-              <input className={inputClass} value={form.calendlyUrl} onChange={(e) => setField('calendlyUrl', e.target.value)} />
-            </Field>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={goBack}
+                className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-base font-semibold text-gray-700 transition hover:bg-gray-50 sm:w-40"
+              >
+                Back
+              </button>
+            )}
+            {step < SIGNUP_STEPS.length - 1 ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl disabled:bg-gray-400"
+              >
+                {loading ? 'Creating account...' : 'Create Account'}
+              </button>
+            )}
           </div>
-
-          <div className="mt-6">
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Upload your resume</label>
-            <label className="flex min-h-[130px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/70 px-4 text-center transition hover:border-[#306770] hover:bg-white">
-              <Upload size={24} className="mb-2 text-[#306770]" />
-              <span className="text-sm font-semibold text-gray-700">{resume ? resume.name : 'Click to choose a file or drag here'}</span>
-              <span className="mt-1 text-xs text-gray-500">PDF, DOC, DOCX, RTF, or TXT. 10 MB max.</span>
-              <input type="file" className="hidden" accept=".pdf,.doc,.docx,.rtf,.txt" onChange={(e) => setResume(e.target.files?.[0] || null)} />
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-7 w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl disabled:bg-gray-400"
-          >
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
 
           <p className="mt-5 text-center text-sm text-gray-600">
             Already have an account?{' '}
@@ -177,15 +453,16 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   )
 }
 
-function Field({ icon, label, required, className = '', children }: { icon?: React.ReactNode; label: string; required?: boolean; className?: string; children: React.ReactNode }) {
+function Field({ icon, label, required, error, className = '', children }: { icon?: React.ReactNode; label: string; required?: boolean; error?: string; className?: string; children: React.ReactNode }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
-        {icon && <span className="text-[#306770]">{icon}</span>}
+      <span className={`mb-2 flex items-center gap-2 text-sm font-semibold ${error ? 'text-red-700' : 'text-gray-700'}`}>
+        {icon && <span className={error ? 'text-red-700' : 'text-[#306770]'}>{icon}</span>}
         {label}
-        {required && <span className="text-[#306770]">*</span>}
+        {required && <span className={error ? 'text-red-700' : 'text-[#306770]'}>*</span>}
       </span>
       {children}
+      {error && <span className="mt-2 block text-xs font-semibold text-red-700">{error}</span>}
     </label>
   )
 }

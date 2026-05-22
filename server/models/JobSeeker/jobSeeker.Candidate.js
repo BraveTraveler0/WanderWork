@@ -138,6 +138,20 @@ const jobSeekerCandidateSchema = new mongoose.Schema({
     recruiterContactsUpdatedAt: {
         type: Date,
         required: false
+    },
+    summary: {
+        type: String,
+        required: false
+    },
+    inferredKeywords: {
+        type: [String],
+        default: [],
+        required: false
+    },
+    usedPromoCodes: {
+        type: [String],
+        default: [],
+        required: false
     }
 })
 

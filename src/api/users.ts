@@ -6,7 +6,19 @@ export interface User {
   // Extend as needed
 }
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || "https://application-server-cwqu.onrender.com";
+const BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
+  "http://localhost:8000";
+
+function getAuthHeader(): Record<string, string> {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("wanderworkToken") : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 export async function getUserById(id: string): Promise<User> {
   const res = await fetch(`${BASE_URL}/users/${encodeURIComponent(id)}`);
@@ -31,7 +43,13 @@ export async function updateUser(id: string, data: Partial<User> & Record<string
 }
 
 export async function deleteAccount(): Promise<{ success: boolean }> {
-  const res = await fetch(`${BASE_URL}/users/deleteAccount`, { method: "DELETE" });
+  const res = await fetch(`${BASE_URL}/users/deleteAccount`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      ...getAuthHeader(),
+    },
+  });
   if (!res.ok) throw new Error(`Failed to delete account: ${res.status}`);
   return res.json();
 }

@@ -67,6 +67,7 @@ interface SettingsPageProps {
   onPageChange: (page: 'account' | 'personal' | 'payment' | 'upgrade') => void
   data?: JobSeekerData
   onCandidateUpdate?: (patch: any) => void
+  onDeleteAccount?: () => void
 }
 
 type DocumentModalState = null | {
@@ -97,7 +98,7 @@ const getSavedJson = <T,>(key: string, fallback: T): T => {
   }
 }
 
-const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpdate }: SettingsPageProps) => {
+const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpdate, onDeleteAccount }: SettingsPageProps) => {
   const candidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const [profile, setProfile] = useState<any>(() => {
     return getSavedJson('wanderworkProfile', {
@@ -701,6 +702,11 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     <button
                       className="px-4 py-2 rounded-[10px] border text-red-600 transition-colors"
                       style={{ borderColor: '#ff6b6b', background: '#ffe0e0' }}
+                      onClick={() => {
+                        if (window.confirm('Permanently delete your account? This cannot be undone.')) {
+                          onDeleteAccount?.()
+                        }
+                      }}
                     >
                       Delete Account
                     </button>

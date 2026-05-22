@@ -3,6 +3,7 @@ const router = express.Router()
 const usersController = require('../controllers/usersController')
 const usersContextController = require('../controllers/usersContextController')
 const mailerController = require('../controllers/mailerController')
+const { requireAuth } = require('../middleware/requireAuth')
 
 router.post('/convertWaitlist', usersContextController.getHandleWaitlistConversion)
 
@@ -79,6 +80,6 @@ router.route('/aoncon2024/updateTutorial/:id')
     .post(usersController.updateEventTutorial)
     
 router.patch('/:id', usersController.updateUser)
-router.delete('/deleteAccount', usersController.deleteUser)
+router.delete('/deleteAccount', requireAuth, usersController.deleteUser)
 
 module.exports = router

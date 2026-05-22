@@ -61,9 +61,10 @@ function Group22() {
   );
 }
 
-function Group23() {
+function Group23({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <motion.div
+      onClick={onSignUp}
       className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#fade3e] w-[189px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
@@ -101,28 +102,31 @@ function Group20() {
 function Group40() {
   return (
     <div className="absolute contents inset-[30%_4.7%_40%_8.55%]">
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal inset-[30%_4.7%_40%_8.55%] leading-[24px] text-[16px] text-center text-white">Start Receiving Matches</p>
+      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal inset-[30%_4.7%_40%_8.55%] leading-[24px] text-[16px] text-center text-white">Find Remote Work!</p>
     </div>
   );
 }
 
-function Group24() {
+function Group24({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <motion.div
+      onClick={onSignUp}
       className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#306770] shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Start Receiving Matches</p>
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Find Remote Work!</p>
     </motion.div>
   );
 }
 
-function Group30() {
+function Group30({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
-    <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[65px] mt-[525px] place-items-start relative">
-      <Group18 />
-      <Group24 />
+    <div className="[grid-area:1_/_1] ml-[65px] mt-[525px] flex flex-col gap-2 relative">
+      <div className="flex flex-row gap-7 items-center">
+        <Group24 onSignUp={onSignUp} />
+        <Group23 onSignUp={onGoPremium} />
+      </div>
     </div>
   );
 }
@@ -251,9 +255,9 @@ function Group43() {
   );
 }
 
-function Group46() {
+function Group46({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
-    <motion.div 
+    <motion.div
       className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[590px] mt-0 place-items-start relative"
       initial={{ opacity: 0, x: 100 }}
       whileInView={{ opacity: 1, x: 0 }}
@@ -261,17 +265,16 @@ function Group46() {
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
       <div className="[grid-area:1_/_1] bg-white h-[747px] ml-0 mt-0 rounded-[20px] shadow-[278px_309px_116px_0px_rgba(0,0,0,0),178px_198px_106px_0px_rgba(0,0,0,0.01),100px_111px_90px_0px_rgba(0,0,0,0.05),44px_49px_66px_0px_rgba(0,0,0,0.09),11px_12px_37px_0px_rgba(0,0,0,0.1)] w-[626px]" />
-      <Group30 />
+      <Group30 onSignUp={onSignUp} onGoPremium={onGoPremium} />
       <Group33 />
       <Group44 />
       <Group45 />
-      <div className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[207px] leading-[70px] ml-[65px] mt-[123.755px] relative text-[46px] text-black w-[451px]">
-        <p className="mb-0">Get Fresh Jobs Daily.</p>
-        <p className="mb-0">Apply in seconds.</p>
-        <p>Get the Interview.</p>
+      <div className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[146px] leading-[60px] ml-[65px] mt-[123.755px] relative text-[46px] text-black w-[491px]">
+        <p className="mb-0">Wander the world</p>
+        <p className="mb-0">while you work.</p>
       </div>
       <Group43 />
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[128px] leading-[24px] ml-[65px] mt-[360.755px] relative text-[#787878] text-[16px] w-[399px]">Stand out with AI-optimized resumes and personalized job matches designed to get past filters and reach hiring managers. Let AI find jobs for you and customize your resume automatically — so you apply in seconds, not hours.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[158px] leading-[26px] ml-[65px] mt-[340.755px] relative text-[#787878] text-[16px] w-[420px]">Let us write your resume, craft your cover letter, and connect you with top recruiters. We match you with the best (and most fresh) remote jobs from all over the world, or connect you straight to recruiters in your field. Stop sending out thousands of applications and let the work come to you.</p>
     </motion.div>
   );
 }
@@ -285,8 +288,8 @@ function Frame6() {
   });
 
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
-  const y = useTransform(smoothProgress, [0, 1], [8, -8]);
-  const x = useTransform(smoothProgress, [0, 1], [4, -4]);
+  const y = useTransform(smoothProgress, [0, 1], [30, -30]);
+  const x = useTransform(smoothProgress, [0, 1], [12, -12]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -315,8 +318,6 @@ function Frame6() {
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[44px] leading-[40px] left-[39px] text-[24px] text-white top-[31px] w-[274px]">Escape the 9-5 Rat Race</p>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[24px] left-[-114px] text-[#787878] text-[16px] top-[901px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[24px] left-[-97px] text-[#787878] text-[16px] top-[1657px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
       <div className="absolute left-[322px] size-[26px] top-[40px]">
         <div className="absolute inset-[9.04%_10.85%_16.11%_10.85%]">
           <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 22 20">
@@ -328,11 +329,11 @@ function Frame6() {
   );
 }
 
-function Group57() {
+function Group57({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
     <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
-      <motion.div 
-        className="[grid-area:1_/_1] h-[556px] ml-0 mt-[106px] relative rounded-[20px] shadow-[495px_468px_191px_0px_rgba(0,0,0,0),317px_300px_174px_0px_rgba(0,0,0,0.01),178px_169px_147px_0px_rgba(0,0,0,0.05),79px_75px_109px_0px_rgba(0,0,0,0.09),20px_19px_60px_0px_rgba(0,0,0,0.1)] w-[795px]" 
+      <motion.div
+        className="[grid-area:1_/_1] h-[556px] ml-0 mt-[106px] relative rounded-[20px] shadow-[495px_468px_191px_0px_rgba(0,0,0,0),317px_300px_174px_0px_rgba(0,0,0,0.01),178px_169px_147px_0px_rgba(0,0,0,0.05),79px_75px_109px_0px_rgba(0,0,0,0.09),20px_19px_60px_0px_rgba(0,0,0,0.1)] w-[795px]"
         data-name="647a648a60d772fd468c718f_81636-well-dressed-man-working-with-laptop-sitting-on-the-rocky-mountain-on-beautiful-scenic-clif-background-near-meteora-monasteries-in-greece"
         initial={{ opacity: 0, x: -100 }}
         whileInView={{ opacity: 1, x: 0 }}
@@ -343,7 +344,7 @@ function Group57() {
           <img alt="" className="absolute h-full left-[-13.21%] max-w-none top-0 w-[113.21%]" src={img647A648A60D772Fd468C718F81636WellDressedManWorkingWithLaptopSittingOnTheRockyMountainOnBeautifulScenicClifBackgroundNearMeteoraMonasteriesInGreece} />
         </div>
       </motion.div>
-      <Group46 />
+      <Group46 onSignUp={onSignUp} onGoPremium={onGoPremium} />
       <Frame6 />
     </div>
   );
@@ -368,7 +369,7 @@ function Frame38() {
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       <Group35 />
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[109px] leading-[40px] relative shrink-0 text-[24px] text-black w-[244px]">Upload your resume (just once — no more endless edits).</p>
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[109px] leading-[40px] relative shrink-0 text-[24px] text-black w-[244px]">Upload your resume once. No more endless edits.</p>
     </motion.div>
   );
 }
@@ -479,8 +480,8 @@ function Frame1() {
   });
 
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
-  const y = useTransform(smoothProgress, [0, 1], [12, -12]);
-  const x = useTransform(smoothProgress, [0, 1], [5, -5]);
+  const y = useTransform(smoothProgress, [0, 1], [32, -32]);
+  const x = useTransform(smoothProgress, [0, 1], [14, -14]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -520,17 +521,15 @@ function Frame1() {
       >
         Frustrated by silence after applying?
       </motion.p>
-      <motion.p 
+      <motion.p
         className="absolute h-auto leading-[40px] left-[37px] text-[24px] text-white top-[199px] w-[547px] max-w-[calc(100%-74px)]"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.7, delay: 0.7, ease: "easeOut" }}
       >
-        Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.
+        Let recruiters come to you. Get their direct contact info and AI-crafted outreach emails, ready to send in seconds. No cold applying required.
       </motion.p>
-      <p className="absolute leading-[24px] left-[-114px] text-[#787878] text-[16px] top-[901px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
-      <p className="absolute leading-[24px] left-[-97px] text-[#787878] text-[16px] top-[1657px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
     </motion.div>
   );
 }
@@ -544,8 +543,8 @@ function Frame3() {
   });
 
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
-  const y = useTransform(smoothProgress, [0, 1], [-10, 10]);
-  const x = useTransform(smoothProgress, [0, 1], [-6, 6]);
+  const y = useTransform(smoothProgress, [0, 1], [-28, 28]);
+  const x = useTransform(smoothProgress, [0, 1], [-14, 14]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -590,8 +589,6 @@ function Frame3() {
   );
 }
 
-const VIDEO_ID = "dQw4w9WgXcQ"
-
 function Frame41() {
   const containerRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(containerRef, { once: true, margin: "200px" })
@@ -606,15 +603,17 @@ function Frame41() {
     >
       <div className="absolute inset-0 overflow-hidden rounded-[20px] bg-gray-900">
         {isInView && (
-          <iframe
-            className="absolute inset-0 w-full h-full"
-            src={`https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${VIDEO_ID}&controls=0&rel=0&playsinline=1`}
-            title="Video background"
-            frameBorder="0"
-            loading="lazy"
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-          />
+          <video
+            className="absolute top-0 left-0 right-0 w-full object-cover pointer-events-none"
+            style={{ height: '112%', objectPosition: 'top center' }}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          >
+            <source src="/late-night-focus.mp4" type="video/mp4" />
+          </video>
         )}
       </div>
       <Frame1 />
@@ -632,8 +631,8 @@ function Frame7() {
   });
 
   const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
-  const y = useTransform(smoothProgress, [0, 1], [15, -15]);
-  const x = useTransform(smoothProgress, [0, 1], [-5, 5]);
+  const y = useTransform(smoothProgress, [0, 1], [32, -32]);
+  const x = useTransform(smoothProgress, [0, 1], [-12, 12]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -663,8 +662,6 @@ function Frame7() {
     >
       <p className="absolute font-['Manrope:Medium',_sans-serif] font-medium h-[55px] leading-[82px] left-[38px] text-[24px] text-white top-[8px] w-[291px]">Save Hours of your Time</p>
       <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal h-[79px] leading-[40px] left-[38px] text-[16px] text-white top-[75px] w-[446px]">Get custom resumes that recruiters notice. Designed to outsmart job application filters used by 90% of companies.</p>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[24px] left-[-114px] text-[#5e5e5e] text-[16px] top-[777px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[24px] left-[-97px] text-[#5e5e5e] text-[16px] top-[1533px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
     </motion.div>
   );
 }
@@ -716,7 +713,7 @@ function Group63() {
 function Group54() {
   return (
     <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid place-items-start relative shrink-0">
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49px] leading-[32px] ml-[30px] mt-0 relative text-[#787878] text-[20px] w-[432px]">Skip the search — new roles sent to your inbox and dashboard.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49px] leading-[32px] ml-[30px] mt-0 relative text-[#787878] text-[20px] w-[432px]">Skip the search. New roles sent to your inbox and dashboard.</p>
       <Group63 />
     </div>
   );
@@ -733,7 +730,7 @@ function Group64() {
 function Group55() {
   return (
     <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid place-items-start relative shrink-0">
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49px] leading-[32px] ml-[30px] mt-0 relative text-[#787878] text-[20px] w-[432px]">Get seen — AI-tuned resumes pass Applicant Tracking System (ATS) screens.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[49px] leading-[32px] ml-[30px] mt-0 relative text-[#787878] text-[20px] w-[432px]">Get seen. AI-tuned resumes pass Applicant Tracking System (ATS) screens.</p>
       <Group64 />
     </div>
   );
@@ -769,9 +766,10 @@ function Group52() {
   );
 }
 
-function Group16() {
+function Group16({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <motion.div
+      onClick={onSignUp}
       className="relative shrink-0 cursor-pointer"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
@@ -783,9 +781,10 @@ function Group16() {
   );
 }
 
-function Group17() {
+function Group17({ scrollToFaq }: { scrollToFaq?: () => void }) {
   return (
     <motion.div
+      onClick={scrollToFaq}
       className="relative shrink-0 cursor-pointer"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
@@ -798,18 +797,18 @@ function Group17() {
   );
 }
 
-function Frame44() {
+function Frame44({ onSignUp, scrollToFaq }: { onSignUp?: () => void; scrollToFaq?: () => void }) {
   return (
     <div className="content-stretch flex gap-[20px] items-center leading-[0] relative shrink-0">
-      <Group16 />
-      <Group17 />
+      <Group16 onSignUp={onSignUp} />
+      <Group17 scrollToFaq={scrollToFaq} />
     </div>
   );
 }
 
-function Frame47() {
+function Frame47({ onSignUp, scrollToFaq }: { onSignUp?: () => void; scrollToFaq?: () => void }) {
   return (
-    <motion.div 
+    <motion.div
       className="content-stretch flex flex-col gap-[58px] items-start relative shrink-0 w-[529px]"
       initial={{ opacity: 0, x: 100 }}
       whileInView={{ opacity: 1, x: 0 }}
@@ -817,23 +816,23 @@ function Frame47() {
       transition={{ duration: 0.8, ease: "easeOut" }}
     >
       <Group52 />
-      <Frame44 />
+      <Frame44 onSignUp={onSignUp} scrollToFaq={scrollToFaq} />
     </motion.div>
   );
 }
 
-function Frame48() {
+function Frame48({ onSignUp, scrollToFaq }: { onSignUp?: () => void; scrollToFaq?: () => void }) {
   return (
     <div className="content-stretch flex gap-[78px] items-center relative shrink-0">
       <Group56 />
-      <Frame47 />
+      <Frame47 onSignUp={onSignUp} scrollToFaq={scrollToFaq} />
     </div>
   );
 }
 
 function Group15() {
   return (
-    <div className="[grid-area:1_/_1] ml-0 mt-0 rounded-[20px] overflow-hidden h-[980px] w-[1461px]">
+    <div className="[grid-area:1_/_1] ml-0 mt-0 rounded-[20px] overflow-hidden h-[650px] w-[1461px]">
       <img alt="" className="w-full h-full object-cover" src={imgPlayaChenRioCozumel} />
     </div>
   );
@@ -852,7 +851,7 @@ function Group2() {
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Where do jobs come from?</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">We scan job boards, company career pages, and hiring platforms daily. Every listing is filtered for remote roles that match your skills and target titles — no manual searching required.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">We scan job boards, company career pages, and hiring platforms daily. Every listing is filtered for remote roles that match your skills and target titles. No manual searching required.</p>
     </motion.div>
   );
 }
@@ -870,7 +869,7 @@ function Group5() {
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">How does outreach work?</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Our AI drafts personalized emails to recruiters on your behalf. You review each message before it sends so you stay in control. We handle the legwork — you collect the replies.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Our AI drafts personalized emails to recruiters on your behalf. You review each message before it sends so you stay in control. We handle the legwork so you collect the replies.</p>
     </motion.div>
   );
 }
@@ -887,8 +886,8 @@ function Group6() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">What are tokens?</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Tokens are credits that power our AI tools — resume tailoring, cover letter generation, and recruiter email drafts each use a small amount. Free accounts get a monthly allowance; Premium plans include far more.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Recruiters are your superpower</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Recruiters find jobs for you. That's literally their job. Connect with ones in your field and let them bring the opportunities straight to you.</p>
     </motion.div>
   );
 }
@@ -924,7 +923,7 @@ function Group8() {
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Is it free to start?</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Yes — sign up and start receiving daily remote job matches at no cost. Premium unlocks higher token limits, unlimited AI document generation, and expanded recruiter outreach.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Yes. Sign up and start receiving daily remote job matches at no cost. Premium unlocks higher token limits, unlimited AI document generation, and expanded recruiter outreach.</p>
     </motion.div>
   );
 }
@@ -942,30 +941,36 @@ function Group14() {
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">What jobs do you source?</p>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">We focus exclusively on remote and location-flexible roles across tech, design, marketing, ops, finance, and more. Every listing is verified to be genuinely remote — no bait-and-switch.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">We focus exclusively on remote and location-flexible roles across tech, design, marketing, ops, finance, and more. Every listing is verified to be genuinely remote. No bait-and-switch.</p>
     </motion.div>
   );
 }
 
-function Group50() {
-  return (
-    <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[63.697px] mt-[261.062px] place-items-start relative">
-      <Group2 />
-      <Group5 />
-      <Group6 />
-      <Group13 />
-      <Group8 />
-      <Group14 />
-    </div>
-  );
-}
+
 
 function Group51() {
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
+  const cardsY = useTransform(smoothProgress, [0, 1], [14, -14]);
+
   return (
-    <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
-      <Group15 />
-      <p className="[grid-area:1_/_1] font-[‘Manrope:Regular’,_sans-serif] font-normal leading-[82px] ml-[63.697px] mt-[78.613px] relative text-[80px] text-black w-[400px]">FAQ’s</p>
-      <Group50 />
+    <div id="faq-section" ref={ref} className="flex flex-col shrink-0">
+      <p className="ml-[53.493px] mb-10 font-normal leading-[82px] text-[80px] text-black" style={{fontFamily: "Manrope, sans-serif"}}>FAQ&apos;s</p>
+      <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative">
+        <Group15 />
+        <motion.div
+          className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[53.493px] mt-[80px] place-items-start relative"
+          style={{ y: cardsY }}
+        >
+          <Group2 />
+          <Group5 />
+          <Group6 />
+          <Group13 />
+          <Group8 />
+          <Group14 />
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -1050,8 +1055,81 @@ function Group49() {
     >
       <div className="[grid-area:1_/_1] h-[667px] ml-[258px] mt-0 relative rounded-[20px] shadow-[559px_417px_195px_0px_rgba(0,0,0,0),358px_267px_179px_0px_rgba(0,0,0,0.01),201px_150px_151px_0px_rgba(0,0,0,0.05),90px_67px_112px_0px_rgba(0,0,0,0.09),22px_17px_61px_0px_rgba(0,0,0,0.1)] w-[1000px]" data-name="freelance-beach">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[20px] size-full" src={imgFreelanceBeach} />
+        <FloatingGlassBubble className="absolute bottom-[-34px] right-[76px] z-10" delay={0.15}>
+          <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[31px] left-[34px] text-[24px] text-white top-[22px] w-[306px]">
+            Remote roles matched<br />to your skills.
+          </p>
+        </FloatingGlassBubble>
       </div>
       <Frame9 />
+    </motion.div>
+  );
+}
+
+function FloatingGlassBubble({
+  className,
+  children,
+  delay = 0,
+}: {
+  className: string;
+  children: React.ReactNode;
+  delay?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
+  const scrollX = useTransform(smoothProgress, [0, 1], [7, -7]);
+  const scrollY = useTransform(smoothProgress, [0, 1], [-7, 7]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePosition({
+      x: (e.clientX - rect.left - rect.width / 2) / rect.width,
+      y: (e.clientY - rect.top - rect.height / 2) / rect.height,
+    });
+  };
+
+  const active = mousePosition.x !== 0 || mousePosition.y !== 0;
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setMousePosition({ x: 0, y: 0 })}
+      style={{
+        x: useTransform(() => scrollX.get() + (-mousePosition.x * 15)),
+        y: useTransform(() => scrollY.get() + (-mousePosition.y * 15)),
+      }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true, margin: "-80px" }}
+      animate={{ scale: active ? 1.02 : 1 }}
+      transition={{
+        opacity: { duration: 0.7, ease: "easeOut", delay },
+        scale: { type: "spring", stiffness: 300, damping: 30 },
+      }}
+    >
+      <motion.div
+        className="relative h-[105px] w-[374px] overflow-clip rounded-[20px] border border-white/10 bg-black/40 backdrop-blur-md"
+        animate={{
+          x: [0, 9, 4, -8, -4, 0],
+          y: [0, -6, 7, 5, -7, 0],
+          rotate: [0, 0.12, -0.08, -0.12, 0.08, 0],
+        }}
+        transition={{
+          duration: 8.4,
+          ease: "easeInOut",
+          repeat: Infinity,
+          delay,
+        }}
+      >
+        {children}
+      </motion.div>
     </motion.div>
   );
 }
@@ -1074,12 +1152,13 @@ function Group41() {
 function Frame5() {
   return (
     <motion.div
-      className="absolute bg-white h-[287.197px] left-[918.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
+      className="testimonial-bouncy absolute bg-white h-[287.197px] left-[918.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
+      style={{ '--testimonial-bounce-duration': '9.5s', '--testimonial-bounce-delay': '-2.4s' }}
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
-        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— David K.</p>
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">- David K.</p>
         <p className="text-[15px] text-[#5e5e5e]">Product Designer</p>
       </div>
       <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#4a7fa5' }}>DK</div>
@@ -1118,12 +1197,13 @@ function Group65() {
 function Frame10() {
   return (
     <motion.div
-      className="absolute bg-white h-[287.197px] left-[61.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
+      className="testimonial-bouncy absolute bg-white h-[287.197px] left-[61.77px] overflow-clip rounded-[20px] top-[380px] w-[481.83px]"
+      style={{ '--testimonial-bounce-duration': '10.5s', '--testimonial-bounce-delay': '-0.8s' }}
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
-        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— Tammy W.</p>
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">- Tammy W.</p>
         <p className="text-[15px] text-[#5e5e5e]">Marketing Director</p>
       </div>
       <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#8b5e3c' }}>TW</div>
@@ -1179,12 +1259,13 @@ function Group66() {
 function Frame12() {
   return (
     <motion.div
-      className="[grid-area:1_/_1] bg-white h-[287.197px] ml-0 mt-0 overflow-clip relative rounded-[20px] w-[481.83px]"
+      className="testimonial-bouncy [grid-area:1_/_1] bg-white h-[287.197px] ml-0 mt-0 overflow-clip relative rounded-[20px] w-[481.83px]"
+      style={{ '--testimonial-bounce-duration': '9s', '--testimonial-bounce-delay': '-4.2s' }}
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       <div className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[32px] left-[166px] top-[166px] w-[280px]">
-        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">— James L.</p>
+        <p className="mb-0 text-[22px] text-[#5e5e5e] font-medium">- James L.</p>
         <p className="text-[15px] text-[#5e5e5e]">Software Engineer</p>
       </div>
       <div className="absolute left-[49px] rounded-full size-[94px] top-[156px] flex items-center justify-center text-white font-bold text-[28px]" style={{ background: '#306770' }}>JL</div>
@@ -1218,7 +1299,6 @@ function Group48() {
         <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none">
           <source src="/ResumeRain.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-black/50" />
       </div>
       <Group10 />
       <Group11 />
@@ -1253,9 +1333,10 @@ function Group68() {
   );
 }
 
-function Group69() {
+function Group69({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <motion.div
+      onClick={onSignUp}
       className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#fade3e] w-[189px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
@@ -1265,19 +1346,19 @@ function Group69() {
   );
 }
 
-function Group70() {
+function Group70({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-0 mt-0 place-items-start relative">
-      <Group69 />
+      <Group69 onSignUp={onSignUp} />
     </div>
   );
 }
 
-function Group71() {
+function Group71({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-[262px] mt-0 place-items-start relative">
       <div className="[grid-area:1_/_1] bg-[#fce03d] h-[60px] ml-0 mt-0 rounded-[15px] w-[189px]" />
-      <Group70 />
+      <Group70 onSignUp={onSignUp} />
     </div>
   );
 }
@@ -1293,42 +1374,43 @@ function Group72() {
 function Group73() {
   return (
     <div className="absolute contents inset-[30%_4.7%_40%_8.55%]">
-      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal inset-[30%_4.7%_40%_8.55%] leading-[24px] text-[16px] text-center text-white">Start Receiving Matches</p>
+      <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal inset-[30%_4.7%_40%_8.55%] leading-[24px] text-[16px] text-center text-white">Find Remote Work!</p>
     </div>
   );
 }
 
-function Group74() {
+function Group74({ onSignUp }: { onSignUp?: () => void }) {
   return (
     <motion.div
+      onClick={onSignUp}
       className="[grid-area:1_/_1] h-[60px] ml-0 mt-0 relative rounded-[15px] bg-[#306770] shadow-[0px_7px_13px_0px_rgba(33,33,33,0.25)] w-[234px] cursor-pointer flex items-center justify-center"
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.98 }}
     >
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Start Receiving Matches</p>
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal text-[16px] text-center text-white">Find Remote Work!</p>
     </motion.div>
   );
 }
 
-function Group75() {
+function Group75({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
     <div className="[grid-area:1_/_1] grid-cols-[max-content] grid-rows-[max-content] inline-grid ml-0 mt-px place-items-start relative">
-      <Group71 />
-      <Group74 />
+      <Group71 onSignUp={onGoPremium} />
+      <Group74 onSignUp={onSignUp} />
     </div>
   );
 }
 
-function Group39() {
+function Group39({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
     <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0">
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[30px] leading-[24px] ml-[154.5px] mt-0 relative text-[16px] text-white w-[180px]">Get My Weekly Matches</p>
-      <Group75 />
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[30px] leading-[24px] ml-[154.5px] mt-0 relative text-[16px] text-white w-[180px]">Get Started for Free!</p>
+      <Group75 onSignUp={onSignUp} onGoPremium={onGoPremium} />
     </div>
   );
 }
 
-function Frame43() {
+function Frame43({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -1367,19 +1449,18 @@ function Frame43() {
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       <Group27 />
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[181px] leading-[60px] relative shrink-0 text-[#2a2f2f] text-[46px] w-[451px]">
-        <span>{`Start getting remote jobs daily straight to your inbox `}</span>
-        <span className="text-[#306770]">Free!</span>
+      <p className="font-['Manrope:Regular',_sans-serif] font-extrabold h-auto leading-[58px] relative shrink-0 text-[#111] text-[46px] w-[451px]">
+        Find the hottest remote jobs all over the world.
       </p>
-      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[87px] leading-[40px] relative shrink-0 text-[24px] text-black w-[435px]">We surface remote roles from across the web and deliver the ones that match — straight to your dashboard.</p>
-      <Group39 />
+      <p className="font-['Manrope:Regular',_sans-serif] font-normal h-[87px] leading-[40px] relative shrink-0 text-[24px] text-black w-[435px]">We surface remote roles from across the web and deliver the ones that match, straight to your dashboard.</p>
+      <Group39 onSignUp={onSignUp} onGoPremium={onGoPremium} />
     </motion.div>
   );
 }
 
-function Group47() {
+function Group47({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium?: () => void }) {
   return (
-    <motion.div 
+    <motion.div
       className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start relative shrink-0"
       initial={{ opacity: 0, y: 50 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -1388,29 +1469,39 @@ function Group47() {
     >
       <div className="[grid-area:1_/_1] h-[756px] ml-0 mt-[47px] relative rounded-[20px] shadow-[360px_731px_228px_0px_rgba(0,0,0,0),231px_468px_209px_0px_rgba(0,0,0,0.01),130px_263px_176px_0px_rgba(0,0,0,0.05),58px_117px_130px_0px_rgba(0,0,0,0.09),14px_29px_72px_0px_rgba(0,0,0,0.1)] w-[1169px]" data-name="Beach-computer-laptop-VPN-RF">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[20px] size-full" src={imgBeachComputerLaptopVpnRf} />
+        <FloatingGlassBubble className="absolute top-[-38px] left-[224px] z-10" delay={0.1}>
+          <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[31px] left-[34px] text-[24px] text-white top-[22px] w-[306px]">
+            Remote roles matched<br />to your skills.
+          </p>
+        </FloatingGlassBubble>
+        <FloatingGlassBubble className="absolute bottom-[-34px] left-[64px] z-10" delay={0.15}>
+          <p className="absolute font-['Manrope:Regular',_sans-serif] font-normal leading-[31px] left-[34px] text-[24px] text-white top-[22px] w-[306px]">
+            Jobs filtered before<br />they hit your dashboard.
+          </p>
+        </FloatingGlassBubble>
       </div>
-      <Frame43 />
+      <Frame43 onSignUp={onSignUp} onGoPremium={onGoPremium} />
     </motion.div>
   );
 }
 
-function Frame50() {
+function Frame50({ onSignUp, onGoPremium, scrollToFaq }: { onSignUp?: () => void; onGoPremium?: () => void; scrollToFaq?: () => void }) {
   return (
     <div className="content-stretch flex flex-col gap-[200px] items-center relative shrink-0 w-full">
-      <Group57 />
+      <Group57 onSignUp={onSignUp} onGoPremium={onGoPremium} />
       <Frame40 />
       <Frame41 />
-      <Frame48 />
+      <Frame48 onSignUp={onSignUp} scrollToFaq={scrollToFaq} />
       <Group51 />
       <Group49 />
       <Group48 />
-      <Group47 />
+      <Group47 onSignUp={onSignUp} onGoPremium={onGoPremium} />
     </div>
   );
 }
 
 
-function Frame13() {
+function Frame13({ onSignUp: _onSignUp }: { onSignUp?: () => void }) {
   return (
     <div className="w-full max-w-[1329px] mx-auto bg-[rgba(255,255,255,0.6)] rounded-[20px] py-5 px-8">
       <div className="flex items-center justify-center gap-10 flex-wrap">
@@ -1422,19 +1513,19 @@ function Frame13() {
   );
 }
 
-function Group59() {
+function Group59({ onSignUp }: { onSignUp?: () => void }) {
   return (
-    <div className="w-full flex justify-center px-6 pb-6">
-      <Frame13 />
+    <div className="w-full flex justify-center px-6">
+      <Frame13 onSignUp={onSignUp} />
     </div>
   );
 }
 
-function Frame49() {
+function Frame49({ onSignUp, onGoPremium, scrollToFaq }: { onSignUp?: () => void; onGoPremium?: () => void; scrollToFaq?: () => void }) {
   return (
-    <div className="content-stretch flex flex-col gap-[124px] items-center w-[1461px] mt-[137px]">
-      <Frame50 />
-      <Group59 />
+    <div className="content-stretch flex flex-col gap-[44px] items-center w-[1461px] mt-[137px]">
+      <Frame50 onSignUp={onSignUp} onGoPremium={onGoPremium} scrollToFaq={scrollToFaq} />
+      <Group59 onSignUp={onSignUp} />
     </div>
   );
 }
@@ -1478,16 +1569,16 @@ function Frame42() {
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       <p className="absolute h-[29px] leading-[40px] left-[28px] text-[24px] text-white top-[23px] w-[205px]">This could be you.</p>
-      <p className="absolute leading-[24px] left-[-114px] text-[#787878] text-[16px] top-[901px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
-      <p className="absolute leading-[24px] left-[-97px] text-[#787878] text-[16px] top-[1657px] w-[333px]">{`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque `}</p>
     </motion.div>
   );
 }
 
-export default function JobSeekerLanding({ scale = 1, onSignIn: _onSignIn }: { scale?: number; onSignIn?: () => void }) {
+export default function JobSeekerLanding({ scale = 1, onSignIn: _onSignIn, onSignUp, onGoPremium }: { scale?: number; onSignIn?: () => void; onSignUp?: () => void; onGoPremium?: () => void }) {
+  const scrollToFaq = () => document.getElementById('faq-section')?.scrollIntoView({ behavior: 'smooth' })
+
   return (
-    <div className="relative shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] w-full min-h-screen pb-20 overflow-x-hidden" data-name="Job Seeker Landing">
-      <Frame49 />
+    <div className="relative shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] w-full min-h-screen overflow-x-hidden" data-name="Job Seeker Landing">
+      <Frame49 onSignUp={onSignUp} onGoPremium={onGoPremium} scrollToFaq={scrollToFaq} />
       <Frame42 />
     </div>
   );

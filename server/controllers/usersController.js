@@ -1007,9 +1007,31 @@ const updateStars = asyncHandler(async (req, res) => {
 // @route DELETE /users
 // @access Private
 const deleteUser = asyncHandler(async (req, res) => {
-    const { email, id, password } = req.body;
+    const { email, id, password } = req.body || {};
 
-    console.log(email, id, password)
+    if (req.user?.email) {
+        const authEmail = String(req.user.email).trim().toLowerCase();
+        const authId = req.user._id || req.user.id;
+        const deletedUser = await User.findOneAndDelete({
+            $or: [
+                ...(authId ? [{ _id: authId }] : []),
+                { email: authEmail },
+            ],
+        });
+
+        if (!deletedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        try {
+            const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
+            await Candidates.deleteMany({ email: authEmail });
+        } catch (error) {
+            console.warn('Deleted user but failed to delete candidate profile:', error.message);
+        }
+
+        return res.json({ success: true, message: 'User deleted successfully' });
+    }
 
     // Confirm data
     if (!id || !email || !password) {

@@ -1,6 +1,15 @@
-import { ChevronDown, Eye, Pencil, X, Check, Upload } from 'lucide-react'
+import { ChevronDown, Eye, Pencil, X, Check, Upload, Plus, Minus } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { updateCandidateSkills, updateJobSeeker, uploadCandidateResume } from '../api/jobseeker.ts'
+
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
 
 const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any, onProfileImageChange?: (image: string | null) => void, onCandidateUpdate?: (patch: any) => void }) => {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -57,6 +66,16 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
 
   const [editForm, setEditForm] = useState<any>(profile)
 
+  const parseSkills = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw.filter(Boolean)
+    if (typeof raw === 'string') return raw.split(',').map(s => s.trim()).filter(Boolean)
+    return []
+  }
+
+  const [skillsList, setSkillsList] = useState<string[]>(() =>
+    parseSkills(data?.Candidates?.[0]?.skills)
+  )
+
   // Sync with incoming candidate data when it changes
   useEffect(() => {
     const rawCandidate = data?.Candidates?.[0]
@@ -76,6 +95,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       }
       setProfile(newProfile)
       setEditForm(newProfile)
+      setSkillsList(parseSkills(rawCandidate.skills))
     }
   }, [data?.Candidates])
 
@@ -175,6 +195,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
 
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const [resumeUploading, setResumeUploading] = useState(false)
+  const [resumePopulated, setResumePopulated] = useState(false)
 
   const handleResumeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -182,14 +203,37 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     setResumeUploading(true)
     try {
       const result = await uploadCandidateResume(profile.email, file)
-      const uploadedResume = result?.candidate?.resume || result?.candidate?.resumeLink || {
+      const returnedCandidate = result?.candidate
+      const uploadedResume = returnedCandidate?.resume || returnedCandidate?.resumeLink || {
         filename: file.name,
         originalname: file.name,
       }
-      const newProfile = { ...profile, resume: uploadedResume }
+
+      // Populate profile fields from parsed resume data
+      const updates: any = { resume: uploadedResume }
+      if (returnedCandidate?.skills?.length) updates.skills = returnedCandidate.skills.join(', ')
+      if (returnedCandidate?.targetRoles?.length) updates.title = returnedCandidate.targetRoles[0]
+      if (returnedCandidate?.location?.[0] && !profile.location?.trim()) {
+        const loc = returnedCandidate.location[0]
+        updates.location = loc.city
+          ? (loc.state ? `${loc.city}, ${loc.state}` : loc.city)
+          : (loc.locationName || profile.location)
+      }
+      if (returnedCandidate?.phone && !profile.phone?.trim()) updates.phone = returnedCandidate.phone
+      if (returnedCandidate?.urls?.length) {
+        const findUrl = (name: string) => returnedCandidate.urls.find((u: any) => u.urlName === name)?.urlAddress
+        if (findUrl('LinkedIn') && !profile.linkedin?.trim()) updates.linkedin = findUrl('LinkedIn')
+        if (findUrl('GitHub') && !profile.github?.trim()) updates.github = findUrl('GitHub')
+        if (findUrl('Portfolio') && !profile.portfolio?.trim()) updates.portfolio = findUrl('Portfolio')
+      }
+
+      const newProfile = { ...profile, ...updates }
       setProfile(newProfile)
+      setEditForm(newProfile)
       localStorage.setItem('wanderworkProfile', JSON.stringify(newProfile))
-      onCandidateUpdate?.(result?.candidate || { resume: uploadedResume, resumeLink: getDocumentUrl(uploadedResume) })
+      setResumePopulated(true)
+      setTimeout(() => setResumePopulated(false), 4000)
+      onCandidateUpdate?.(returnedCandidate || { resume: uploadedResume, resumeLink: getDocumentUrl(uploadedResume) })
     } catch (err) {
       console.warn('Resume upload failed', err)
     } finally {
@@ -302,7 +346,10 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
           )}
         </div>
 
-        <div className="w-[94px] h-[94px] rounded-full bg-gray-300 cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden">
+        <div
+          className="w-[94px] h-[94px] rounded-full cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden flex items-center justify-center text-[28px] font-semibold"
+          style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}
+        >
           <input
             type="file"
             accept="image/*"
@@ -313,6 +360,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
           {profileImage && (
             <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
           )}
+          {!profileImage && getInitials(profile.name || profile.email || 'User')}
         </div>
 
         {/* Always show on lg, conditionally on smaller screens */}
@@ -360,16 +408,16 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
             onSave={() => handleSave('phone')}
             onCancel={() => handleCancel('phone')}
           />
-          <FieldRow
-            label="Skills"
-            value={profile.skills}
-            editValue={editForm.skills}
-            editing={editingField === 'skills'}
-            onEdit={() => handleEdit('skills')}
-            onChange={(v) => handleFieldChange('skills', v)}
-            onSave={() => handleSave('skills')}
-            onCancel={() => handleCancel('skills')}
-            multiline
+          <SkillsField
+            skills={skillsList}
+            candidateId={candidate?._id}
+            onSkillsChange={(updated: string[]) => {
+              setSkillsList(updated)
+              const joined = updated.join(', ')
+              setProfile((p: any) => ({ ...p, skills: joined }))
+              setEditForm((f: any) => ({ ...f, skills: joined }))
+              onCandidateUpdate?.({ skills: updated })
+            }}
           />
           <FieldRow
             label="Linkedin URL"
@@ -415,6 +463,11 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
           {/* Resume Field — file upload */}
           <div className="w-full lg:w-[210px] group/resume" style={{ fontFamily: 'Manrope', color: '#787878' }}>
             <p className="text-[12px] mb-1">Resume</p>
+            {resumePopulated && (
+              <p className="text-[11px] mb-1 font-medium" style={{ color: '#36BF8F' }}>
+                ✓ Profile updated from resume
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -428,17 +481,18 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
                   ? getDocumentName(profile.resume || candidate?.resume || candidate?.resumeLink)
                   : 'No file uploaded'}
               </button>
-              <button
-                onClick={openResume}
-                disabled={!getDocumentUrl(profile.resume || candidate?.resume || candidate?.resumeLink)}
-                title="View uploaded resume"
-                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 opacity-0 group-hover/resume:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ background: '#EEF4F5', color: '#306770', border: '1px solid #C8DDE0' }}
-                onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.background = '#D4E8EC' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#EEF4F5' }}
-              >
-                <Eye size={13} />
-              </button>
+              {getDocumentUrl(profile.resume || candidate?.resume || candidate?.resumeLink) && (
+                <button
+                  onClick={openResume}
+                  title="View uploaded resume"
+                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                  style={{ background: '#EEF4F5', color: '#306770', border: '1px solid #C8DDE0' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#D4E8EC' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#EEF4F5' }}
+                >
+                  <Eye size={13} />
+                </button>
+              )}
               <button
                 onClick={() => resumeInputRef.current?.click()}
                 disabled={resumeUploading}
@@ -456,7 +510,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
             <input
               ref={resumeInputRef}
               type="file"
-              accept=".pdf,.doc,.docx,.rtf,.txt"
+              accept=".pdf,.docx"
               className="hidden"
               onChange={handleResumeFileChange}
             />
@@ -616,6 +670,137 @@ const EditField = ({ label, value, multiline, onChange }: { label: string, value
           style={{ borderColor: '#DCDCDC', fontFamily: 'Manrope', color: '#787878' }}
         />
       )}
+    </div>
+  )
+}
+
+const SkillsField = ({
+  skills,
+  candidateId,
+  onSkillsChange,
+}: {
+  skills: string[]
+  candidateId?: string
+  onSkillsChange: (skills: string[]) => void
+}) => {
+  const COLLAPSED_COUNT = 10
+  const [expanded, setExpanded] = useState(false)
+  const [search, setSearch] = useState('')
+  const [hoveredSkill, setHoveredSkill] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const hasMore = skills.length > COLLAPSED_COUNT
+  const displayed = expanded ? skills : skills.slice(0, COLLAPSED_COUNT)
+
+  const save = async (updated: string[]) => {
+    onSkillsChange(updated)
+    if (candidateId) {
+      try { await updateCandidateSkills(candidateId, updated) }
+      catch (e) { console.warn('Failed to update skills', e) }
+    }
+  }
+
+  const handleDelete = (skill: string) => save(skills.filter(s => s !== skill))
+
+  const handleAdd = () => {
+    const trimmed = search.trim()
+    if (!trimmed || skills.map(s => s.toLowerCase()).includes(trimmed.toLowerCase())) {
+      setSearch('')
+      return
+    }
+    save([...skills, trimmed])
+    setSearch('')
+    inputRef.current?.focus()
+  }
+
+  return (
+    <div className="w-full lg:w-[210px]" style={{ fontFamily: 'Manrope', color: '#787878' }}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[12px]">Skills</p>
+        {hasMore && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="w-5 h-5 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: '#F0F0F0', color: '#787878' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#E0E0E0' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#F0F0F0' }}
+            title={expanded ? 'Collapse' : 'Show all'}
+          >
+            {expanded ? <Minus size={10} /> : <Plus size={10} />}
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {displayed.map(skill => (
+          <div
+            key={skill}
+            className="flex items-center gap-1 px-2.5 py-[5px] rounded-full text-[11px] font-medium transition-all select-none"
+            style={{
+              border: hoveredSkill === skill ? '1.5px solid #36BF8F' : '1.5px solid #DCDCDC',
+              color: '#1A1A2E',
+              background: 'white',
+              cursor: 'default',
+            }}
+            onMouseEnter={() => setHoveredSkill(skill)}
+            onMouseLeave={() => setHoveredSkill(null)}
+          >
+            <span>{skill}</span>
+            {hoveredSkill === skill && (
+              <button
+                onClick={() => handleDelete(skill)}
+                className="flex items-center justify-center rounded-full transition-colors"
+                style={{ color: '#AAAAAA', lineHeight: 0 }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#E53E3E' }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#AAAAAA' }}
+                title={`Remove ${skill}`}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        ))}
+        {!expanded && hasMore && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="px-2.5 py-[5px] rounded-full text-[11px] font-medium transition-colors"
+            style={{ border: '1.5px solid #DCDCDC', color: '#787878', background: 'white' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#306770'; e.currentTarget.style.color = '#306770' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#DCDCDC'; e.currentTarget.style.color = '#787878' }}
+          >
+            +{skills.length - COLLAPSED_COUNT} more
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Add a skill..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          className="flex-1 px-2.5 py-1 rounded-full text-[11px] outline-none transition-colors"
+          style={{
+            border: '1.5px solid #DCDCDC',
+            color: '#1A1A2E',
+            fontFamily: 'Manrope',
+            background: 'white',
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = '#306770' }}
+          onBlur={e => { e.currentTarget.style.borderColor = '#DCDCDC' }}
+        />
+        <button
+          onClick={handleAdd}
+          disabled={!search.trim()}
+          className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-30"
+          style={{ background: '#36BF8F', color: 'white' }}
+          title="Add skill"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
     </div>
   )
 }

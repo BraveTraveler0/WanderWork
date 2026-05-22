@@ -8,6 +8,7 @@ const DESKTOP_BREAKPOINT = 1024
 interface LandingPageProps {
   onSignIn: () => void
   onSignUp: () => void
+  onGoPremium?: () => void
 }
 
 function LandingNavbar({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
@@ -103,7 +104,7 @@ function LandingNavbar({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp:
   )
 }
 
-export default function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
+export default function LandingPage({ onSignIn, onSignUp, onGoPremium }: LandingPageProps) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < DESKTOP_BREAKPOINT)
   const [scale, setScale] = useState(1)
   const [contentHeight, setContentHeight] = useState(0)
@@ -133,7 +134,6 @@ export default function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
     return <MobileLanding onSignIn={onSignIn} onSignUp={onSignUp} />
   }
 
-  const isScaled = scale < 1
   const outerHeight = contentHeight > 0 ? Math.round(contentHeight * scale) : undefined
 
   return (
@@ -141,7 +141,7 @@ export default function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
       <LandingNavbar onSignIn={onSignIn} onSignUp={onSignUp} />
       <div
         style={{
-          overflowX: 'hidden',
+          overflow: 'hidden',
           width: '100%',
           height: outerHeight ? `${outerHeight}px` : '100vh',
           position: 'relative',
@@ -151,12 +151,12 @@ export default function LandingPage({ onSignIn, onSignUp }: LandingPageProps) {
           ref={innerRef}
           style={{
             transform: `scale(${scale})`,
-            transformOrigin: isScaled ? 'top center' : 'top left',
+            transformOrigin: 'top center',
             width: `${DESIGN_WIDTH}px`,
-            marginLeft: isScaled ? `calc(50vw - ${DESIGN_WIDTH / 2}px)` : 0,
+            marginLeft: `calc(50vw - ${DESIGN_WIDTH / 2}px)`,
           }}
         >
-          <JobSeekerLanding scale={scale} onSignIn={onSignIn} />
+          <JobSeekerLanding scale={scale} onSignIn={onSignIn} onSignUp={onSignUp} onGoPremium={onGoPremium} />
         </div>
       </div>
     </>

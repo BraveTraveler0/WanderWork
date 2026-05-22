@@ -191,6 +191,55 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   res.json({ received: true });
 });
 
+// ── POST /stripe/redeem-code ──────────────────────────────────────────────────
+// Body: { code, email, tokens }
+// Validates promo code server-side (PROMO_CODES env var), prevents reuse, adds tokens atomically.
+router.post('/redeem-code', async (req, res) => {
+  const { code, email, tokens } = req.body || {};
+  if (!code || !email) {
+    return res.status(400).json({ message: 'code and email are required.' });
+  }
+
+  const tokenQty = Number(tokens);
+  if (!Number.isInteger(tokenQty) || tokenQty < 1 || tokenQty > 1000) {
+    return res.status(400).json({ message: 'tokens must be a whole number between 1 and 1000.' });
+  }
+
+  const validCodes = (process.env.PROMO_CODES || '')
+    .split(',')
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedCode = code.trim().toLowerCase();
+
+  if (!validCodes.includes(normalizedCode)) {
+    return res.status(400).json({ message: 'Invalid code. Please check and try again.' });
+  }
+
+  try {
+    const normalizedEmail = String(email).toLowerCase();
+    const candidate = await Candidate.findOne({ email: normalizedEmail });
+    if (!candidate) {
+      return res.status(404).json({ message: 'No account found for this email.' });
+    }
+
+    const usedCodes = Array.isArray(candidate.usedPromoCodes) ? candidate.usedPromoCodes : [];
+    if (usedCodes.includes(normalizedCode)) {
+      return res.status(409).json({ message: 'This code has already been redeemed on your account.' });
+    }
+
+    const updated = await Candidate.findOneAndUpdate(
+      { _id: candidate._id },
+      { $inc: { tokenBalance: tokenQty }, $push: { usedPromoCodes: normalizedCode } },
+      { new: true }
+    );
+
+    res.json({ tokenBalance: updated.tokenBalance, added: tokenQty });
+  } catch (err) {
+    console.error('redeem-code error:', err.message);
+    res.status(500).json({ message: 'Server error. Please try again.' });
+  }
+});
+
 // ── POST /stripe/create-payment-intent (legacy — kept for compatibility) ──────
 router.post('/create-payment-intent', async (req, res) => {
   const { amount, userId, contentCreator } = req.body;

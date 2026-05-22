@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ArrowRight, Users } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
-import { createTokenCheckoutSession } from '../api/stripe'
+import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 
 const INTERESTED_KEY = 'wanderworkInterestedJobs'
 function loadInterestedOverrides(): Record<number, boolean> {
@@ -64,9 +64,14 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const [floatDelta, setFloatDelta] = useState<number | null>(null)
   const [floatKey, setFloatKey] = useState(0)
   const [creditBalanceOverride, setCreditBalanceOverride] = useState<number | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal'>('stripe')
+  const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal' | 'code' | 'other'>('stripe')
   const [tokenCheckoutLoading, setTokenCheckoutLoading] = useState(false)
   const [tokenCheckoutError, setTokenCheckoutError] = useState<string | null>(null)
+  const [paypalInfo, setPaypalInfo] = useState<string | null>(null)
+  const [promoCode, setPromoCode] = useState('')
+  const [codeError, setCodeError] = useState<string | null>(null)
+  const [customPayment, setCustomPayment] = useState('')
+  const [otherSuccess, setOtherSuccess] = useState(false)
 
   const baseCredits = (() => {
     const tokenValue = firstCandidate?.tokenBalance ?? firstCandidate?.tokens
@@ -101,41 +106,50 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
     window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank')
   }
 
-  const addTokensLocally = async () => {
-    const newTotal = currentTokens + tokenQty
-    setCurrentTokens(newTotal)
-    setShowTokensModal(false)
-    setShowToast(true)
-    setTimeout(() => setShowToast(false), 2000)
-    setFloatDelta(tokenQty)
-    setFloatKey((k) => k + 1)
-    setTimeout(() => setFloatDelta(null), 3200)
-    // Persist token change for first candidate when possible
-    try {
-      const candidate = data?.Candidates?.[0]
-      if (candidate?._id) {
-        await updateJobSeeker({
-          Candidates: [
-            { _id: candidate._id, tokenBalance: newTotal }
-          ]
-        })
-      }
-    } catch (e) {
-      // Swallow errors; UI remains responsive and local
-      console.warn('Failed to persist token update', e)
-    }
-  }
-
   const purchase = async () => {
     if (tokenQty < 1 || tokenCheckoutLoading) return
     setTokenCheckoutError(null)
+    setCodeError(null)
+    setPaypalInfo(null)
 
-    if (paymentMethod === 'paypal') {
-      openPayPalCheckout()
-      await addTokensLocally()
+    if (paymentMethod === 'code') {
+      const email = firstCandidate?.email || data?.Candidates?.[0]?.email || ''
+      if (!email) { setCodeError('Could not find your account email. Please log in again.'); return }
+      setTokenCheckoutLoading(true)
+      try {
+        const result = await redeemPromoCode(promoCode.trim(), email, tokenQty)
+        // Server confirmed payment — update local state with server-returned balance
+        setCurrentTokens(result.tokenBalance)
+        setShowTokensModal(false)
+        setShowToast(true)
+        setTimeout(() => setShowToast(false), 2000)
+        setFloatDelta(result.added)
+        setFloatKey((k) => k + 1)
+        setTimeout(() => setFloatDelta(null), 3200)
+      } catch (err: any) {
+        setCodeError(err?.message || 'Invalid code. Please check and try again.')
+      } finally {
+        setTokenCheckoutLoading(false)
+      }
       return
     }
 
+    if (paymentMethod === 'paypal') {
+      openPayPalCheckout()
+      setPaypalInfo('Complete your payment in the PayPal window. Once confirmed, email support@wanderwork.ai with your receipt and we will add your tokens within 24 hours.')
+      return
+    }
+
+    if (paymentMethod === 'other') {
+      if (!customPayment.trim()) {
+        setTokenCheckoutError('Please describe your preferred payment method.')
+        return
+      }
+      setOtherSuccess(true)
+      return
+    }
+
+    // Stripe — redirect to hosted checkout; tokens added server-side via webhook on success
     setTokenCheckoutLoading(true)
     try {
       const email = firstCandidate?.email || data?.Candidates?.[0]?.email || ''
@@ -348,31 +362,81 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             return s.replace(/\s{3,}/g, '  ').trim()
           }
 
+          const stripMarkdown = (text: string) => {
+            return text
+              .replace(/(^|\n)\s{0,3}#{1,6}\s*/g, '$1')
+              .replace(/(^|\n)\s{0,3}[-*_]{3,}\s*(?=\n|$)/g, '$1')
+              .replace(/(^|\n)\s{0,3}(\*\*|__)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
+              .replace(/(^|\n)\s{0,3}(\*|_)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
+              .replace(/(^|\n)\s{0,3}(\*\*|__)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+              .replace(/(^|\n)\s{0,3}(\*|_)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+              .replace(/(^|\n)\s{0,3}(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*/gi, '$1')
+              .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
+              .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+              .replace(/\*([^*\n]+)\*/g, '$1')
+              .replace(/___([^_\n]+)___/g, '$1')
+              .replace(/__([^_\n]+)__/g, '$1')
+              .replace(/_([^_\n]+)_/g, '$1')
+              .replace(/\*\*/g, '')
+              .trim()
+          }
+
+          const stripDuplicateAboutHeading = (text: string) => {
+            return text
+              .replace(/^about\s+(.{2,80}?)\s+\1\b\s*/i, '$1 ')
+              .trim()
+          }
+
+          const stripLeadingPresentationLines = (text: string) => {
+            const presentationOnly =
+              /^(?:#{1,6}|[-*_]{3,}|(?:\*\*|__|\*|_)?\s*(?:about\s+(?:the\s+role|us|the\s+opportu?nity)|company\s+description|company|description|job\s+details|position|hiring)\s*:?\s*(?:\*\*|__|\*|_)?)$/i
+            const lines = text
+              .split(/\n+/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+            while (lines.length && presentationOnly.test(lines[0])) {
+              lines.shift()
+            }
+            return lines.join('\n\n').trim()
+          }
+
+          const cleanDescriptionText = (value: string) =>
+            stripLeadingPresentationLines(stripDuplicateAboutHeading(stripMarkdown(stripJunkMeta(stripHtml(value)))))
+
           const fromValue = (value: any): string => {
             if (!value) return ''
-            if (typeof value === 'string') return stripJunkMeta(stripHtml(value))
-            if (Array.isArray(value)) return stripJunkMeta(stripHtml(value.filter(Boolean).join(' ')))
+            if (typeof value === 'string') return cleanDescriptionText(value)
+            if (Array.isArray(value)) return cleanDescriptionText(value.filter(Boolean).join(' '))
             if (typeof value === 'object') {
               const joined = Object.values(value).filter((v) => typeof v === 'string').join(' ')
-              return stripJunkMeta(stripHtml(joined))
+              return cleanDescriptionText(joined)
             }
             return ''
           }
 
           const desc = fromValue((selectedJob as any).description)
           if (desc) {
-            const formatted = addBreaks(desc)
+            const formatted = stripLeadingPresentationLines(addBreaks(desc))
             return isTooShort(formatted) ? fallbackMessage : formatted
           }
           const summary = fromValue((selectedJob as any).summary)
           if (summary) {
-            const formatted = addBreaks(summary)
+            const formatted = stripLeadingPresentationLines(addBreaks(summary))
             return isTooShort(formatted) ? fallbackMessage : formatted
           }
           return fallbackMessage
         })()
         
         const applyUrl = typeof (selectedJob as any).url === 'string' ? (selectedJob as any).url : ''
+
+        // For Wellfound specific job URLs, show a fallback to the company jobs page in case the listing expired.
+        // Only applies when the URL points at a specific job (has content after /jobs/),
+        // not when it's already the company jobs listing page.
+        const wellfoundCompanyUrl = (() => {
+          if (!applyUrl.includes('wellfound.com/company/')) return null
+          const match = applyUrl.match(/wellfound\.com\/company\/([^/]+)\/jobs\/(.+)/)
+          return match ? `https://wellfound.com/company/${match[1]}/jobs` : null
+        })()
 
         return (
           <div 
@@ -434,9 +498,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Actions */}
               <div className="flex flex-col gap-4">
-                <div className="flex gap-3 flex-wrap">
+                <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap">
                   <a
-                    className="px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap flex-shrink-0 transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white"
+                    className="w-full sm:w-auto flex items-center justify-center px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap flex-shrink-0 transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white"
                     style={{ 
                       border: '1px solid #306770',
                       color: '#306770',
@@ -452,8 +516,22 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   >
                     Apply on site
                   </a>
+                  {wellfoundCompanyUrl && (
+                    <p className="w-full text-[11px]" style={{ color: '#AAAAAA' }}>
+                      If that link is expired,{' '}
+                      <a
+                        href={wellfoundCompanyUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#306770', textDecoration: 'underline' }}
+                      >
+                        view all open roles at this company
+                      </a>
+                      .
+                    </p>
+                  )}
                   <button
-                    className="cta-glow flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
+                    className="cta-glow w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
                     style={{ background: '#306770' }}
                     onClick={() => setShowCustomRequestModal({
                       jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
@@ -467,7 +545,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   </button>
                   {hasCompanyRecruiters && (
                     <button
-                      className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
                       style={{ border: '1px solid #306770', color: '#306770' }}
                       onClick={() => setShowRecruiterModal(true)}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#306770'; e.currentTarget.style.color = 'white' }}
@@ -532,37 +610,69 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               <span className="text-[14px]" style={{ color: '#306770' }}>${tokenPrice}</span>
             </div>
 
-            <div className="text-[13px] mb-6" style={{ color: '#787878' }}>
-              <span>Payment Method</span>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  className="rounded-[10px] border px-4 py-3 text-left transition-colors"
-                  style={{
-                    borderColor: paymentMethod === 'stripe' ? '#306770' : '#DCDCDC',
-                    background: paymentMethod === 'stripe' ? 'rgba(48,103,112,0.08)' : 'white',
-                    color: paymentMethod === 'stripe' ? '#306770' : '#787878',
-                  }}
-                  onClick={() => setPaymentMethod('stripe')}
-                >
-                  <span className="block text-[13px] font-semibold">Stripe</span>
-                  <span className="block text-[11px]">Card checkout</span>
-                </button>
-                <button
-                  type="button"
-                  className="rounded-[10px] border px-4 py-3 text-left transition-colors"
-                  style={{
-                    borderColor: paymentMethod === 'paypal' ? '#306770' : '#DCDCDC',
-                    background: paymentMethod === 'paypal' ? 'rgba(48,103,112,0.08)' : 'white',
-                    color: paymentMethod === 'paypal' ? '#306770' : '#787878',
-                  }}
-                  onClick={() => setPaymentMethod('paypal')}
-                >
-                  <span className="block text-[13px] font-semibold">PayPal</span>
-                  <span className="block text-[11px]">PayPal account</span>
-                </button>
-              </div>
+            <div className="text-[13px] mb-4" style={{ color: '#787878' }}>
+              <label className="block mb-2">Payment Method</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => {
+                  setPaymentMethod(e.target.value as any)
+                  setCodeError(null)
+                  setTokenCheckoutError(null)
+                  setPaypalInfo(null)
+                  setPromoCode('')
+                  setCustomPayment('')
+                  setOtherSuccess(false)
+                }}
+                className="w-full rounded-[10px] border px-3 py-2.5 text-[13px] outline-none appearance-none"
+                style={{ borderColor: '#DCDCDC', color: '#306770', background: 'white', cursor: 'pointer' }}
+              >
+                <option value="stripe">Stripe — Card checkout</option>
+                <option value="paypal">PayPal — PayPal account</option>
+                <option value="code">Use Code</option>
+                <option value="other">Other — Contact support</option>
+              </select>
             </div>
+
+            {paymentMethod === 'code' && (
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => { setPromoCode(e.target.value); setCodeError(null) }}
+                  placeholder="Enter promo code"
+                  className="w-full rounded-[10px] border px-3 py-2.5 text-[13px] outline-none"
+                  style={{ borderColor: codeError ? '#FCA5A5' : '#DCDCDC', color: '#306770' }}
+                />
+                {codeError && (
+                  <p className="mt-1 text-[12px]" style={{ color: '#B91C1C' }}>{codeError}</p>
+                )}
+              </div>
+            )}
+
+            {paymentMethod === 'other' && !otherSuccess && (
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={customPayment}
+                  onChange={(e) => { setCustomPayment(e.target.value); setTokenCheckoutError(null) }}
+                  placeholder="Describe your preferred payment method"
+                  className="w-full rounded-[10px] border px-3 py-2.5 text-[13px] outline-none"
+                  style={{ borderColor: '#DCDCDC', color: '#306770' }}
+                />
+              </div>
+            )}
+
+            {paymentMethod === 'other' && otherSuccess && (
+              <div className="mb-4 rounded-[10px] border px-3 py-2.5 text-[13px]" style={{ borderColor: '#A7F3D0', color: '#065F46', background: '#ECFDF5' }}>
+                Got it — we've noted <strong>{customPayment}</strong>. Reach out to support to complete your purchase and we'll get you set up.
+              </div>
+            )}
+
+            {paypalInfo && (
+              <div className="mb-4 rounded-[10px] border px-3 py-2 text-[12px]" style={{ borderColor: '#93C5FD', color: '#1E40AF', background: '#EFF6FF' }}>
+                {paypalInfo}
+              </div>
+            )}
 
             {tokenCheckoutError && (
               <div className="mb-4 rounded-[10px] border px-3 py-2 text-[12px]" style={{ borderColor: '#FCA5A5', color: '#B91C1C', background: '#FEF2F2' }}>
@@ -570,16 +680,18 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
             )}
 
-            <button
-              className="w-full rounded-[10px] border px-4 py-3 text-[13px] transition-colors"
-              style={{ borderColor: '#306770', color: '#306770' }}
-              onClick={purchase}
-              disabled={tokenCheckoutLoading || tokenQty < 1}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#306770', e.currentTarget.style.color = 'white')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'white', e.currentTarget.style.color = '#306770')}
-            >
-              {tokenCheckoutLoading ? 'Opening Stripe...' : paymentMethod === 'stripe' ? 'Checkout with Stripe' : 'Checkout with PayPal'}
-            </button>
+            {!(paymentMethod === 'other' && otherSuccess) && (
+              <button
+                className="w-full rounded-[10px] py-3 text-[14px] font-semibold transition-all"
+                style={{ background: '#306770', color: 'white', border: 'none' }}
+                onClick={purchase}
+                disabled={tokenCheckoutLoading || tokenQty < 1}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#245460' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#306770' }}
+              >
+                {tokenCheckoutLoading ? 'Opening checkout…' : 'Get Tokens'}
+              </button>
+            )}
           </div>
         </div>
       )}

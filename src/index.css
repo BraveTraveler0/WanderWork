@@ -65,6 +65,89 @@ html {
   50%       { box-shadow: 0 0 0 6px rgba(48,103,112,0.08); }
 }
 
+@keyframes testimonialBounce {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  18% {
+    transform: translate3d(0, -10px, 0) scale(1.01);
+  }
+  34% {
+    transform: translate3d(0, 3px, 0) scale(0.997);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0) scale(1.006);
+  }
+  68% {
+    transform: translate3d(0, 2px, 0) scale(0.999);
+  }
+}
+
+.testimonial-bouncy {
+  animation: testimonialBounce var(--testimonial-bounce-duration, 9s) cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+  animation-delay: var(--testimonial-bounce-delay, 0s);
+  transform-origin: 50% 65%;
+  will-change: transform;
+}
+
+.glass-bubble-bouncy {
+  animation: glassBubbleFloat var(--glass-bubble-bounce-duration, 7.2s) ease-in-out infinite;
+  animation-delay: var(--glass-bubble-bounce-delay, 0s);
+  transform-origin: 50% 50%;
+  transition: filter 0.2s ease;
+  will-change: transform;
+}
+
+.glass-bubble-bouncy:hover {
+  animation-name: glassBubbleHoverOrbit;
+  animation-duration: 6.2s;
+  animation-timing-function: ease-in-out;
+  filter: brightness(1.025);
+}
+
+@keyframes glassBubbleFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+  }
+  18% {
+    transform: translate3d(14px, -8px, 0) scale(1.008) rotate(0.25deg);
+  }
+  36% {
+    transform: translate3d(6px, 10px, 0) scale(0.998) rotate(-0.18deg);
+  }
+  56% {
+    transform: translate3d(-14px, 5px, 0) scale(1.01) rotate(-0.3deg);
+  }
+  76% {
+    transform: translate3d(-6px, -10px, 0) scale(1.004) rotate(0.2deg);
+  }
+}
+
+@keyframes glassBubbleHoverOrbit {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1.01) rotate(0deg);
+  }
+  20% {
+    transform: translate3d(10px, -6px, 0) scale(1.022) rotate(0.14deg);
+  }
+  42% {
+    transform: translate3d(6px, 7px, 0) scale(1.016) rotate(-0.1deg);
+  }
+  64% {
+    transform: translate3d(-9px, 6px, 0) scale(1.024) rotate(-0.14deg);
+  }
+  84% {
+    transform: translate3d(-6px, -7px, 0) scale(1.018) rotate(0.1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .testimonial-bouncy,
+  .glass-bubble-bouncy {
+    animation: none;
+  }
+}
+
 @keyframes shimmer {
   0%   { background-position: -400px 0; }
   100% { background-position: 400px 0; }

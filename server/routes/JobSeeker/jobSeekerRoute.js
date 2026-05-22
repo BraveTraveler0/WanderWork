@@ -10,18 +10,36 @@ const resumeUploadDir = path.join(__dirname, '../../uploads/resumes')
 const coverLetterUploadDir = path.join(__dirname, '../../uploads/cover-letters')
 fs.mkdirSync(resumeUploadDir, { recursive: true })
 fs.mkdirSync(coverLetterUploadDir, { recursive: true })
+const ALLOWED_RESUME_MIMETYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
 const resumeUpload = multer({
-  dest: resumeUploadDir
+  dest: resumeUploadDir,
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(Object.assign(new Error('Only PDF and DOCX files are accepted.'), { status: 400 }))
+    }
+  },
 })
 const coverLetterUpload = multer({
   dest: coverLetterUploadDir
 })
 
 router.route('/')
-    .get(optionalAuth, jobSeekerController.getEverything)
+    .get(requireAuth, jobSeekerController.getEverything)
 
 router.route('/candidate')
     .get(jobSeekerController.getAllCandidates)
+
+// Static sub-paths must come before /:id to avoid being swallowed as the id param
+router.route('/candidate/resume')
+    .post(resumeUpload.single('resume'), jobSeekerController.updateCandidateResume)
+
+router.route('/candidate/cover-letter')
+    .post(coverLetterUpload.single('coverLetter'), jobSeekerController.updateCandidateCoverLetter)
 
 router.route('/candidate/:id')
     .get(jobSeekerController.getCandidateById)
@@ -34,12 +52,6 @@ router.route('/candidate/:id/pair-jobs')
 
 router.route('/pair-jobs')
     .post(jobSeekerController.pairAllCandidatesHandler)
-
-router.route('/candidate/resume')
-    .post(resumeUpload.single('resume'), jobSeekerController.updateCandidateResume)
-
-router.route('/candidate/cover-letter')
-    .post(coverLetterUpload.single('coverLetter'), jobSeekerController.updateCandidateCoverLetter)
 
 router.route('/custom-request')
     .post(optionalAuth, jobSeekerController.submitCustomRequest)

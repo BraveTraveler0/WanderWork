@@ -25,6 +25,44 @@ const _stripJunkMeta = (text: string): string => {
   return s.replace(/\s{3,}/g, '  ').trim()
 }
 
+const _stripMarkdown = (text: string): string => {
+  return text
+    .replace(/(^|\n)\s{0,3}#{1,6}\s*/g, '$1')
+    .replace(/(^|\n)\s{0,3}[-*_]{3,}\s*(?=\n|$)/g, '$1')
+    .replace(/(^|\n)\s{0,3}(\*\*|__)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(\*|_)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(\*\*|__)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(\*|_)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*/gi, '$1')
+    .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/___([^_\n]+)___/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    .replace(/\*\*/g, '')
+    .trim()
+}
+
+const _stripDuplicateAboutHeading = (text: string): string => {
+  return text
+    .replace(/^about\s+(.{2,80}?)\s+\1\b\s*/i, '$1 ')
+    .trim()
+}
+
+const _stripLeadingPresentationLines = (text: string): string => {
+  const presentationOnly =
+    /^(?:#{1,6}|[-*_]{3,}|(?:\*\*|__|\*|_)?\s*(?:about\s+(?:the\s+role|us|the\s+opportu?nity)|company\s+description|company|description|job\s+details|position|hiring)\s*:?\s*(?:\*\*|__|\*|_)?)$/i
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  while (lines.length && presentationOnly.test(lines[0])) {
+    lines.shift()
+  }
+  return lines.join('\n\n').trim()
+}
+
 const LEAD_IN_PATTERNS: RegExp[] = [
   /^company[:,\s-]*/i,
   /^about\s+the\s+role[:,\s-]*/i,
@@ -40,7 +78,7 @@ const LEAD_IN_PATTERNS: RegExp[] = [
   /^hiring[:,\s-]*/i,
   /^job\s+details[:,\s-]*/i,
   /^about\s+the\s+opportu?nity[:,\s-]*/i,
-  /^about\s+.+[:,\s-]*/i,
+  /^about\s+[^.!?\n:]{2,80}[:\-]\s*/i,
 ]
 
 const _stripLeadIns = (text: string): string => {
@@ -93,7 +131,9 @@ const _isTooShort = (value: string): boolean => {
 
 function processJobDescription(d: unknown): string {
   const run = (raw: string) => {
-    const formatted = _addBreaks(_stripLeadIns(_stripJunkMeta(_stripHtml(raw))))
+    const formatted = _stripLeadingPresentationLines(
+      _addBreaks(_stripLeadIns(_stripDuplicateAboutHeading(_stripMarkdown(_stripJunkMeta(_stripHtml(raw))))))
+    )
     return !formatted || _isTooShort(formatted) ? FALLBACK_DESC : formatted
   }
   if (typeof d === 'string') return run(d)
@@ -109,9 +149,32 @@ interface JobFeedProps {
   jobs?: any[]
   showNewOnly: boolean
   onToggleNewFilter: () => void
+  loading?: boolean
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: JobFeedProps) => {
+const BATCH = 15
+
+function getJobTime(job: any): number {
+  const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt
+  if (!raw) return 0
+  const parsed = new Date(raw)
+  if (!Number.isNaN(parsed.getTime())) return parsed.getTime()
+  if (typeof raw === 'string') {
+    const withZ = new Date(`${raw}Z`)
+    if (!Number.isNaN(withZ.getTime())) return withZ.getTime()
+  }
+  if (!Number.isNaN(Number(raw))) {
+    const asNum = new Date(Number(raw))
+    if (!Number.isNaN(asNum.getTime())) return asNum.getTime()
+  }
+  return 0
+}
+
+const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading }: JobFeedProps) => {
+  const [visibleCount, setVisibleCount] = useState(BATCH)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
     const saved = localStorage.getItem('wanderworkDiscardedJobs')
     if (!saved) return new Set()
@@ -152,6 +215,22 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
   const [keywords, setKeywords] = useState<string[]>([])
   const [keywordInput, setKeywordInput] = useState('')
   const [dateRange, setDateRange] = useState('all')
+
+  // Reset visible count whenever filters change
+  useEffect(() => {
+    setVisibleCount(BATCH)
+  }, [showMatchedOnly, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords.join(',')])
+
+  // Load more as user scrolls to the sentinel
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setVisibleCount((n) => n + BATCH)
+    }, { threshold: 0.1 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
 
   // ALWAYS use jobs from props - they're already transformed and safe
   // Never fall back to data?.Jobs which may have untransformed objects
@@ -232,13 +311,13 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
     }
 
     addValue(candidate?.skills)
+    addValue(candidate?.skills_2)
+    addValue(candidate?.inferredKeywords)
     addValue(candidate?.inferredSkills)
     addValue(candidate?.inferred_skills)
     addValue(candidate?.extractedSkills)
     addValue(candidate?.extracted_skills)
-    addValue(candidate?.skills2)
-    addValue(candidate?.skills_2)
-    addValue(candidate?.education)
+    addValue(candidate?.targetRoles)
 
     if (typeof window !== 'undefined') {
       const storedProfileRaw = localStorage.getItem('wanderworkProfile')
@@ -288,13 +367,13 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
     return Array.from(new Set(expanded)).filter(Boolean)
   }, [
     candidate?.skills,
+    candidate?.skills_2,
+    candidate?.inferredKeywords,
     candidate?.inferredSkills,
     candidate?.inferred_skills,
     candidate?.extractedSkills,
     candidate?.extracted_skills,
-    candidate?.skills2,
-    candidate?.skills_2,
-    candidate?.education
+    candidate?.targetRoles,
   ])
   const matchedJobIds = useMemo(() => {
     const apps = Array.isArray(data?.Applications) ? data!.Applications : []
@@ -316,76 +395,45 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
     ])
   }, [data?.Applications, data?.CandidateJobPairing, candidateId])
 
-  const isJobMatched = (job: any) => {
-    if (candidateKeywords.length > 0) {
-      const jobSkillsRaw = Array.isArray(job.skills)
-        ? job.skills
-        : typeof job.skills === 'string'
-          ? job.skills.split(',')
-          : []
-      const normalize = (text: string) =>
-        text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
-      const jobText = [
-        job.title,
-        job.company,
-        job.location,
-        job.description,
-        jobSkillsRaw.join(' ')
-      ]
-        .filter(Boolean)
-        .join(' ')
-      const normalizedJobText = normalize(jobText)
-      const jobTokens = new Set(normalizedJobText.split(' ').filter(Boolean))
-      const hasToken = (token: string) => jobTokens.has(token)
-      const hasPhrase = (phrase: string) => normalizedJobText.includes(phrase)
-
-      return candidateKeywords.some((keyword) => {
-        if (keyword === 'ui') {
-          return hasPhrase('user interface')
-        }
-        if (keyword === 'ux') {
-          return hasToken('ux') || hasPhrase('user experience')
-        }
-        if (keyword === 'dev') {
-          return hasToken('developer') || hasToken('development')
-        }
-        if (keyword === 'fe') {
-          return hasPhrase('front end') || hasToken('frontend')
-        }
-        if (keyword === 'be') {
-          return hasPhrase('back end') || hasToken('backend')
-        }
-        const parts = keyword.split(' ').filter(Boolean)
-        if (parts.length === 0) return false
-        if (parts.length === 1) {
-          return jobTokens.has(keyword)
-        }
-        return normalizedJobText.includes(keyword)
-      })
+  // Build search text for every job once — shared by matchedSet and keyword filter
+  const jobSearchTexts = useMemo(() => {
+    const map = new Map<number, { txt: string; tokens: Set<string> }>()
+    for (const job of visibleJobsList) {
+      const skillsRaw = Array.isArray(job.skills) ? job.skills : (typeof job.skills === 'string' ? job.skills.split(',') : [])
+      const txt = _normSearch([job.title, job.company, job.location, job.description, skillsRaw.join(' ')].filter(Boolean).join(' '))
+      map.set(job.id, { txt, tokens: new Set(txt.split(' ').filter(Boolean)) })
     }
-    if (!matchedJobIds.size) return false
-    return matchedJobIds.has(String(job.backendId))
-  }
+    return map
+  }, [visibleJobsList])
 
-  const getJobTime = (job: any) => {
-    const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt
-    if (!raw) return 0
-    const parsed = new Date(raw)
-    if (!Number.isNaN(parsed.getTime())) return parsed.getTime()
-    if (typeof raw === 'string') {
-      const withZ = new Date(`${raw}Z`)
-      if (!Number.isNaN(withZ.getTime())) return withZ.getTime()
+  // Pre-compute which jobs match the candidate — O(jobs × keywords) once, not per render
+  const matchedSet = useMemo(() => {
+    const set = new Set<number>()
+    for (const job of visibleJobsList) {
+      if (candidateKeywords.length > 0) {
+        const entry = jobSearchTexts.get(job.id)
+        if (!entry) continue
+        const { txt, tokens } = entry
+        const hit = candidateKeywords.some((kw) => {
+          if (kw === 'ui') return txt.includes('user interface')
+          if (kw === 'ux') return tokens.has('ux') || txt.includes('user experience')
+          if (kw === 'dev') return tokens.has('developer') || tokens.has('development')
+          if (kw === 'fe') return txt.includes('front end') || tokens.has('frontend')
+          if (kw === 'be') return txt.includes('back end') || tokens.has('backend')
+          const parts = kw.split(' ').filter(Boolean)
+          return parts.length === 1 ? tokens.has(kw) : txt.includes(kw)
+        })
+        if (hit) set.add(job.id)
+      } else if (matchedJobIds.has(String(job.backendId))) {
+        set.add(job.id)
+      }
     }
-    if (!Number.isNaN(Number(raw))) {
-      const asNum = new Date(Number(raw))
-      if (!Number.isNaN(asNum.getTime())) return asNum.getTime()
-    }
-    return 0
-  }
+    return set
+  }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts])
 
-  const visibleJobs = visibleJobsList
+  const visibleJobs = useMemo(() => visibleJobsList
     .filter((job: any) => !discardedJobs.has(job.id))
-    .filter((job: any) => !showMatchedOnly || isJobMatched(job))
+    .filter((job: any) => !showMatchedOnly || matchedSet.has(job.id))
     .filter((job: any) => !showInterestedOnly || isJobInterested(job))
     .filter((job: any) => !showNewOnly || isNewJob(job))
     .filter((job: any) => {
@@ -427,23 +475,22 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
     })
     .filter((job: any) => {
       if (keywords.length === 0) return true
-      const haystack = [job.title, job.company, job.location, job.description, Array.isArray(job.skills) ? job.skills.join(' ') : job.skills]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return keywords.every((kw) => haystack.includes(kw.toLowerCase()))
+      const entry = jobSearchTexts.get(job.id)
+      if (!entry) return true
+      return keywords.every((kw) => entry.txt.includes(kw.toLowerCase()))
     })
     .sort((a: any, b: any) => getJobTime(b) - getJobTime(a))
+  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
-  // Pre-compute descriptions once per jobs-list change — never inside render
+  // Process descriptions only for the jobs currently rendered — not the full list
   const jobDescriptions = useMemo(() => {
     const map = new Map<number, string>()
-    for (const job of visibleJobsList) {
+    for (const job of visibleJobs.slice(0, visibleCount + BATCH)) {
       map.set(job.id, processJobDescription(job.description))
     }
     return map
-  }, [visibleJobsList])
+  }, [visibleJobs, visibleCount])
 
   const toggleInterested = async (job: any) => {
     let nextValue = false
@@ -539,9 +586,15 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
       <p className="text-[24px] sm:text-[28px] lg:text-[32px]" style={{ color: '#787878' }}>
         Hey there, Let's get you hired.
       </p>
-      <div className="text-[11px]" style={{ color: '#787878' }}>
-        Loaded jobs: {Array.isArray(jobs) && jobs.length ? jobs.length : (data?.Jobs?.length ?? 0)} · Showing: {visibleJobsList.length} · After filters: {visibleJobs.length}
-      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-6">
+          <svg className="animate-spin h-7 w-7 text-[#306770]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      )}
 
       {/* Custom Request Modal */}
       {showCustomRequestModal && (
@@ -714,7 +767,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
                 title={`${discardedJobsList.length} discarded jobs`}
               >
                 <Trash2 size={18} style={{ color: discardedJobsList.length === 0 ? '#CCCCCC' : '#306770' }} />
-                <span className="text-[12px]">Not intereested</span>
+                <span className="text-[12px]">Not interested</span>
                 {discardedJobsList.length > 0 && (
                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
                     {discardedJobsList.length}
@@ -779,7 +832,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
             </p>
           </div>
         )}
-        {visibleJobs.map((job: any, _jobIndex: number) => {
+        {visibleJobs.slice(0, visibleCount).map((job: any, _jobIndex: number) => {
           const isInterested = isJobInterested(job)
           const isNew = isNewJob(job)
           const expiringDays = (() => {
@@ -814,6 +867,22 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly }: J
             />
           )
         })}
+        {visibleCount < visibleJobs.length ? (
+          <div ref={sentinelRef} className="flex justify-center py-6">
+            <div
+              className="animate-spin"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                border: '3px solid #C8DDE0',
+                borderTopColor: '#1e5560',
+              }}
+            />
+          </div>
+        ) : (
+          <div ref={sentinelRef} />
+        )}
       </div>
     </div>
   )

@@ -27,6 +27,7 @@ import {
   type JobSeekerData,
   type Location,
 } from './api/jobseeker.ts'
+import { deleteAccount } from './api/users'
 
 const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
   if (typeof window === 'undefined') return null
@@ -40,6 +41,15 @@ const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
     }
   }
   return null
+}
+
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
 }
 
 // Seed data (mirrors seed-backend.js) to keep UI populated if backend is empty
@@ -228,6 +238,27 @@ const cleanLocationString = (raw: string): string => {
   return s
 }
 
+// Fix Wellfound job URLs that are missing a numeric ID — those URLs always 404 in the browser.
+// Wellfound's current format is /company/[slug]/jobs/[numeric-id]-[title-slug].
+// When the stored URL has no numeric prefix (e.g. /jobs/machine-learning-engineer), fall back
+// to the company's jobs listing page which is always a working URL.
+function normalizeJobUrl(url: string | undefined): string {
+  if (!url) return ''
+  try {
+    const u = new URL(url)
+    if (!u.hostname.includes('wellfound.com')) return url
+    const match = u.pathname.match(/^\/company\/([^/]+)\/jobs\/([^/]+)$/)
+    if (match) {
+      const jobSlug = match[2]
+      // If the job slug starts with a numeric ID the URL is current-format and should work
+      if (/^\d/.test(jobSlug)) return url
+      // No numeric ID — fall back to the company's jobs page
+      return `https://wellfound.com/company/${match[1]}/jobs`
+    }
+  } catch { /* invalid URL, return as-is */ }
+  return url
+}
+
 // Transform backend job data to component format
 function transformJob(job: Job, index: number) {
   const locationString = (() => {
@@ -377,7 +408,7 @@ function transformJob(job: Job, index: number) {
     showCoverLetter: false,
     postedAt: dateStr,
     salary: (job as any).salary,
-    url: (job as any).url,
+    url: normalizeJobUrl((job as any).url),
     jobType: (job as any).jobType || (job as any).type,
     job_code: (job as any).job_code || (job as any).code,
     rawDate: dateStr, // Use the parsed dateStr instead of original rawDate
@@ -406,6 +437,38 @@ function App() {
     }, 75)
     return () => clearInterval(timer)
   }, [])
+
+  const [oauthError, setOauthError] = useState<string | null>(null)
+
+  // Handle OAuth callbacks (LinkedIn redirect, etc.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauthToken = params.get('token')
+    const oauthUser = params.get('user')
+    const oauthErr = params.get('error')
+
+    if (oauthToken && oauthUser) {
+      try {
+        const userData = JSON.parse(decodeURIComponent(oauthUser))
+        localStorage.setItem('wanderworkToken', oauthToken)
+        localStorage.setItem('wanderworkUser', JSON.stringify(userData))
+        setToken(oauthToken)
+        setUser(userData)
+        setShowLogin(false)
+        window.history.replaceState({}, '', window.location.pathname)
+      } catch (e) {
+        console.warn('OAuth callback parse error', e)
+      }
+    } else if (oauthErr === 'linkedin_scope') {
+      setOauthError('LinkedIn connection failed. Please enable "Sign In with LinkedIn using OpenID Connect" in your LinkedIn developer app, then try again.')
+      window.history.replaceState({}, '', window.location.pathname)
+      setTimeout(() => setOauthError(null), 10000)
+    } else if (oauthErr === 'linkedin') {
+      setOauthError('LinkedIn sign-in failed. Please try again.')
+      window.history.replaceState({}, '', window.location.pathname)
+      setTimeout(() => setOauthError(null), 6000)
+    }
+  }, [])
   const [showRecruiterNavModal, setShowRecruiterNavModal] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkProfileImage', ['wanderHireProfileImage'])
@@ -424,6 +487,23 @@ function App() {
   const [_token, setToken] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
+
+  const clearLocalAuth = () => {
+    localStorage.removeItem('wanderworkToken')
+    localStorage.removeItem('wanderworkUser')
+    localStorage.removeItem('wanderworkProfileImage')
+    setUser(null)
+    setToken(null)
+    setData(null)
+    setProfileImage(null)
+  }
+
+  const handleDeleteAccount = async () => {
+    try { await deleteAccount() } catch { /* account may already be gone */ }
+    clearLocalAuth()
+    setCurrentPage('dashboard')
+  }
+
   const [showLogin, setShowLogin] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return new URLSearchParams(window.location.search).get('login') === 'true'
@@ -432,7 +512,28 @@ function App() {
     if (typeof window === 'undefined') return false
     return new URLSearchParams(window.location.search).get('signup') === 'true'
   })
+  const [showPlans, setShowPlans] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+
+  // Push a history entry when navigating to auth screens so the browser back button
+  // returns to the landing page instead of potentially bypassing auth.
+  useEffect(() => {
+    if (showLogin || showSignup) {
+      window.history.pushState({ wanderAuth: true }, '')
+    }
+  }, [showLogin, showSignup])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setShowLogin(false)
+      setShowSignup(false)
+      setShowForgotPassword(false)
+      if (!_token) setShowPlans(false)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [_token])
+
   const buildFallbackCandidate = (): Candidate => {
     const storedProfileRaw = getMigratedStorageItem('wanderworkProfile', ['wanderHireProfile'])
     let storedProfile: any = null
@@ -590,46 +691,7 @@ function App() {
       cjPairings?: any[]
       contactPairings?: any[]
     }) => {
-      console.log('useJobs called with:', payload.jobs.length, 'jobs')
-      if (payload.jobs.length > 0) {
-        const raw = payload.jobs[0] as any
-        console.log('Sample raw job fields:', {
-          title: raw?.title,
-          company: raw?.company,
-          description: raw?.description,
-          shortDescription: raw?.shortDescription,
-          jobDescription: raw?.jobDescription,
-          summary: raw?.summary,
-          datePosted: raw?.datePosted,
-          postedAt: raw?.postedAt,
-          preparedAt: raw?.preparedAt,
-          createdAt: raw?.createdAt,
-        })
-      }
-
       const jobsMapped = payload.jobs.map((job, index) => transformJob(job as Job, index))
-      console.log('Transformed jobs:', jobsMapped.length)
-      if (jobsMapped.length > 0) {
-        const sample = jobsMapped[0]
-        console.log('Sample job after transform:', {
-          id: sample.id,
-          title: sample.title,
-          company: sample.company,
-          descriptionPreview: (sample.description || '').slice(0, 200),
-          descriptionLength: sample.description?.length ?? 0,
-          postedAt: sample.postedAt,
-          rawDate: (sample as any).rawDate,
-        })
-      }
-      
-      // Debug: Check first few jobs' date fields
-      if (jobsMapped.length > 0) {
-        console.log('Sample backend job dates:', jobsMapped.slice(0, 3).map((j: any) => ({
-          postedAt: j.postedAt,
-          rawDate: j.rawDate
-        })))
-      }
-      
       setTransformedJobs(jobsMapped.length > 0 ? jobsMapped : mockJobs)
       setData({
         Applications: payload.applications || [],
@@ -650,44 +712,30 @@ function App() {
       setError(null)
       
       try {
-        // Check if we have a logged-in user
-        let userCandidate = null
-        if (_user?.email) {
-          try {
-            console.log('Fetching candidate data for logged-in user:', _user.email)
-            const candidates = await getCandidates({ signal: controller.signal })
-            if (candidates && candidates.length > 0) {
-              // Find the candidate matching the logged-in user's email
-              userCandidate = candidates.find((c: any) => c.email === _user.email)
-              if (!userCandidate) {
-                userCandidate = candidates[0] // Use first candidate as fallback
-              }
-              console.log('Found user candidate:', userCandidate?.email)
-            }
-          } catch (err) {
-            console.warn('Failed to fetch user candidate:', err)
-          }
-        }
-
         // Preferred: single aggregate call
         try {
-          console.log('Fetching data from /jobseeker/...')
           const result = await getAllJobSeekerData({ signal: controller.signal })
-          console.log('Fetch result:', result?.Jobs?.length, 'jobs,', result?.Candidates?.length, 'candidates')
           const sourceJobs = result?.Jobs?.length ? result.Jobs : seedJobs
           let sourceCandidates = result?.Candidates?.length ? result.Candidates : []
-          
-          // Use logged-in user's candidate if available
-          if (userCandidate) {
-            sourceCandidates = [userCandidate]
+
+          // Narrow to the logged-in user's candidate when we have multiple
+          if (_user?.email && sourceCandidates.length > 1) {
+            const match = sourceCandidates.find((c: any) => (c.email || '').toLowerCase() === (_user.email || '').toLowerCase())
+            if (match) sourceCandidates = [match]
           }
+
+          // Logged-in user has no candidate record — account was deleted server-side
+          if (_user && sourceCandidates.length === 0) {
+            clearLocalAuth()
+            setLoading(false)
+            return
+          }
+
           if (sourceCandidates.length === 0) {
             const fallbackCandidate = buildFallbackCandidate()
-            if (fallbackCandidate) {
-              sourceCandidates = [fallbackCandidate]
-            }
+            if (fallbackCandidate) sourceCandidates = [fallbackCandidate]
           }
-          
+
           setData({
             ...(result || {}),
             Jobs: sourceJobs,
@@ -704,6 +752,12 @@ function App() {
           return
         } catch (aggregateErr) {
           if (controller.signal.aborted) return
+          // 401 = token expired or account deleted — clear auth and show landing
+          if (String(aggregateErr).includes('401')) {
+            clearLocalAuth()
+            setLoading(false)
+            return
+          }
           console.warn('Aggregate fetch failed, trying split endpoints:', aggregateErr)
         }
 
@@ -719,11 +773,12 @@ function App() {
           ])
 
           let sourceCandidates = candidates?.length ? candidates : []
-          
-          // Use logged-in user's candidate if available
-          if (userCandidate) {
-            sourceCandidates = [userCandidate]
+
+          if (_user?.email && sourceCandidates.length > 1) {
+            const match = sourceCandidates.find((c: any) => (c.email || '').toLowerCase() === (_user.email || '').toLowerCase())
+            if (match) sourceCandidates = [match]
           }
+
           if (sourceCandidates.length === 0) {
             const fallbackCandidate = buildFallbackCandidate()
             if (fallbackCandidate) {
@@ -755,7 +810,7 @@ function App() {
         }
 
         // Final fallback: seeds + mock
-        const fallbackCandidate = userCandidate || buildFallbackCandidate()
+        const fallbackCandidate = buildFallbackCandidate()
         const fallbackCandidates = fallbackCandidate ? [fallbackCandidate] : []
         setData({
           Jobs: seedJobs,
@@ -798,10 +853,7 @@ function App() {
     { label: 'Privacy Policy',  action: () => { setCurrentPage('privacy'); setShowMenu(false) } },
     { label: 'Terms of Service',action: () => { setCurrentPage('terms'); setShowMenu(false) } },
     { label: 'Sign Out',        action: () => {
-      localStorage.removeItem('wanderworkToken')
-      localStorage.removeItem('wanderworkUser')
-      setUser(null)
-      setToken(null)
+      clearLocalAuth()
       setShowLogin(false)
       setShowMenu(false)
     }},
@@ -853,9 +905,22 @@ function App() {
 
   // Show landing page when unauthenticated and not explicitly navigating to login
   if (!_token && !showLogin && !showSignup) {
+    if (showPlans) {
+      return (
+        <PlansPage
+          onBack={() => setShowPlans(false)}
+          onSignUp={() => { setShowPlans(false); setShowSignup(true) }}
+          onSignIn={() => { setShowPlans(false); setShowLogin(true) }}
+        />
+      )
+    }
     return (
       <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f4f4' }} />}>
-        <LandingPage onSignIn={() => setShowLogin(true)} onSignUp={() => setShowSignup(true)} />
+        <LandingPage
+          onSignIn={() => setShowLogin(true)}
+          onSignUp={() => setShowSignup(true)}
+          onGoPremium={() => setShowPlans(true)}
+        />
       </Suspense>
     )
   }
@@ -898,7 +963,7 @@ function App() {
 
   // Render different pages
   if (currentPage === 'settings') {
-    return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} />
+    return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} />
   }
 
   if (currentPage === 'privacy') {
@@ -914,14 +979,38 @@ function App() {
   }
 
   if (currentPage === 'profile') {
-    const profileCandidate = safeData?.Candidates?.[0] || buildFallbackCandidate()
-    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} />
+    const backendCandidate = safeData?.Candidates?.[0] as any
+    const localFallback = buildFallbackCandidate() as any
+    const storedImage = localStorage.getItem('wanderworkProfileImage')
+    const profileCandidate = backendCandidate ? {
+      ...backendCandidate,
+      targetRoles: backendCandidate.targetRoles?.length ? backendCandidate.targetRoles : (localFallback?.targetRoles || []),
+      skills: backendCandidate.skills?.length ? backendCandidate.skills : (localFallback?.skills || []),
+      location: backendCandidate.location?.length ? backendCandidate.location : (localFallback?.location || []),
+      urls: backendCandidate.urls?.length ? backendCandidate.urls : (localFallback?.urls || []),
+      phone: backendCandidate.phone || localFallback?.phone || '',
+      profileImage: backendCandidate.profileImage || storedImage || undefined,
+    } : (localFallback || (_user ? {
+        _id: _user._id || _user.id || '',
+        firstName: (_user.displayName || _user.email || '').split(' ')[0] || '',
+        lastName: (_user.displayName || '').split(' ').slice(1).join(' ') || '',
+        email: _user.email || '',
+        phone: '', location: [], targetRoles: [], seniority: [],
+        skills: [], urls: [], resume: {}, status: 'active',
+        paidUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
+      } : null))
+    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} />
   }
-
-  console.log('About to render main dashboard, loading:', loading, 'data:', !!data, 'transformedJobs:', transformedJobs.length)
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)', backgroundAttachment: 'fixed' }}>
+      {oauthError && (
+        <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, maxWidth: 480, width: 'calc(100% - 40px)', background: '#1A1A2E', color: '#fff', borderRadius: 12, padding: '14px 20px', fontSize: 13, fontFamily: 'Manrope', lineHeight: 1.5, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }}>!</span>
+          <span>{oauthError}</span>
+          <button onClick={() => setOauthError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: 0, flexShrink: 0, fontSize: 16, lineHeight: 1 }}>x</button>
+        </div>
+      )}
       {/* Full-width sticky header */}
       <div className="sticky top-0 z-50 w-full" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
         <header className="max-w-[1460px] mx-auto px-4 sm:px-6 flex items-center justify-between py-4">
@@ -931,13 +1020,6 @@ function App() {
             {logoText.length > 7 ? logoText.slice(7) : ''}
           </h1>
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-[31px] h-[31px] rounded-full overflow-hidden border border-[#DCDCDC] bg-gray-200 flex items-center justify-center">
-              {profileImage ? (
-                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-2 h-2 rounded-full bg-white/70" />
-              )}
-            </div>
             <button
               onClick={() => setShowRecruiterNavModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-all duration-200"
@@ -949,6 +1031,13 @@ function App() {
               <Users size={13} />
               <span className="hidden sm:inline">Contact Recruiters</span>
             </button>
+            <div className="w-[31px] h-[31px] rounded-full overflow-hidden flex items-center justify-center text-[11px] font-semibold" style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}>
+              {profileImage ? (
+                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                getInitials(`${safeData.Candidates[0]?.firstName || ''} ${safeData.Candidates[0]?.lastName || ''}`.trim() || _user?.displayName || _user?.email || 'User')
+              )}
+            </div>
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -987,8 +1076,18 @@ function App() {
         )}
         
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <p style={{ color: '#787878' }}>Loading your data...</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div
+              className="animate-spin"
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                border: '4px solid #C8DDE0',
+                borderTopColor: '#1e5560',
+              }}
+            />
+            <p style={{ color: '#787878', fontFamily: 'Manrope', fontSize: 14 }}>Putting in Work</p>
           </div>
         ) : (
           <div className="flex flex-col md:flex-row gap-4 md:gap-3 xl:gap-5 md:flex-1 md:min-h-0">
@@ -1004,6 +1103,7 @@ function App() {
                   jobs={transformedJobs}
                   showNewOnly={showNewOnly}
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
+                  loading={loading}
                 />
               </div>
 

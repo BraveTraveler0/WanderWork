@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler')
 const User = require('../models/User')
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
 const jwtUtils = require('../utils/jwtUtils')
+const { sendWelcomeEmail } = require('../utils/welcomeEmail')
 const bcrypt = require('bcrypt')
 const Achievements = require('../models/achievements')
 const { updateLightSeekerAchievement } = require('./achievementsController.js');
@@ -10,6 +11,119 @@ const sendEmail = require('../utils/mail.service')
 const passport = require('passport')
 const sgMail = require('@sendgrid/mail');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+const LOGIN_ATTEMPT_LIMIT = 10;
+const LOGIN_BASE_LOCK_MS = 60 * 60 * 1000;
+const LOGIN_MAX_LOCK_MS = 24 * 60 * 60 * 1000;
+const missingUserLoginAttempts = new Map();
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function getClientIp(req) {
+    return String(req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || 'unknown')
+        .split(',')[0]
+        .trim();
+}
+
+function formatLockMessage(lockUntil) {
+    const remainingMs = Math.max(0, new Date(lockUntil).getTime() - Date.now());
+    const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+    return `Too many failed login attempts. Try again in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}.`;
+}
+
+function lockDurationForLevel(level) {
+    return Math.min(LOGIN_BASE_LOCK_MS * (2 ** Math.max(0, level - 1)), LOGIN_MAX_LOCK_MS);
+}
+
+function getMissingUserAttemptKey(req, email) {
+    return `${getClientIp(req)}:${normalizeEmail(email) || 'blank'}`;
+}
+
+function checkMissingUserLock(req, email) {
+    const key = getMissingUserAttemptKey(req, email);
+    const entry = missingUserLoginAttempts.get(key);
+    if (!entry?.lockUntil) return null;
+    if (entry.lockUntil <= Date.now()) {
+        missingUserLoginAttempts.delete(key);
+        return null;
+    }
+    return new Date(entry.lockUntil);
+}
+
+function recordMissingUserFailure(req, email) {
+    const key = getMissingUserAttemptKey(req, email);
+    const existing = missingUserLoginAttempts.get(key) || { attempts: 0, level: 0, lockUntil: null };
+    const attempts = existing.attempts + 1;
+    const next = { ...existing, attempts, lastFailedAt: Date.now() };
+    if (attempts >= LOGIN_ATTEMPT_LIMIT) {
+        next.level = existing.level + 1;
+        next.lockUntil = Date.now() + lockDurationForLevel(next.level);
+        next.attempts = 0;
+    }
+    missingUserLoginAttempts.set(key, next);
+    return next.lockUntil ? new Date(next.lockUntil) : null;
+}
+
+function clearMissingUserFailures(req, email) {
+    missingUserLoginAttempts.delete(getMissingUserAttemptKey(req, email));
+}
+
+async function registerFailedLogin(user) {
+    const attempts = (user.failedLoginAttempts || 0) + 1;
+    user.failedLoginAttempts = attempts;
+    user.lastFailedLoginAt = new Date();
+
+    if (attempts >= LOGIN_ATTEMPT_LIMIT) {
+        const nextLevel = (user.loginLockLevel || 0) + 1;
+        user.loginLockLevel = nextLevel;
+        user.loginLockUntil = new Date(Date.now() + lockDurationForLevel(nextLevel));
+        user.failedLoginAttempts = 0;
+    }
+
+    await user.save();
+    return user.loginLockUntil;
+}
+
+async function clearLoginFailures(user) {
+    if (user.failedLoginAttempts || user.loginLockUntil || user.loginLockLevel) {
+        user.failedLoginAttempts = 0;
+        user.loginLockUntil = null;
+        user.loginLockLevel = 0;
+        user.lastFailedLoginAt = null;
+        await user.save();
+    }
+}
+
+async function resolveGoogleIdentity({ credential, accessToken }) {
+    if (credential && process.env.GOOGLE_CLIENT_ID) {
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+        const ticket = await client.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
+        const payload = ticket.getPayload();
+        return {
+            email: normalizeEmail(payload.email),
+            name: payload.name || '',
+            picture: payload.picture || '',
+        };
+    }
+
+    if (accessToken) {
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) throw new Error('Invalid Google access token');
+        const payload = await response.json();
+        return {
+            email: normalizeEmail(payload.email),
+            name: payload.name || '',
+            picture: payload.picture || '',
+        };
+    }
+
+    throw new Error('Google credential is required');
+}
 
 const _twKey = process.env.TWITTER_CONSUMER_KEY;
 const _twSecret = process.env.TWITTER_CONSUMER_SECRET;
@@ -23,39 +137,56 @@ if (_twKey && _twKey !== 'dummy' && _twSecret && _twSecret !== 'dummy') {
 }
 
 const login = asyncHandler(async (req, res) => {
-    const { email, password, token } = req.body; // Use req.query to access query parameters
+    const email = normalizeEmail(req.body?.email);
+    const password = String(req.body?.password || '');
 
     // Confirm data
     if (!email) {
         return res.status(400).json({ message: 'Email is required' });
     }
+    if (!password) {
+        return res.status(400).json({ message: 'Password is required' });
+    }
 
     try {
+        const missingUserLock = checkMissingUserLock(req, email);
+        if (missingUserLock) {
+            return res.status(423).json({ message: formatLockMessage(missingUserLock), lockedUntil: missingUserLock });
+        }
+
         // Find a user with the provided email
-        console.log('Email:', email);
         const user = await User.findOne({ email });
 
         // If no user with the provided email is found
         if (!user) {
+            const lockUntil = recordMissingUserFailure(req, email);
+            if (lockUntil) {
+                return res.status(423).json({ message: formatLockMessage(lockUntil), lockedUntil: lockUntil });
+            }
             return res.status(404).json({ message: 'User not found' });
         }
 
-        if (password) {
-            // Compare the provided password with the stored hashed password
-            const passwordMatch = await user.comparePassword(password);
-
-            if (!passwordMatch) {
-                return res.status(401).json({ message: 'Invalid password' });
-            }
-        } else if (token) {
-            // If a token is provided, compare it with the token stored in the user data
-            if (token !== user.token) {
-                return res.status(401).json({ message: 'Invalid token' });
-            }
-        } else {
-            // Neither password nor token provided, handle the error
-            return res.status(400).json({ message: 'Either password or token is required' });
+        if (user.loginLockUntil && user.loginLockUntil > new Date()) {
+            return res.status(423).json({ message: formatLockMessage(user.loginLockUntil), lockedUntil: user.loginLockUntil });
         }
+
+        if (user.active === false) {
+            return res.status(403).json({ message: 'Account is disabled' });
+        }
+
+        // Compare the provided password with the stored hashed password
+        const passwordMatch = await user.comparePassword(password);
+
+        if (!passwordMatch) {
+            const lockUntil = await registerFailedLogin(user);
+            if (lockUntil && lockUntil > new Date()) {
+                return res.status(423).json({ message: formatLockMessage(lockUntil), lockedUntil: lockUntil });
+            }
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        await clearLoginFailures(user);
+        clearMissingUserFailures(req, email);
 
         // If the email and password (or token) are correct, generate a JWT
         const jwtToken = jwtUtils.generateToken(user);
@@ -70,38 +201,48 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const googlelogin = asyncHandler(async (req, res) => {
-    const { email, token } = req.body;
+    const { credential, accessToken } = req.body || {};
 
-    // Confirm data
-    if (!email) {
-        return res.status(400).json({ message: 'Email is required' });
+    if (!credential && !accessToken) {
+        return res.status(400).json({ message: 'Google credential is required' });
     }
 
     try {
-        // Find a user with the provided email
-        console.log('Email:', email);
-        const user = await User.findOne({ email });
+        const googleIdentity = await resolveGoogleIdentity({ credential, accessToken });
+        const googleEmail = googleIdentity.email;
+        const googleName = googleIdentity.name;
 
-        // If no user with the provided email is found
+        if (!googleEmail) {
+            return res.status(400).json({ message: 'Could not determine email from Google credential' });
+        }
+
+        let user = await User.findOne({ email: googleEmail });
+
+        // Auto-create user if they don't have an account yet
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            const nameParts = (googleName || googleEmail.split('@')[0]).split(' ');
+            const displayName = googleName || nameParts.join(' ');
+            const randomPass = require('crypto').randomBytes(24).toString('hex');
+            const hashedPass = await bcrypt.hash(randomPass, 10);
+            user = await User.create({
+                email: googleEmail,
+                displayName,
+                password: hashedPass,
+                verified: true,
+            });
         }
 
-        if (token) {
-            // If a token is provided, compare it with the token stored in the user data
-            if (token !== user.token) {
-                return res.status(401).json({ message: 'Invalid token' });
-            }
+        if (user.active === false) {
+            return res.status(403).json({ message: 'Account is disabled' });
         }
 
-        // If the email (and token if provided) are correct, generate a JWT
+        await clearLoginFailures(user);
+
         const jwtToken = jwtUtils.generateToken(user);
-
-        // Respond with the user data (excluding the password) and the JWT
         res.json({ user: { ...user._doc, password: undefined }, token: jwtToken });
         await updateLightSeekerAchievement(user._id);
     } catch (error) {
-        console.error(error);
+        console.error('Google login error:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
@@ -266,6 +407,11 @@ const createNewUser = asyncHandler(async (req, res) => {
       return res.status(400).json({ message: 'Invalid user data received' });
     }
 
+    // Send welcome email directly via SendGrid (non-blocking)
+    setImmediate(() => {
+      sendWelcomeEmail({ email: normalizedEmail, firstName: safeFirstName }).catch(() => {});
+    });
+
     // Send verification email
     const verificationLink = `https://application-server-cwqu.onrender.com/auth/signup/verify?email=${email}&redirect=interests`;
     const emailMessage = {
@@ -293,45 +439,7 @@ const createNewUser = asyncHandler(async (req, res) => {
 });
 
 const loginSocial = asyncHandler(async (req, res) => {
-    const { email, displayName, name, photoURL } = req.body; // Use req.query to access query parameters
-    if (!email) {
-        return res.status(400).json({ message: 'All fields are required' });
-    }
-    try {
-        // Find a user with the provided email
-        let newuser;
-        const user = await User.findOne({ email });
-        const userName = name ? name : displayName;
-        // If no user with the provided email is found
-        if (!user) {
-            // Hash password
-            const hashedPwd = await bcrypt.hash(userName, 15); // salt rounds
-
-            // Fetch all achievements from the database
-            const achievements = await Achievements.find().lean().exec();
-
-            // Create an array of achievements for the user
-            const userAchievements = achievements.map(({ _id, crown, goal }) => ({
-                id: _id,
-                crown,
-                goal,
-            }));
-
-            const userObject = { email, password: hashedPwd, achievements: userAchievements, displayName: userName };
-
-            // Create and store new user
-            newuser = await User.create(userObject);
-        }
-
-        // If the email and password are correct, generate a JWT
-        const token = jwtUtils.generateToken(user || newuser);
-
-        // Respond with the user data (excluding the password) and the JWT
-        res.json({ user: user | newuser, token });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error' });
-    }
+    return res.status(410).json({ message: 'Legacy social login is disabled. Use Google or LinkedIn OAuth.' });
 });
 
 const twitterLogin = asyncHandler(async (req, res) => {

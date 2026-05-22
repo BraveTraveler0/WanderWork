@@ -236,7 +236,18 @@ function FaqItem({ item, index, visible }: { item: { q: string; a: string }; ind
 
 const PAYPAL_EMAIL = 'dcartercreative@gmail.com'
 
-const PlansPage = ({ onBack, userEmail }: { onBack?: () => void; userEmail?: string }) => {
+const PlansPage = ({
+  onBack,
+  userEmail,
+  onSignUp,
+  onSignIn,
+}: {
+  onBack?: () => void
+  userEmail?: string
+  onSignUp?: () => void
+  onSignIn?: () => void
+}) => {
+  const isGuest = !userEmail
   const [pageVisible, setPageVisible] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<StripePlan | 'tokens' | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
@@ -250,6 +261,11 @@ const PlansPage = ({ onBack, userEmail }: { onBack?: () => void; userEmail?: str
   }, [])
 
   const handleCheckout = async (plan: StripePlan) => {
+    if (!userEmail && onSignUp) {
+      onSignUp()
+      return
+    }
+
     setCheckoutLoading(plan)
     setCheckoutError(null)
     try {
@@ -342,37 +358,68 @@ const PlansPage = ({ onBack, userEmail }: { onBack?: () => void; userEmail?: str
           </h1>
           <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {onBack && (
-              <button
-                onClick={onBack}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
-                  borderRadius: 8,
-                  background: 'none',
-                  border: '1px solid #DCDCDC',
-                  cursor: 'pointer',
-                  color: '#306770',
-                  fontSize: 13,
-                  fontFamily: 'Manrope',
-                  fontWeight: 600,
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#306770'
-                  e.currentTarget.style.color = '#fff'
-                  e.currentTarget.style.borderColor = '#306770'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'none'
-                  e.currentTarget.style.color = '#306770'
-                  e.currentTarget.style.borderColor = '#DCDCDC'
-                }}
-              >
-                <ArrowLeft size={15} />
-                Dashboard
-              </button>
+              <>
+                <button
+                  onClick={onBack}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    background: 'none',
+                    border: '1px solid #DCDCDC',
+                    cursor: 'pointer',
+                    color: '#306770',
+                    fontSize: 13,
+                    fontFamily: 'Manrope',
+                    fontWeight: 600,
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#306770'
+                    e.currentTarget.style.color = '#fff'
+                    e.currentTarget.style.borderColor = '#306770'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'none'
+                    e.currentTarget.style.color = '#306770'
+                    e.currentTarget.style.borderColor = '#DCDCDC'
+                  }}
+                >
+                  <ArrowLeft size={15} />
+                  {isGuest ? 'Back to Home' : 'Dashboard'}
+                </button>
+                {isGuest && (
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
+                    <button
+                      onClick={onSignIn}
+                      style={{
+                        padding: '7px 16px', borderRadius: 8, background: 'none',
+                        border: '2px solid #306770', cursor: 'pointer', color: '#306770',
+                        fontSize: 13, fontFamily: 'Manrope', fontWeight: 600, transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#306770'; e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#306770' }}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={onSignUp}
+                      style={{
+                        padding: '8px 18px', borderRadius: 8, background: '#306770',
+                        border: 'none', cursor: 'pointer', color: '#fff',
+                        fontSize: 13, fontFamily: 'Manrope', fontWeight: 700,
+                        boxShadow: '0 4px 14px rgba(48,103,112,0.3)', transition: 'background 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#245460' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#306770' }}
+                    >
+                      Sign Up Free
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </nav>
         </header>

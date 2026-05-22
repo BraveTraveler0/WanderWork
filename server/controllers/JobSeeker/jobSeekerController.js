@@ -12,6 +12,28 @@ const Applications = require('../../models/JobSeeker/jobSeeker.Application.js');
 const CandidateJobPairings = require('../../models/JobSeeker/jobSeeker.CandidateJobPairing.js');
 const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPairing.js');
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
+
+async function extractPdfText(fileBuffer) {
+    const pdfParse = require('pdf-parse');
+
+    // pdf-parse v1 exported a callable function. v2 exports PDFParse.
+    if (typeof pdfParse === 'function') {
+        const parsed = await pdfParse(fileBuffer);
+        return parsed?.text || '';
+    }
+
+    if (typeof pdfParse.PDFParse === 'function') {
+        const parser = new pdfParse.PDFParse({ data: fileBuffer });
+        try {
+            const parsed = await parser.getText();
+            return parsed?.text || '';
+        } finally {
+            await parser.destroy();
+        }
+    }
+
+    throw new Error('Unsupported pdf-parse API. Expected callable parser or PDFParse class.');
+}
 // ── Junk job detection (shared between read-time filter and DB purge) ─────────
 function isJunkJobRecord(job) {
     // Check all possible title field names used by scrapers
@@ -41,6 +63,78 @@ function isJunkJobRecord(job) {
     const facetCounts = (desc.match(/\(\d[\d,]{2,}\)/g) || []).length
     if (facetCounts >= 3) return true
     return false
+}
+
+// ── Skills extraction from resume text ───────────────────────────────────────
+const SKILL_KEYWORDS = [
+    // Languages
+    'JavaScript','TypeScript','Python','Java','C++','C#','Go','Rust','Ruby','PHP','Swift','Kotlin',
+    'Scala','R','MATLAB','Perl','Bash','Shell','Dart','Elixir','Haskell','Clojure','Lua',
+    // Frontend
+    'React','Vue','Angular','Next.js','Nuxt.js','Svelte','HTML','CSS','Sass','Tailwind',
+    'Material UI','Bootstrap','jQuery','Redux','Zustand','Vite','Webpack','Figma',
+    'Sketch','Adobe XD','Storybook','Three.js','D3.js',
+    // Backend
+    'Node.js','Express','Django','Flask','FastAPI','Spring Boot','Rails','Laravel','ASP.NET',
+    'NestJS','Fastify','GraphQL','REST','gRPC','WebSocket','tRPC',
+    // Databases
+    'PostgreSQL','MySQL','MongoDB','Redis','Elasticsearch','SQLite','DynamoDB','Cassandra',
+    'Firebase','Supabase','Prisma','Sequelize','Mongoose','SQL','NoSQL',
+    // Cloud / DevOps
+    'AWS','Azure','GCP','Docker','Kubernetes','Terraform','Ansible','Jenkins',
+    'GitHub Actions','CircleCI','CI/CD','Linux','Nginx','Apache','Vercel','Netlify',
+    // Data / AI / ML
+    'Machine Learning','Deep Learning','TensorFlow','PyTorch','Pandas','NumPy',
+    'Scikit-learn','NLP','Computer Vision','Data Analysis','Data Science',
+    'Power BI','Tableau','Spark','Hadoop','Airflow','dbt','LLM','OpenAI','LangChain',
+    // Mobile
+    'iOS','Android','React Native','Flutter','Ionic','Xcode','Swift UI','Kotlin Multiplatform',
+    // Testing
+    'Jest','Vitest','Cypress','Playwright','Selenium','PyTest','JUnit','Mocha','Chai',
+    // APIs / Tooling
+    'Git','GitHub','GitLab','Bitbucket','Postman','Swagger','OpenAPI','Jira','Confluence',
+    'Notion','Linear','Figma','Slack',
+    // Design
+    'UX','UI','Prototyping','Wireframing','User Research','Accessibility','WCAG',
+    'Adobe Photoshop','Adobe Illustrator','InDesign','Canva',
+    // Project / Product
+    'Agile','Scrum','Kanban','Product Management','Project Management',
+    'Roadmapping','A/B Testing','OKRs','Stakeholder Management',
+    // Business / Marketing
+    'SEO','SEM','Google Ads','Facebook Ads','Email Marketing','Content Marketing',
+    'Salesforce','HubSpot','Marketo','Mixpanel','Amplitude','Google Analytics',
+    // Finance / Ops
+    'Excel','Financial Modeling','QuickBooks','SAP','ERP','SQL Server',
+    // Soft skills
+    'Leadership','Communication','Teamwork','Problem Solving','Analytical Thinking',
+    'Cross-functional Collaboration','Mentoring',
+]
+
+function extractSkillsFromText(text) {
+    if (!text || typeof text !== 'string') return []
+    const found = new Set()
+    for (const skill of SKILL_KEYWORDS) {
+        const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        if (new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, 'i').test(text)) {
+            found.add(skill)
+        }
+    }
+    return Array.from(found)
+}
+
+function extractTargetRoleFromText(text) {
+    if (!text || typeof text !== 'string') return ''
+    const titlePatterns = [
+        /^([A-Z][a-zA-Z &\/\-|]+(?:Engineer|Developer|Designer|Manager|Analyst|Architect|Lead|Director|Scientist|Consultant|Specialist|Coordinator|Associate|Officer|Executive|Representative|Administrator|Strategist|Producer|Writer|Editor))(?:\s*[\|\/\-]|$)/m,
+        /(?:title|position|role|job title)\s*[:\-]\s*([A-Z][^\n]{3,60})/i,
+        /^([A-Z][a-zA-Z &\/\-|]+)[\r\n]/m,
+    ]
+    for (const pattern of titlePatterns) {
+        const match = text.match(pattern)
+        const candidate = match?.[1]?.trim()
+        if (candidate && candidate.length >= 5 && candidate.length <= 80) return candidate
+    }
+    return ''
 }
 
 // ── Resume field extraction — used at startup backfill and per-request ────────
@@ -100,7 +194,8 @@ async function backfillCandidateResumeFields() {
         let updated = 0
         for (const candidate of candidates) {
             if (candidate.work_experience && candidate.education) continue
-            const { workExperience, education } = deriveResumeFields(candidate.resume_text)
+            const resumeText = typeof candidate.resume_text === 'string' ? candidate.resume_text : ''
+            const { workExperience, education } = deriveResumeFields(resumeText)
             const update = {}
             if (workExperience && !candidate.work_experience) update.work_experience = workExperience
             if (education && !candidate.education) update.education = education
@@ -123,6 +218,7 @@ async function purgeJunkJobs() {
         const junkIds = all.filter(isJunkJobRecord).map((j) => j._id)
         if (junkIds.length === 0) return
         const result = await JobDynamic.deleteMany({ _id: { $in: junkIds } })
+        _invalidateJobsCache()
         console.log(`[purgeJunkJobs] Deleted ${result.deletedCount} junk job record(s)`)
     } catch (e) {
         console.warn('[purgeJunkJobs] Failed:', e.message)
@@ -191,9 +287,10 @@ async function updateAirtableCandidateResume(candidate, resumeLink) {
         'Content-Type': 'application/json'
     };
 
+    // Only update resume_link. Do NOT send resume_text: '' — that would clear Airtable's
+    // text field and cause the hourly sync to wipe MongoDB's extracted data.
     const fields = {
         resume_link: resumeLink || '',
-        resume_text: ''
     };
 
     if (candidate.airtableId) {
@@ -547,25 +644,63 @@ async function backfillJobCompanies(jobs) {
         } catch (error) {
             console.warn('Failed to update job company in MongoDB', error.message);
         }
-        try {
-            await updateAirtableJobCompany(entry.job, entry.company);
-        } catch (error) {
-            console.warn('Failed to update job company in Airtable', error.message);
-        }
     }
 }
 
 const getEverything = asyncHandler(async (req, res) => {
     try {
-        const [Applications, Candidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing] = await Promise.all([
+        let allCandidates = await getAllCandidatesPure()
+
+        // When authenticated, return only the logged-in user's candidate
+        if (req.user?.email) {
+            const userEmail = req.user.email.toLowerCase()
+            let match = allCandidates.find((c) => (c.email || '').toLowerCase() === userEmail)
+
+            // Auto-create a Candidate document if this authenticated user has none yet
+            if (!match) {
+                const displayName = req.user.displayName || req.user.email.split('@')[0]
+                const nameParts = String(displayName).trim().split(' ').filter(Boolean)
+                try {
+                    const created = await Candidates.findOneAndUpdate(
+                        { email: userEmail },
+                        {
+                            $setOnInsert: {
+                                email: userEmail,
+                                firstName: nameParts[0] || displayName,
+                                lastName: nameParts.slice(1).join(' ') || '',
+                                phone: '',
+                                location: [],
+                                targetRoles: [],
+                                seniority: [],
+                                skills: [],
+                                urls: [],
+                                resume: {},
+                                status: 'active',
+                                paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                                tokenBalance: 30,
+                                recruiterContactsLeft: 10,
+                                recruiterContactsUpdatedAt: new Date(),
+                            },
+                        },
+                        { upsert: true, new: true }
+                    )
+                    if (created) match = created.toObject ? created.toObject() : created
+                } catch (e) {
+                    console.warn('[getEverything] Auto-create candidate failed:', e.message)
+                }
+            }
+
+            allCandidates = match ? [match] : []
+        }
+
+        const [Applications, Jobs, Contacts, CandidateJobPairing, ContactJobPairing] = await Promise.all([
             getAllApplicationsPure(),
-            getAllCandidatesPure(),
             getAllJobsPure(),
             getAllContactsPure(),
             getAllCandidateJobPairingsPure(),
             getAllContactJobPairingsPure(),
         ]);
-        res.json({ Applications, Candidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing });
+        res.json({ Applications, Candidates: allCandidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: 'An error occurred collecting data.' });
@@ -617,10 +752,31 @@ async function getAllCandidatesPure() {
     })
 }
 
+// Fields the UI actually needs — excludes raw scraper blobs and vendor internals
+const JOB_PROJECTION = {
+    _id: 1, title: 1, job_title: 1, name: 1,
+    company: 1, location: 1,
+    description: 1, description_short: 1, shortDescription: 1, summary: 1, why_matched: 1,
+    skills: 1, tags: 1, jobType: 1, job_type: 1,
+    date_posted: 1, datePosted: 1, postedAt: 1, postedDate: 1, rawDate: 1, preparedAt: 1,
+    url: 1, apply_url: 1, applyUrl: 1,
+    source: 1, job_code: 1, job_id: 1,
+    interested: 1, hasNewBadge: 1,
+}
+
+// 5-minute in-memory cache — avoids a full MongoDB scan on every page load
+let _jobsCache = null
+let _jobsCacheAt = 0
+const JOB_CACHE_TTL = 5 * 60 * 1000
+
+function _invalidateJobsCache() { _jobsCache = null; _jobsCacheAt = 0 }
+
 async function getAllJobsPure() {
+    if (_jobsCache && Date.now() - _jobsCacheAt < JOB_CACHE_TTL) return _jobsCache
+
     const JobDynamic = mongoose.models.JobDynamic ||
         mongoose.model('JobDynamic', new mongoose.Schema({}, { strict: false, collection: 'jobseeker.jobs' }));
-    const jobs = await JobDynamic.find().lean().exec();
+    const jobs = await JobDynamic.find({}, JOB_PROJECTION).lean().exec();
     const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
 
     const parseJobDate = (job) => {
@@ -658,6 +814,9 @@ async function getAllJobsPure() {
             console.warn('Backfill job companies failed', error.message);
         });
     });
+
+    _jobsCache = filtered
+    _jobsCacheAt = Date.now()
     return filtered;
 }
 
@@ -670,7 +829,7 @@ async function getAllContactsPure() {
 }
 
 async function getAllCandidateJobPairingsPure() {
-    return await CandidateJobPairings.find().lean().exec();
+    return await CandidateJobPairings.find({}, { candidateId: 1, jobId: 1, score: 1, matchedSkills: 1, reason: 1, pairedAt: 1 }).lean().exec();
 }
 
 async function getAllContactJobPairingsPure() {
@@ -834,13 +993,6 @@ const updateCandidateSkills = asyncHandler(async (req, res) => {
             applyQueueUpdated = result.modifiedCount || 0;
         }
 
-        let airtable = { updated: false };
-        try {
-            airtable = await updateAirtableCandidateSkills(candidate, normalizedSkills);
-        } catch (err) {
-            airtable = { updated: false, reason: err.message };
-        }
-
         let pairing = { updated: false };
         try {
             pairing = await pairCandidateJobs(candidate._id);
@@ -848,7 +1000,7 @@ const updateCandidateSkills = asyncHandler(async (req, res) => {
             pairing = { updated: false, reason: err.message };
         }
 
-        res.json({ candidate, applyQueueUpdated, airtable, pairing });
+        res.json({ candidate, applyQueueUpdated, pairing });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Failed to update candidate skills.' });
@@ -890,7 +1042,8 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
         return res.status(404).json({ message: 'Candidate not found.' });
     }
 
-    const hasExistingResume = !!(candidate.resumeLink || candidate.resume);
+    // Only count an existing resume if a real URL or non-empty object (not the default `{}`) exists
+    const hasExistingResume = !!(candidate.resumeLink || (candidate.resume && candidate.resume.url));
     if (hasExistingResume) {
         const creditBalance = Number.isFinite(candidate.tokenBalance) ? candidate.tokenBalance
             : Number.isFinite(candidate.creditsBalance) ? candidate.creditsBalance
@@ -925,28 +1078,155 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
         ? Math.max(0, (candidate.creditsBalance || 0) - 3)
         : candidate.creditsBalance;
 
-    candidate.resumeLink = resumeLink;
-    candidate.resume = resumeMeta;
-    candidate.resume_text = '';
-    candidate.resume_hash = '';
-    candidate.resume_updated_at = new Date();
-    if (Number.isFinite(candidate.tokenBalance)) {
-        candidate.tokenBalance = nextTokenBalance;
-        candidate.tokensUsed = (candidate.tokensUsed || 0) + 3;
-    }
-    if (Number.isFinite(candidate.creditsBalance)) {
-        candidate.creditsBalance = nextCreditsBalance;
-        candidate.creditsUsed = (candidate.creditsUsed || 0) + 3;
-    }
-
-    await candidate.save();
-
-    let airtable = { updated: false };
+    // ── Step 1: Extract raw text from the file ───────────────────────────────
+    let extractedText = '';
     try {
-        airtable = await updateAirtableCandidateResume(candidate, resumeLink);
-    } catch (err) {
-        airtable = { updated: false, reason: err.message };
+        const filePath = targetPath || file.path;
+        const fileBuffer = fs.readFileSync(filePath);
+        if (ext === '.pdf') {
+            extractedText = await extractPdfText(fileBuffer);
+        } else if (ext === '.docx' || ext === '.doc') {
+            const mammoth = require('mammoth');
+            const result = await mammoth.extractRawText({ buffer: fileBuffer });
+            extractedText = result.value || '';
+        } else if (ext === '.rtf') {
+            // Strip RTF control codes to get readable plain text
+            const raw = fileBuffer.toString('latin1');
+            extractedText = raw
+                .replace(/\\pard[^\\]*/gi, '\n')
+                .replace(/\\'[0-9a-f]{2}/gi, '')
+                .replace(/\\[a-z]+\-?\d*\s?/gi, '')
+                .replace(/[{}\\]/g, '')
+                .replace(/\r?\n\s*\r?\n/g, '\n\n')
+                .replace(/[ \t]+/g, ' ')
+                .trim();
+        } else if (ext === '.txt') {
+            extractedText = fileBuffer.toString('utf-8');
+        }
+    } catch (extractErr) {
+        console.warn('Resume text extraction failed (non-fatal):', extractErr.message);
     }
+
+    // ── Step 2: AI-powered structured parsing ─────────────────────────────────
+    // Use OpenAI to reliably extract structured fields regardless of resume format
+    let aiParsed = null;
+    if (extractedText && process.env.OPENAI_API_KEY) {
+        try {
+            const aiResponse = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are a resume parser. Extract structured data from the resume text and return ONLY valid JSON with these exact keys:
+- firstName: string (first name only)
+- lastName: string (last name only, may be empty)
+- phone: string (phone number, empty if not found)
+- targetRole: string (most recent job title or stated career goal)
+- skills: array of strings (technical and professional skills)
+- workExperience: string (all work history, each job separated by a blank line, include company, title, dates, and responsibilities)
+- education: string (all education entries, each separated by a blank line, include school, degree, dates)
+- summary: string (professional summary or objective if present, otherwise empty string)
+- location: string (city and state/country if found, otherwise empty)
+- inferredKeywords: array of up to 20 strings — the most important professional keywords from this resume (job titles held, industries, key technologies, domain terms). These are used for job matching so be specific and diverse.`
+                        },
+                        {
+                            role: 'user',
+                            content: extractedText.slice(0, 12000)
+                        }
+                    ],
+                    response_format: { type: 'json_object' },
+                    max_tokens: 2000,
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 30000,
+                }
+            );
+            aiParsed = JSON.parse(aiResponse.data.choices[0].message.content);
+        } catch (aiErr) {
+            console.warn('AI resume parsing failed, falling back to regex:', aiErr.message);
+        }
+    }
+
+    // ── Step 3: Merge AI results with regex fallback ───────────────────────────
+    const { workExperience: regexWork, education: regexEdu } = deriveResumeFields(extractedText);
+    const regexSkills = extractSkillsFromText(extractedText);
+    const regexRole = extractTargetRoleFromText(extractedText);
+    const regexPhone = extractedText.match(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/)?.[0]?.trim() || '';
+    const regexEmail = extractedText.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)?.[0]?.trim() || '';
+    const regexLocation = (() => {
+        const m = extractedText.match(/\b([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\b/)
+        return m ? { locationName: `${m[1].trim()}, ${m[2]}`, city: m[1].trim(), state: m[2] } : null
+    })()
+    const nameLines = extractedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 5)
+    const nameLine = nameLines.find(l => /^[A-Z][a-z]+(\s+[A-Z][a-z]+)+$/.test(l))
+    const regexFirstName = nameLine ? nameLine.split(/\s+/)[0] : ''
+    const regexLastName = nameLine ? nameLine.split(/\s+/).slice(1).join(' ') : ''
+
+    const finalWork = aiParsed?.workExperience || regexWork;
+    const finalEdu = aiParsed?.education || regexEdu;
+    const aiSkills = Array.isArray(aiParsed?.skills) ? aiParsed.skills : [];
+    const aiInferredKeywords = Array.isArray(aiParsed?.inferredKeywords) ? aiParsed.inferredKeywords : [];
+    const finalRole = (aiParsed?.targetRole || regexRole || '').trim();
+    const finalPhone = (aiParsed?.phone || regexPhone || '').trim();
+    const finalFirstName = (aiParsed?.firstName || regexFirstName || '').trim();
+    const finalLastName = (aiParsed?.lastName || regexLastName || '').trim();
+    const finalSummary = (aiParsed?.summary || '').trim();
+    const finalEmail = regexEmail;
+    const finalLocation = (() => {
+        if (aiParsed?.location) {
+            const parts = aiParsed.location.split(',').map(s => s.trim());
+            return parts[0] ? { locationName: aiParsed.location, city: parts[0], state: parts[1] || '' } : null;
+        }
+        return regexLocation;
+    })();
+
+    const setFields = {
+        resumeLink,
+        resume: resumeMeta,
+        resume_text: extractedText,
+        resume_hash: '',
+        resume_updated_at: new Date(),
+    };
+    // Always update work experience and education from the latest resume
+    if (finalWork) setFields.work_experience = finalWork;
+    if (finalEdu) setFields.education = finalEdu;
+    if (finalSummary) setFields.summary = finalSummary;
+    // Update skills: always merge AI-found skills; only set from regex if candidate has none
+    if (aiSkills.length > 0) {
+        const existingSkills = Array.isArray(candidate.skills) ? candidate.skills : [];
+        setFields.skills = [...new Set([...existingSkills, ...aiSkills])];
+    } else if (regexSkills.length > 0 && (!candidate.skills || candidate.skills.length === 0)) {
+        setFields.skills = regexSkills;
+    }
+    // Only set these if not already filled in
+    if (finalRole && (!candidate.targetRoles || candidate.targetRoles.length === 0)) setFields.targetRoles = [finalRole];
+    if (finalPhone && !candidate.phone) setFields.phone = finalPhone;
+    if (finalFirstName && !candidate.firstName) setFields.firstName = finalFirstName;
+    if (finalLastName && !candidate.lastName) setFields.lastName = finalLastName;
+    if (finalLocation && (!candidate.location || candidate.location.length === 0)) setFields.location = [finalLocation];
+    if (finalEmail && finalEmail !== candidate.email && !candidate.email) setFields.email = finalEmail;
+    // Always overwrite inferredKeywords — they reflect the latest resume content
+    if (aiInferredKeywords.length > 0) setFields.inferredKeywords = aiInferredKeywords;
+    if (hasExistingResume && Number.isFinite(candidate.tokenBalance)) {
+        setFields.tokenBalance = nextTokenBalance;
+        setFields.tokensUsed = (candidate.tokensUsed || 0) + 3;
+    }
+    if (hasExistingResume && Number.isFinite(candidate.creditsBalance)) {
+        setFields.creditsBalance = nextCreditsBalance;
+        setFields.creditsUsed = (candidate.creditsUsed || 0) + 3;
+    }
+
+    await Candidates.updateOne({ _id: candidate._id }, { $set: setFields });
+
+    // Fetch fresh from DB so the response always reflects what was actually saved,
+    // rather than relying on Object.assign to update the Mongoose document in memory.
+    const updatedCandidate = await Candidates.findOne({ _id: candidate._id }).lean().exec() || candidate;
 
     if (RESUME_EXTRACT_WEBHOOK) {
         try {
@@ -954,7 +1234,7 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: candidate.email,
+                    email: updatedCandidate.email,
                     resume_url: resumeLink
                 })
             });
@@ -965,20 +1245,33 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
 
     let pairing = { updated: false };
     try {
-        pairing = await pairCandidateJobs(candidate._id);
+        pairing = await pairCandidateJobs(updatedCandidate._id);
     } catch (err) {
         pairing = { updated: false, reason: err.message };
     }
 
+    const extractionOk = !!(aiParsed || finalWork || finalEdu || aiSkills.length);
+    if (!extractionOk) {
+        console.warn('[updateCandidateResume] Profile fields could not be extracted.',
+            `textExtracted=${!!extractedText}`,
+            `aiParsed=${!!aiParsed}`,
+            `openaiKey=${!!process.env.OPENAI_API_KEY}`
+        );
+    }
+
     res.json({
-        candidate,
-        credits: {
-            tokenBalance: candidate.tokenBalance,
-            tokensUsed: candidate.tokensUsed,
-            creditsBalance: candidate.creditsBalance,
-            creditsUsed: candidate.creditsUsed
+        candidate: updatedCandidate,
+        extracted: {
+            textExtracted: !!extractedText,
+            aiParsed: !!aiParsed,
+            fieldsPopulated: extractionOk,
         },
-        airtable,
+        credits: {
+            tokenBalance: updatedCandidate.tokenBalance,
+            tokensUsed: updatedCandidate.tokensUsed,
+            creditsBalance: updatedCandidate.creditsBalance,
+            creditsUsed: updatedCandidate.creditsUsed
+        },
         pairing
     });
 });
@@ -1266,20 +1559,35 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
 STRICT FORMATTING RULES — follow exactly:
 - Do NOT use markdown. No asterisks (*), pound signs (#), underscores (_), or backticks.
-- Section headers must be in ALL CAPS on their own line (e.g. WORK EXPERIENCE, EDUCATION, SKILLS, SUMMARY)
+- Section headers must be in ALL CAPS on their own line (e.g. WORK EXPERIENCE, EDUCATION, SUMMARY)
 - Bullet points must start with a hyphen and space: "- "
 - Separate sections with a single blank line
 - Never use bracket placeholders like [Company Name] or [Your Degree]
+- Do NOT include a SKILLS section. Skills should be woven naturally into the experience bullet points instead.
 
 Tailor every bullet point to match the target job description — highlight specific skills and accomplishments that directly address the role's requirements.`,
-            `${jobContext}\n\n${candidateContext}\n\nWrite the complete tailored resume. Every bullet point should connect the candidate's real experience to the requirements of this specific role. Use only real data from above.`,
+            `${jobContext}\n\n${candidateContext}\n\nWrite the complete tailored resume. Every bullet point should connect the candidate's real experience to the requirements of this specific role. Use only real data from above. Do not add a SKILLS section.`,
             2000
         ) : Promise.resolve(null),
-        coverLetter ? callOpenAI(
-            "You are a professional cover letter writer. Write a concise, tailored cover letter using the candidate's real background. Start with 'Dear Hiring Manager,'. Use 3-4 short paragraphs. No header block. Do not use placeholder text. Plain text only.",
-            `${jobContext}\n\n${candidateContext}\n\nWrite the cover letter.`,
-            800
-        ) : Promise.resolve(null),
+        coverLetter ? (() => {
+            const safeCompany = company || 'the company'
+            const safeTitle = jobTitle || 'this role'
+            const openings = [
+                `I'm interested in the ${safeTitle} position at ${safeCompany} because`,
+                `${safeCompany} seems like a really great match for my background because`,
+                `I think I bring real value to ${safeCompany} because`,
+                `The mission of ${safeCompany} aligns with my skillset and background because`,
+                `After coming across the ${safeTitle} opening at ${safeCompany}, I knew I had to reach out because`,
+                `What draws me to ${safeCompany} is`,
+                `Building my career around ${safeTitle.toLowerCase().replace(/^(senior|lead|principal)\s+/i, '')} work, ${safeCompany} stood out to me because`,
+            ]
+            const chosenOpening = openings[Math.floor(Math.random() * openings.length)]
+            return callOpenAI(
+                `You are a professional cover letter writer. Write a concise, tailored cover letter using the candidate's real background. Start with 'Dear Hiring Manager,' on the first line. The very first sentence of the body must begin with exactly: "${chosenOpening}" — then complete it naturally based on the job and candidate. Use 3-4 short paragraphs. No header block. Do not use placeholder text. Do not start with "I'm excited", "I am thrilled", or similar enthusiastic clichés. Plain text only.`,
+                `${jobContext}\n\n${candidateContext}\n\nWrite the cover letter. Remember: begin the first body sentence with "${chosenOpening}"`,
+                800
+            )
+        })() : Promise.resolve(null),
     ])
 
     const resumeContent = fillPlaceholders(resumeRaw)
@@ -1385,14 +1693,12 @@ Tailor every bullet point to match the target job description — highlight spec
 
         try {
             await Promise.all(sends)
-            console.log('[CustomRequest] Emails sent to', email)
         } catch (e) {
             console.error('[CustomRequest] Email send failed:', e.message)
             // Still return ok — tokens were deducted, content was generated
         }
     } else {
         console.warn('[CustomRequest] SMTP not configured — EMAIL_SMTP_USER and EMAIL_SMTP_PASS required')
-        console.log('[CustomRequest] Generated:', { candidateName, email, resume: !!resumeContent, coverLetter: !!coverLetterContent, jobTitle, company })
     }
 
     return res.json({ ok: true, tokensRemaining, application })
@@ -1437,223 +1743,80 @@ const UpdateAllData = asyncHandler(async (req, res) => {
 });
 
 const ImportData = asyncHandler(async (req, res) => {
-    const {data} = req.body;
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ message: 'data is required.' });
 
-    let applications = [];
-    let candidates = [];
-    let candidateJobPairings = [];
-    let jobs = [];
-    let contacts = [];
-    let contactJobPairings = [];
+    const candidateList = Array.isArray(data.Candidates) ? data.Candidates : [];
+    const jobList = Array.isArray(data.Jobs) ? data.Jobs : [];
+    const contactList = Array.isArray(data.Contacts) ? data.Contacts : [];
+    const applicationList = Array.isArray(data.Applications) ? data.Applications : [];
+    const pairingList = Array.isArray(data.CandidateJobPairings) ? data.CandidateJobPairings : [];
+    const contactPairingList = Array.isArray(data.ContactJobPairing) ? data.ContactJobPairing : [];
 
-    for (var i = 0; i < data.Candidates.length; i += 1) {
-        Candidates.findOne({email: data.Canddiates[i].email}).lean()
-            .then(async(foundCandidate) => {
-                if (foundCandidate) {
-                    foundCandidate.firstName = data.Candidates[i].firstName;
-                    foundCandidate.lastName = data.Candidates[i].lastName;
-                    foundCandidate.phone = data.Candidates[i].phone;
-                    foundCandidate.location = data.Candidates[i].location;
-                    foundCandidate.targetRole = data.Candidates[i].targetRole;
-                    foundCandidate.seniority = data.Candidates[i].seniority;
-                    foundCandidate.skills = data.Candidates[i].skills;
-                    foundCandidate.urls = data.Candidates[i].urls;
-                    foundCandidate.resume = data.Candidates[i].resume;
-                    foundCandidate.resumeLink = data.Candidates[i].resumeLink;
-                    foundCandidate.status = data.Candidates[i].status;
-                    foundCandidate.paidUntil = data.Candidates[i].paidUntil;
-                    foundCandidate.graceDays = data.Candidates[i].graceDays;
-                    foundCandidate.tokenBalance = data.Candidates[i].tokenBalance;
-                    foundCandidate.tokensUsed = data.Candidates[i].tokensUsed;
-                    foundCandidate.creditsBalance = data.Candidates[i].creditsBalance;
-                    foundCandidate.creditsUsed = data.Candidates[i].creditsUsed;
+    await Promise.all(candidateList.map((c) =>
+        Candidates.findOneAndUpdate(
+            { email: c.email },
+            { $set: { firstName: c.firstName, lastName: c.lastName, phone: c.phone, location: c.location, targetRoles: c.targetRoles, seniority: c.seniority, skills: c.skills, urls: c.urls, resume: c.resume, resumeLink: c.resumeLink, status: c.status, paidUntil: c.paidUntil, graceDays: c.graceDays, tokenBalance: c.tokenBalance, tokensUsed: c.tokensUsed, creditsBalance: c.creditsBalance, creditsUsed: c.creditsUsed }, $setOnInsert: { email: c.email } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData candidate upsert failed:', e.message))
+    ));
 
-                    await foundCandidate.save();
-                }
-                else {
-                    const currentCandidate = new Candidates({
-                        firstName: data.Candidates[i].firstName,
-                        lastName: data.Candidates[i].lastName,
-                        email: data.Candidates[i].email,
-                        phone: data.Candidates[i].phone,
-                        location: data.Candidates[i].location,
-                        targetRoles: data.Candidates[i].targetRoles,
-                        seniority: data.Candidates[i].seniority,
-                        skills: data.Candidates[i].skills,
-                        urls: data.Candidates[i].urls,
-                        resume: data.Candidates[i].resume,
-                        resumeLink: data.Candidates[i].resumeLink,
-                        status: data.Candidates[i].status,
-                        paidUntil: data.Candidates[i].paidUntil,
-                        graceDays: data.Canddiates[i].graceDays,
-                        tokenBalance: data.Candidates[i].tokenBalance,
-                        tokensUsed: data.Candidates[i].tokensUsed,
-                        creditsBalance: data.Candidates[i].creditsBalance,
-                        creditsUsed: data.Candidates[i].creditsUsed
-                    });
-                    await currentCandidate.save();
-                }
-            });
-    }
+    await Promise.all(jobList.map((j) =>
+        Jobs.findOneAndUpdate(
+            { job_code: j.job_code },
+            { $set: { title: j.title, company: j.company, salary: j.salary, location: j.location, url: j.url, jobType: j.jobType, date_posted: j.datePosted || j.date_posted, shortDescription: j.shortDescription, tags: j.tags } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData job upsert failed:', e.message))
+    ));
 
-    for (var i = 0; i < data.Jobs.length; i += 1) {
-        Jobs.findOne({job_code: data.Jobs[i].job_code}).lean()
-            .then(async (foundJob) => {
-                if (foundJob) {
-                    foundJob.job_code = data.Jobs[i].job_code;
-                    foundJob.title = data.Jobs[i].title;
-                    foundJob.company = data.Jobs[i].company;
-                    foundJob.salary = data.Jobs[i].salary;
-                    foundJob.location = data.Jobs[i].location;
-                    foundJob.url = data.Jobs[i].url;
-                    foundJob.jobType = data.Jobs[i].jobType;
-                    foundJob.datePosted = data.Jobs[i].datePosted;
-                    foundJob.shortDescription = data.Jobs[i].shortDescription;
-                    foundJob.tags = data.Jobs[i].tags;
+    await Promise.all(contactList.map((c) =>
+        Contacts.findOneAndUpdate(
+            { company: c.company, email: c.email },
+            { $set: { name: c.name, title: c.title, source: c.source, lastVerified: c.lastVerified } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData contact upsert failed:', e.message))
+    ));
 
-                    await foundJob.save();
-                }
-                else {
-                    const currentJob = new Jobs({
-                        job_code: data.Jobs[i].job_code,
-                        title: data.Jobs[i].title,
-                        company: data.Jobs[i].company,
-                        salary: data.Jobs[i].salary,
-                        location: data.Jobs[i].location,
-                        url: data.Jobs[i].url,
-                        jobType: data.Jobs[i].jobType,
-                        datePosted: data.Jobs[i].datePosted,
-                        shortDescription: data.Jobs[i].shortDescription,
-                        tags: data.Jobs[i].tags
-                    });
+    const [candidates, jobs, contacts] = await Promise.all([
+        Candidates.find().lean(),
+        Jobs.find().lean(),
+        Contacts.find().lean(),
+    ]);
 
-                    await currentJob.save()
-                }
-            });
-    }
+    await Promise.all(applicationList.map((a) => {
+        const job = jobs.find((j) => j.job_code === a.jobId);
+        const candidate = candidates.find((c) => c.email === a.email);
+        if (!job || !candidate) return Promise.resolve();
+        return Applications.findOneAndUpdate(
+            { jobId: job._id, candidateId: candidate._id },
+            { $setOnInsert: { jobId: job._id, candidateId: candidate._id, preparedAt: a.preparedAt, status: a.status, resume: a.resume, coverLetter: a.coverLetter } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData application upsert failed:', e.message));
+    }));
 
-    for (var i = 0; i < data.Contacts.length; i += 1) {
-        Contacts.findOne({company: data.Contacts[i].company, email: data.Contacts[i].email})
-            .then(async (foundContact) => {
-                if (foundContact) {
-                    foundContact.name = data.Contacts[i].name;
-                    foundContact.title = data.Contacts[i].title;
-                    foundContact.source = data.Contacts[i].source;
-                    foundContact.lastVerified = data.Contacts[i].lastVerified;
+    await Promise.all(pairingList.map((p) => {
+        const job = jobs.find((j) => j.job_id === p.job_id);
+        const candidate = candidates.find((c) => c.email === p.email);
+        if (!job || !candidate) return Promise.resolve();
+        return CandidateJobPairings.findOneAndUpdate(
+            { jobId: job._id, candidateId: candidate._id },
+            { $set: { score: p.score } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData pairing upsert failed:', e.message));
+    }));
 
-                    foundContact.save();
-                }
-                else {
-                    const currentContact = new Contacts({
-                        company: data.Contacts[i].company,
-                        name: data.Contacts[i].name,
-                        title: data.Contacts[i].title,
-                        email: data.Contacts[i].email,
-                        source: data.Contacts[i].source,
-                        lastVerified: data.Contacts[i].lastVerified
-                    });
+    await Promise.all(contactPairingList.map((p) => {
+        const contact = contacts.find((c) => c.email === p.email);
+        const job = jobs.find((j) => j.job_code === p.job_id);
+        if (!contact || !job) return Promise.resolve();
+        return ContactJobPairings.findOneAndUpdate(
+            { jobId: job._id, contactId: contact._id },
+            { $set: { confidence: p.confidence } },
+            { upsert: true }
+        ).catch((e) => console.warn('ImportData contact pairing upsert failed:', e.message));
+    }));
 
-                    await currentContact.save();
-                }
-            });
-    }
-
-    candidates = Candidates.find().lean();
-    jobs = Jobs.find().lean();
-    contacts = Contacts.find().lean();
-
-    for (var i = 0; i < data.Applications.length; i += 1) {
-        currentJob = jobs.find(x => x.job_code === data.Applications[i].jobId);
-        currentCandidate = candidates.find(x => x.email === data.Applications[i].email);
-
-        if (!currentJob) {
-            console.log("No job found for application.");
-            continue;
-        }
-        if (!currentCandidate) {
-            console.log("No candidate found for application.")
-        }
-
-        Applications.findOne({job_code: currentJob.jobId, email: currentCandidate.email})
-            .then(async (foundApplication) => {
-                if (foundApplication) {
-                    console.log("Application already present, skipping.");
-                }
-                else {
-                    const currentApplication = new Applications({
-                        jobId: currentJob._Id,
-                        candidateId: currentCandidate._Id,
-                        preparedAt: data.Applications[i].preparedAt,
-                        status: data.Applications[i].status,
-                        resume: data.Applications[i].resume,
-                        coverLetter: data.Applications[i].coverLetter
-                    });
-
-                    currentApplication.save();
-                }
-            });
-    }
-
-    for (var i = 0; i < data.CandidateJobPairings.length; i += 1) {
-        currentJob = jobs.find(x=> x.job_id === data.CandidateJobPairings[i].job_id);
-        currentCandidate = candidates.find(x => x.email === data.CandidateJobPairings[i].email);
-
-        if (!curentJob) {
-            console.log("No job found for candidate + job pairing.");
-            continue;
-        }
-        if (!currentCandidate) {
-            console.log("No candidate found for candidate + job pairing.");
-            continue;
-        }
-
-        CandidateJobPairings.findOne({jobId: currentJob.jobId, canddiateId: currentCandidate.email})
-            .then(async (foundPairing) => {
-                if (foundPairing) {
-                    console.log("Current candidate + job pairing already present, skipping.");
-                }
-                else {
-                    const currentPairing = new CandidateJobPairing({
-                        jobId: currentJob._Id,
-                        candidateId: currentCandidate.candidate._Id,
-                        score: data.CandidateJobPairings[i].score
-                    });
-
-                    currentPairing.save();
-                }
-            });
-    }
-
-    for (var i = 0; i < data.ContactJobPairing.length; i += 1) {
-        currentContact = contacts.find(x => x.email == data.ContactJobPairing[i].email);
-        currentJob = jobs.find(x => x.job_code == data.ContactJobPairing[i].job_id);
-
-        if (!currentContact) {
-            console.log("No contact found for contact + job pairing.");
-            continue;
-        }
-        if (!currentJob) {
-            console.log("No job found for contact + job pairing.");
-        }
-
-        ContactJobPairings.findOne({jobId: currentJob.jobId, email: currentContact.email})
-            .then(async (foundPairing) => {
-                if (foundPairing) {
-                    console.console.log("Current contact + job pairing already present.skipping.");
-                }
-                else {
-                    const currentPairing = new ContactJobPairing({
-                        contactId: currentContact._Id,
-                        jobId: currentJob._Id,
-                        confidence: data.ContactJobPairing[i].confidence
-                    });
-
-                    currentPairing.save();
-                }
-            });
-    }
-
-    res.statusCode(200).json({message: 'Import process completed.'});
+    res.status(200).json({ message: 'Import process completed.' });
 });
 
 
