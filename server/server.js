@@ -49,6 +49,9 @@ app.use((req, res, next) => {
 });
 
 
+// Health check (before DB middleware so Render's check always passes)
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use(checkConnection);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
