@@ -1,7 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport');
-const LinkedInStrategy = require('passport-linkedin-oauth2').Strategy;
 const User = require('../models/User');
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
 const jwtUtils = require('../utils/jwtUtils');
@@ -43,31 +41,86 @@ async function resolveGoogleIdentity({ credential, accessToken }) {
   throw new Error('Google credential is required');
 }
 
-// ── LinkedIn Strategy ────────────────────────────────────────────────────────
+// ── LinkedIn OAuth (manual flow, no passport) ────────────────────────────────
 if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
-  const https = require('https');
+  const LINKEDIN_CALLBACK = `${SERVER_URL}/oauth/linkedin/callback`;
 
-  const linkedInStrategy = new LinkedInStrategy({
-    clientID: process.env.LINKEDIN_CLIENT_ID,
-    clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
-    callbackURL: `${SERVER_URL}/oauth/linkedin/callback`,
-    scope: ['openid', 'profile', 'email'],
-    state: true,
-  }, async (accessToken, refreshToken, profile, done) => {
+  // Step 1: redirect user to LinkedIn authorization page
+  router.get('/linkedin', (req, res) => {
+    const state = crypto.randomBytes(16).toString('hex');
+    // Build params without scope so we can append it with %20 encoding.
+    // URLSearchParams encodes spaces as + which LinkedIn rejects.
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: process.env.LINKEDIN_CLIENT_ID,
+      redirect_uri: LINKEDIN_CALLBACK,
+      state,
+    });
+    res.redirect(
+      `https://www.linkedin.com/oauth/v2/authorization?${params}&scope=openid%20profile%20email`
+    );
+  });
+
+  // Step 2: handle LinkedIn callback, exchange code for token, fetch user info
+  router.get('/linkedin/callback', async (req, res) => {
+    const { code, error, error_description } = req.query;
+
+    if (error) {
+      if (error === 'invalid_scope' || (String(error_description || '')).toLowerCase().includes('scope')) {
+        return res.redirect(`${APP_URL}?error=linkedin_scope`);
+      }
+      return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+    }
+
+    if (!code) return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+
     try {
-      const email = (profile.emails?.[0]?.value || profile._json?.email || '').toLowerCase();
-      if (!email) return done(new Error('No email from LinkedIn'), null);
+      // Exchange authorization code for access token
+      const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: LINKEDIN_CALLBACK,
+          client_id: process.env.LINKEDIN_CLIENT_ID,
+          client_secret: process.env.LINKEDIN_CLIENT_SECRET,
+        }),
+      });
 
-      let user = await User.findOne({ email });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) {
+        console.error('LinkedIn token exchange failed:', tokenData);
+        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      }
+
+      const accessToken = tokenData.access_token;
+
+      // Fetch user info from OIDC endpoint
+      const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!userInfoRes.ok) {
+        console.error('LinkedIn userinfo failed:', userInfoRes.status);
+        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      }
+
+      const userInfo = await userInfoRes.json();
+      const email = normalizeEmail(userInfo.email);
+
+      if (!email) return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+
       const linkedinData = {
-        firstName: profile.name?.givenName || profile._json?.given_name || '',
-        lastName: profile.name?.familyName || profile._json?.family_name || '',
-        displayName: profile.displayName || profile._json?.name || '',
-        photo: profile.photos?.[0]?.value || profile._json?.picture || '',
-        profileUrl: profile.profileUrl || profile._json?.sub || '',
-        accessToken,
+        firstName: userInfo.given_name || '',
+        lastName: userInfo.family_name || '',
+        displayName: userInfo.name || '',
+        photo: userInfo.picture || '',
+        profileUrl: userInfo.sub || '',
       };
 
+      // Find or create User document
+      let user = await User.findOne({ email });
       if (!user) {
         const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
         user = await User.create({
@@ -78,133 +131,75 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
         });
       }
 
-      return done(null, { user, linkedinData });
+      if (user.active === false) {
+        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      }
+
+      // Upsert Candidate document
+      try {
+        const linkedinUrl = linkedinData.profileUrl
+          ? `https://www.linkedin.com/in/${linkedinData.profileUrl}`
+          : '';
+
+        const existing = await Candidates.findOneAndUpdate(
+          { email },
+          {
+            $setOnInsert: {
+              email,
+              firstName: linkedinData.firstName || linkedinData.displayName?.split(' ')[0] || email.split('@')[0],
+              lastName: linkedinData.lastName || linkedinData.displayName?.split(' ').slice(1).join(' ') || '',
+              phone: '',
+              location: [],
+              targetRoles: [],
+              seniority: [],
+              skills: [],
+              urls: linkedinUrl ? [{ urlName: 'LinkedIn', urlAddress: linkedinUrl }] : [],
+              resume: {},
+              status: 'active',
+              paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              tokenBalance: 30,
+              recruiterContactsLeft: 10,
+              recruiterContactsUpdatedAt: new Date(),
+              ...(linkedinData.photo ? { profileImage: linkedinData.photo } : {}),
+            },
+          },
+          { upsert: true, new: false }
+        );
+
+        if (!existing) {
+          setImmediate(() => {
+            sendWelcomeEmail({ email, firstName: linkedinData.firstName }).catch(() => {});
+          });
+        } else {
+          const setFields = {};
+          if (!existing.firstName && linkedinData.firstName) setFields.firstName = linkedinData.firstName;
+          if (!existing.lastName && linkedinData.lastName) setFields.lastName = linkedinData.lastName;
+          if (!existing.profileImage && linkedinData.photo) setFields.profileImage = linkedinData.photo;
+          const hasLinkedInUrl = (existing.urls || []).some(u => u.urlName === 'LinkedIn');
+          if (!hasLinkedInUrl && linkedinUrl) {
+            await Candidates.updateOne({ email }, {
+              ...(Object.keys(setFields).length ? { $set: setFields } : {}),
+              $push: { urls: { urlName: 'LinkedIn', urlAddress: linkedinUrl } },
+            });
+          } else if (Object.keys(setFields).length) {
+            await Candidates.updateOne({ email }, { $set: setFields });
+          }
+        }
+      } catch (e) {
+        console.warn('LinkedIn candidate upsert failed:', e.message);
+      }
+
+      const token = jwtUtils.generateToken(user);
+      const userData = encodeURIComponent(JSON.stringify({ ...user._doc, password: undefined }));
+      res.redirect(`${APP_URL}?token=${token}&user=${userData}&source=linkedin`);
     } catch (err) {
-      return done(err, null);
+      console.error('LinkedIn OAuth error:', err);
+      res.redirect(`${APP_URL}?login=true&error=linkedin`);
     }
   });
-
-  // Fix: Node's querystring.stringify encodes spaces as '+' but LinkedIn OAuth requires '%20'
-  const _origGetAuthorizeUrl = linkedInStrategy._oauth2.getAuthorizeUrl.bind(linkedInStrategy._oauth2);
-  linkedInStrategy._oauth2.getAuthorizeUrl = function(params) {
-    return _origGetAuthorizeUrl(params).replace(/(?<=scope=)[^&]+/, (s) => s.replace(/\+/g, '%20'));
-  };
-
-  // Override passport-linkedin-oauth2's hardcoded /v2/me call with the OIDC userinfo endpoint
-  linkedInStrategy.userProfile = function(accessToken, done) {
-    const req = https.request({
-      hostname: 'api.linkedin.com',
-      path: '/v2/userinfo',
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          done(null, {
-            provider: 'linkedin',
-            id: json.sub || '',
-            displayName: json.name || '',
-            name: { givenName: json.given_name || '', familyName: json.family_name || '' },
-            emails: json.email ? [{ value: json.email }] : [],
-            photos: json.picture ? [{ value: json.picture }] : [],
-            _json: json,
-          });
-        } catch (e) {
-          done(new Error('Failed to parse LinkedIn userinfo: ' + e.message));
-        }
-      });
-    });
-    req.on('error', done);
-    req.end();
-  };
-
-  passport.use(linkedInStrategy);
-  passport.serializeUser((data, done) => done(null, data));
-  passport.deserializeUser((data, done) => done(null, data));
-
-  router.get('/linkedin', passport.authenticate('linkedin'));
-
-  router.get('/linkedin/callback',
-    (req, res, next) => {
-      // Catch scope errors (app missing "Sign In with LinkedIn using OpenID Connect" product)
-      if (req.query.error === 'invalid_scope' || (req.query.error_description || '').toLowerCase().includes('scope')) {
-        return res.redirect(`${APP_URL}?error=linkedin_scope`);
-      }
-      passport.authenticate('linkedin', { session: false, failureRedirect: `${APP_URL}?login=true&error=linkedin` })(req, res, next);
-    },
-    async (req, res) => {
-      try {
-        const { user, linkedinData } = req.user;
-        const token = jwtUtils.generateToken(user);
-
-        // Ensure a Candidate document exists; on insert seed defaults, on update sync name/photo if missing
-        try {
-          const linkedinUrl = linkedinData.profileUrl || '';
-          const existing = await Candidates.findOneAndUpdate(
-            { email: user.email },
-            {
-              $setOnInsert: {
-                email: user.email,
-                firstName: linkedinData.firstName || linkedinData.displayName?.split(' ')[0] || user.email.split('@')[0],
-                lastName: linkedinData.lastName || linkedinData.displayName?.split(' ').slice(1).join(' ') || '',
-                phone: '',
-                location: [],
-                targetRoles: [],
-                seniority: [],
-                skills: [],
-                urls: linkedinUrl ? [{ urlName: 'LinkedIn', urlAddress: linkedinUrl }] : [],
-                resume: {},
-                status: 'active',
-                paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                tokenBalance: 30,
-                recruiterContactsLeft: 10,
-                recruiterContactsUpdatedAt: new Date(),
-                ...(linkedinData.photo ? { profileImage: linkedinData.photo } : {}),
-              },
-            },
-            { upsert: true, new: false }
-          );
-          // New user: send welcome email directly (non-blocking)
-          if (!existing) {
-            setImmediate(() => {
-              sendWelcomeEmail({ email: user.email, firstName: linkedinData.firstName }).catch(() => {});
-            });
-          }
-
-          // For existing candidates: sync name if blank, photo if missing, add LinkedIn URL if absent
-          if (existing) {
-            const setFields = {};
-            if (!existing.firstName && linkedinData.firstName) setFields.firstName = linkedinData.firstName;
-            if (!existing.lastName && linkedinData.lastName) setFields.lastName = linkedinData.lastName;
-            if (!existing.profileImage && linkedinData.photo) setFields.profileImage = linkedinData.photo;
-            const hasLinkedInUrl = (existing.urls || []).some(u => u.urlName === 'LinkedIn');
-            if (!hasLinkedInUrl && linkedinUrl) {
-              await Candidates.updateOne({ email: user.email }, {
-                ...(Object.keys(setFields).length ? { $set: setFields } : {}),
-                $push: { urls: { urlName: 'LinkedIn', urlAddress: linkedinUrl } },
-              });
-            } else if (Object.keys(setFields).length) {
-              await Candidates.updateOne({ email: user.email }, { $set: setFields });
-            }
-          }
-        } catch (e) {
-          console.warn('LinkedIn candidate upsert failed:', e.message);
-        }
-
-        // Redirect to frontend with token and user data encoded
-        const userData = encodeURIComponent(JSON.stringify({ ...user._doc, password: undefined }));
-        res.redirect(`${APP_URL}?token=${token}&user=${userData}&source=linkedin`);
-      } catch (err) {
-        res.redirect(`${APP_URL}?login=true&error=linkedin`);
-      }
-    }
-  );
 } else {
   router.get('/linkedin', (req, res) => {
-    res.status(503).json({ message: 'LinkedIn OAuth is not configured. Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.' });
+    res.status(503).json({ message: 'LinkedIn OAuth is not configured.' });
   });
 }
 
@@ -237,8 +232,7 @@ router.post('/google', async (req, res) => {
       return res.status(403).json({ message: 'Account is disabled' });
     }
 
-    // Ensure a Candidate document exists for this user (create if new, leave existing data alone)
-    const nameParts = (googleName || '').trim().split(' ').filter(Boolean)
+    const nameParts = (googleName || '').trim().split(' ').filter(Boolean);
     const existingCandidate = await Candidates.findOneAndUpdate(
       { email: googleEmail },
       {
@@ -262,14 +256,12 @@ router.post('/google', async (req, res) => {
         },
       },
       { upsert: true, new: false }
-    ).catch((e) => { console.warn('Candidate upsert failed:', e.message); return null })
+    ).catch((e) => { console.warn('Candidate upsert failed:', e.message); return null; });
 
-    // Backfill profileImage on existing candidates that don't have one yet
     if (googlePicture && existingCandidate && !existingCandidate.profileImage) {
-      Candidates.updateOne({ email: googleEmail }, { $set: { profileImage: googlePicture } }).catch(() => {})
+      Candidates.updateOne({ email: googleEmail }, { $set: { profileImage: googlePicture } }).catch(() => {});
     }
 
-    // New user: send welcome email directly (non-blocking)
     if (!existingCandidate) {
       setImmediate(() => {
         sendWelcomeEmail({ email: googleEmail, firstName: nameParts[0] || googleEmail.split('@')[0] }).catch(() => {});
