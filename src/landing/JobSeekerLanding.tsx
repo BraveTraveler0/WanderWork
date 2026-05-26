@@ -850,7 +850,7 @@ function Group2() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Where do jobs come from?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">Where do jobs come from?</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">We scan job boards, company career pages, and hiring platforms daily. Every listing is filtered for remote roles that match your skills and target titles. No manual searching required.</p>
     </motion.div>
   );
@@ -868,7 +868,7 @@ function Group5() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">How does outreach work?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">How does outreach work?</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Our AI drafts personalized emails to recruiters on your behalf. You review each message before it sends so you stay in control. We handle the legwork so you collect the replies.</p>
     </motion.div>
   );
@@ -886,7 +886,7 @@ function Group6() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Recruiters are your superpower</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">Recruiters are your superpower</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Recruiters find jobs for you. That's literally their job. Connect with ones in your field and let them bring the opportunities straight to you.</p>
     </motion.div>
   );
@@ -904,7 +904,7 @@ function Group13() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.159px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Will my resume beat ATS?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">Will my resume beat ATS?</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">Yes. Our AI reads each job description and rewrites your resume with the exact keywords ATS systems screen for. Over 90% of companies filter applicants through ATS before a human ever sees the application.</p>
     </motion.div>
   );
@@ -922,7 +922,7 @@ function Group8() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.16px] mt-[35.933px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">Is it free to start?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">Is it free to start?</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.038px] relative text-[#787878] text-[16px] w-[344px]">Yes. Sign up and start receiving daily remote job matches at no cost. Premium unlocks higher token limits, unlimited AI document generation, and expanded recruiter outreach.</p>
     </motion.div>
   );
@@ -940,7 +940,7 @@ function Group14() {
       <div className="[grid-area:1_/_1] h-[27.948px] ml-[41.16px] mt-[35.934px] relative w-[34.923px]" data-name="Info">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-contain pointer-events-none size-full" src={imgInfo} />
       </div>
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-auto leading-[30px] ml-[115.777px] mt-[35px] relative text-[24px] text-black w-[268px]">What jobs do you source?</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-semibold h-auto leading-[22px] ml-[115.777px] mt-[38px] relative text-[17px] text-black w-[268px]">What jobs do you source?</p>
       <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[118.745px] leading-[24px] ml-[40px] mt-[91.037px] relative text-[#787878] text-[16px] w-[344px]">We focus exclusively on remote and location-flexible roles across tech, design, marketing, ops, finance, and more. Every listing is verified to be genuinely remote. No bait-and-switch.</p>
     </motion.div>
   );

@@ -352,9 +352,11 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
 
       {/* ── "Frustrated by silence?" dark section ── */}
       <section style={{ background: '#111', padding: '48px 24px', position: 'relative', overflow: 'hidden' }}>
-        <img
-          src="/late-night-focus.gif"
-          alt=""
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
           style={{
             position: 'absolute',
             top: 0,
@@ -367,7 +369,9 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
             opacity: 0.45,
             pointerEvents: 'none',
           }}
-        />
+        >
+          <source src="/late-night-focus.mp4" type="video/mp4" />
+        </video>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.56))', pointerEvents: 'none' }} />
         <motion.div
           initial={{ opacity: 0, y: 24 }}

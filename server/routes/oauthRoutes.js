@@ -84,6 +84,12 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
     }
   });
 
+  // Fix: Node's querystring.stringify encodes spaces as '+' but LinkedIn OAuth requires '%20'
+  const _origGetAuthorizeUrl = linkedInStrategy._oauth2.getAuthorizeUrl.bind(linkedInStrategy._oauth2);
+  linkedInStrategy._oauth2.getAuthorizeUrl = function(params) {
+    return _origGetAuthorizeUrl(params).replace(/(?<=scope=)[^&]+/, (s) => s.replace(/\+/g, '%20'));
+  };
+
   // Override passport-linkedin-oauth2's hardcoded /v2/me call with the OIDC userinfo endpoint
   linkedInStrategy.userProfile = function(accessToken, done) {
     const req = https.request({
