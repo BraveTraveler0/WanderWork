@@ -2,7 +2,7 @@ import { ArrowLeft, Check, CreditCard, Eye, Files, Upload, WalletCards, X } from
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
-import { createCheckoutSession, type Plan as StripePlan } from '../api/stripe'
+import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -787,12 +787,15 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   <button
                     className="px-4 py-2 rounded-[10px] border transition-colors"
                     style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
-                    onClick={() => window.open(
-                      paymentProvider === 'stripe'
-                        ? 'https://billing.stripe.com'
-                        : 'https://www.paypal.com/signin',
-                      '_blank', 'noopener,noreferrer'
-                    )}
+                    onClick={() => {
+                      if (paymentProvider === 'stripe') {
+                        openCustomerPortal(profile.email).catch(() =>
+                          window.open('https://billing.stripe.com', '_blank', 'noopener,noreferrer')
+                        )
+                      } else {
+                        window.open('https://www.paypal.com/signin', '_blank', 'noopener,noreferrer')
+                      }
+                    }}
                   >
                     + Add {paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method
                   </button>
