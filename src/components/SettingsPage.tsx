@@ -790,7 +790,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     onClick={() => {
                       if (paymentProvider === 'stripe') {
                         openCustomerPortal(profile.email).catch(() =>
-                          window.open('https://billing.stripe.com', '_blank', 'noopener,noreferrer')
+                          window.open('https://billing.stripe.com/p/login/7sY28s8860Dgg4ufHo3Ru00', '_blank', 'noopener,noreferrer')
                         )
                       } else {
                         window.open('https://www.paypal.com/signin', '_blank', 'noopener,noreferrer')

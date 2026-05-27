@@ -5,6 +5,7 @@
 
 const cron = require('node-cron');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
+const { pairAllCandidates } = require('./services/jobPairingService');
 
 let isRunning = false;
 let lastSyncTime = null;
@@ -37,6 +38,11 @@ async function runSync() {
 
     console.log(`\n✅ Sync completed in ${Math.round((new Date() - startTime) / 1000)}s`);
     console.log(`Next sync: ${new Date(Date.now() + 60 * 60 * 1000).toLocaleTimeString()}`);
+
+    // Re-pair all candidates with updated job data (fire-and-forget)
+    setImmediate(() => {
+      pairAllCandidates().catch((e) => console.warn('[AutoPair] Failed after sync:', e.message));
+    });
   } catch (error) {
     lastSyncStatus = 'error';
     console.error(`❌ Sync failed: ${error.message}`);

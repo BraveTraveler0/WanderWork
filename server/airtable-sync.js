@@ -640,60 +640,32 @@ async function syncCandidates() {
         if (candidateData.email) lookupQuery.$or.push({ email: candidateData.email });
         if (!lookupQuery.$or.length) lookupQuery.$or.push({ _id: candidateData.candidate_id });
 
-        const existing = await Candidate.findOne(lookupQuery).lean().exec();
-
-        const existingLink = existing?.resumeLink || existing?.resume_link || '';
-        const incomingLink = candidateData.resume_link || '';
-        const existingText = existing?.resume_text || existing?.resumeText || '';
+        // MongoDB is the source of truth for candidate profile data.
+        // For existing candidates: only sync airtableId for record linking.
+        // For new candidates (upsert insert): seed all Airtable fields.
+        const seedPayload = { ...candidateData };
         const incomingText = candidateData.resume_text || '';
-        const incomingHash = candidateData.resume_hash || '';
-        const existingHash = existing?.resume_hash || '';
-
-        const derived = incomingText ? deriveResumeFields(incomingText) : {};
-
-        const linkChanged = incomingLink && incomingLink !== existingLink;
-        const hashChanged = incomingHash && incomingHash !== existingHash;
-        const textChanged = incomingText && incomingText !== existingText;
-
-        const shouldUpdateText = incomingText && (linkChanged || hashChanged || textChanged || !existingText);
-
-        const updatePayload = { ...candidateData };
-        if (!shouldUpdateText) {
-          delete updatePayload.resume_text;
-        } else {
-          updatePayload.resume_hash = incomingHash || hashValue(incomingText || incomingLink);
-          updatePayload.resume_updated_at = candidateData.resume_updated_at || new Date().toISOString();
+        if (incomingText) {
+          const derived = deriveResumeFields(incomingText);
+          if (!seedPayload.education && derived.education) seedPayload.education = derived.education;
+          if (!seedPayload.work_experience && derived.work_experience) seedPayload.work_experience = derived.work_experience;
+          if ((!seedPayload.skills_2 || !seedPayload.skills_2.length) && derived.skills_2?.length) seedPayload.skills_2 = derived.skills_2;
+          if (!seedPayload.seniority && derived.seniority) seedPayload.seniority = derived.seniority;
+          seedPayload.resume_hash = candidateData.resume_hash || hashValue(incomingText);
         }
-
-        if (!candidateData.education && derived.education) updatePayload.education = derived.education;
-        if (!candidateData.work_experience && derived.work_experience) updatePayload.work_experience = derived.work_experience;
-        if ((!candidateData.skills_2 || candidateData.skills_2.length === 0) && derived.skills_2 && derived.skills_2.length) {
-          updatePayload.skills_2 = derived.skills_2;
-        }
-        if (!candidateData.seniority && derived.seniority) updatePayload.seniority = derived.seniority;
 
         const result = await Candidate.findOneAndUpdate(
           lookupQuery,
-          updatePayload,
-          { upsert: true, new: true, runValidators: false }
+          {
+            // Always update airtableId so we can link records
+            $set: { airtableId: candidateData.airtableId },
+            // Only set profile fields on first insert — never overwrite user's MongoDB data
+            $setOnInsert: seedPayload,
+          },
+          { upsert: true, new: false, runValidators: false }
         );
 
-        if (candidateData.airtableId) {
-          const airtableFields = {};
-          if (!candidateData.education && derived.education) airtableFields['education'] = derived.education;
-          if (!candidateData.work_experience && derived.work_experience) airtableFields['work_experience'] = derived.work_experience;
-          if ((!candidateData.skills_2 || candidateData.skills_2.length === 0) && derived.skills_2 && derived.skills_2.length) {
-            airtableFields['skills 2'] = derived.skills_2.join(', ');
-          }
-          if (!candidateData.seniority && derived.seniority) airtableFields['seniority'] = derived.seniority;
-          if (shouldUpdateText) {
-            airtableFields['resume_hash'] = updatePayload.resume_hash;
-            airtableFields['resume_updated_at'] = updatePayload.resume_updated_at;
-          }
-          await updateAirtableCandidateFields(candidateData.airtableId, airtableFields);
-        }
-
-        if (!result.__v || result.__v === 0) {
+        if (!result) {
           created++;
         } else {
           updated++;

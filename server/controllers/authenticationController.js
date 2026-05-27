@@ -504,7 +504,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
             const displayName = user.displayName || user.email.split('@')[0];
             const emailMessage = {
                 to: user.email,
-                from: process.env.EMAIL_FROM || 'support@wanderwork.ai',
+                from: process.env.EMAIL_FROM || 'support@wanderwork.io',
                 subject: "Reset your Wander/Work password",
                 html: `
 <!DOCTYPE html>
@@ -526,7 +526,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
           <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:0">If you didn't request this, you can safely ignore this email — your password won't change.<br><br>If the button above doesn't work, copy this link into your browser:<br><a href="${resetLink}" style="color:#306770;word-break:break-all">${resetLink}</a></p>
         </td></tr>
         <tr><td style="background:#F9FAFB;padding:20px 40px;text-align:center">
-          <p style="margin:0;color:#9CA3AF;font-size:12px">© 2026 Wander/Work, Inc. · <a href="https://wanderwork.ai/privacy" style="color:#9CA3AF">Privacy</a> · <a href="https://wanderwork.ai/terms" style="color:#9CA3AF">Terms</a></p>
+          <p style="margin:0;color:#9CA3AF;font-size:12px">© 2026 Wander/Work, Inc. · <a href="https://wanderwork.io/privacy" style="color:#9CA3AF">Privacy</a> · <a href="https://wanderwork.io/terms" style="color:#9CA3AF">Terms</a></p>
         </td></tr>
       </table>
     </td></tr>

@@ -6,9 +6,41 @@ const CandidateJobPairings = require('../models/JobSeeker/jobSeeker.CandidateJob
 const DEFAULT_LIMIT = 250
 const DEFAULT_MIN_SCORE = 18
 
+// Seniority tiers — order matters (most senior first)
+const SENIORITY_TIERS = [
+  { level: 5, keywords: ['vp ', 'vice president', 'chief ', 'cto', 'cpo', 'c-level', 'partner', 'managing director'] },
+  { level: 4, keywords: ['director', 'head of', 'principal'] },
+  { level: 3, keywords: ['senior', 'sr.', 'sr ', 'lead ', 'staff ', 'manager', 'architect'] },
+  { level: 2, keywords: ['mid ', 'mid-level', 'associate', 'ii ', 'iii '] },
+  { level: 1, keywords: ['junior', 'jr.', 'jr ', 'entry level', 'entry-level', 'intern', 'apprentice', 'trainee', 'graduate'] },
+]
+
+function detectSeniorityLevel(text) {
+  const t = normalizeText(text)
+  for (const tier of SENIORITY_TIERS) {
+    if (tier.keywords.some(k => t.includes(k))) return tier.level
+  }
+  return 2 // default to mid if undetectable
+}
+
+function candidateSeniority(candidate) {
+  // Use explicit seniority field first (most reliable)
+  if (candidate.seniority) {
+    const level = detectSeniorityLevel(candidate.seniority)
+    if (level !== 2) return level // only trust it if it's not ambiguous default
+  }
+  const sources = [
+    toArray(candidate.targetRoles).join(' '),
+    candidate.work_experience || '',
+    candidate.summary || '',
+    toArray(candidate.skills).join(' '),
+  ].join(' ')
+  return detectSeniorityLevel(sources)
+}
+
 const SYNONYMS = {
-  ui: ['user interface', 'interface'],
-  ux: ['user experience', 'research', 'prototype', 'prototyping'],
+  ui: ['user interface'],
+  ux: ['user experience', 'user research', 'prototype', 'prototyping', 'interaction design', 'experience design'],
   javascript: ['js'],
   typescript: ['ts'],
   react: ['reactjs', 'react.js'],
@@ -16,6 +48,8 @@ const SYNONYMS = {
   brand: ['branding'],
   content: ['copywriting', 'copy'],
   creative: ['design', 'brand', 'visual'],
+  figma: ['sketch', 'adobe xd'],
+  webflow: ['framer', 'no-code', 'nocode'],
 }
 
 function normalizeText(value) {
@@ -106,7 +140,7 @@ function containsPhrase(text, phrase) {
   return text.includes(normalized)
 }
 
-function scoreJob(candidate, job, keywords) {
+function scoreJob(candidate, job, keywords, candSeniority) {
   const text = jobText(job)
   const tokens = tokenSet(text)
   const title = normalizeText(job.title)
@@ -114,6 +148,14 @@ function scoreJob(candidate, job, keywords) {
 
   const matchedSkills = []
   let score = 0
+
+  // Seniority match/mismatch
+  const jobSeniority = detectSeniorityLevel(title)
+  const seniorityDiff = candSeniority - jobSeniority
+  if (seniorityDiff >= 2) score -= 20      // senior applying to entry/intern — strong penalty
+  else if (seniorityDiff === 1) score -= 8  // slight overqualified — mild penalty
+  else if (seniorityDiff === 0) score += 10 // exact match — bonus
+  else if (seniorityDiff === -1) score += 4 // slight stretch — small bonus (aspirational)
 
   for (const keyword of keywords) {
     const parts = keyword.split(' ').filter(Boolean)
@@ -149,6 +191,25 @@ function scoreJob(candidate, job, keywords) {
   else if (uniqueMatches.length >= 3) score += 7
   else if (uniqueMatches.length >= 1) score += 3
 
+  // Domain relevance check: candidate's direct skills must appear in the job.
+  // Single-word skills require a title hit to avoid false positives from common
+  // English words ("design" in "study design", "react" used as a verb in
+  // clinical/research job descriptions). Multi-word phrases check full text.
+  const directSkills = unique([
+    ...toArray(candidate.skills),
+    ...toArray(candidate.skills_2),
+    ...toArray(candidate.targetRoles),
+  ]).map(normalizeText).filter(s => s.length >= 3)
+
+  if (directSkills.length > 0) {
+    const hasDomainHit = directSkills.some(skill => {
+      const parts = skill.split(' ').filter(Boolean)
+      if (parts.length > 1) return containsPhrase(text, skill)
+      return containsPhrase(title, skill)
+    })
+    if (!hasDomainHit) score -= 50
+  }
+
   const cappedScore = Math.max(0, Math.min(100, Math.round(score)))
   return {
     score: cappedScore,
@@ -175,8 +236,9 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
   }
 
   const keywords = candidateKeywords(candidate)
+  const candSeniority = candidateSeniority(candidate)
   const scored = jobs
-    .map((job) => ({ job, ...scoreJob(candidate, job, keywords) }))
+    .map((job) => ({ job, ...scoreJob(candidate, job, keywords, candSeniority) }))
     .filter((item) => item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)

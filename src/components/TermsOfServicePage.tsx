@@ -80,7 +80,7 @@ const TermsOfServicePage = ({ onBack }: TermsOfServicePageProps) => {
               If you have any questions about these Terms of Service, please contact us at:
             </p>
             <p>
-              <strong>Email:</strong> support@wanderwork.ai<br />
+              <strong>Email:</strong> support@wanderwork.io<br />
               <strong>Address:</strong> 123 Tech Lane, San Francisco, CA 94105
             </p>
           </div>

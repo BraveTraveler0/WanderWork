@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, ArrowRight, Users } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 
@@ -65,6 +65,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const [floatKey, setFloatKey] = useState(0)
   const [creditBalanceOverride, setCreditBalanceOverride] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal' | 'code' | 'other'>('stripe')
+  const [showPaymentDropdown, setShowPaymentDropdown] = useState(false)
   const [tokenCheckoutLoading, setTokenCheckoutLoading] = useState(false)
   const [tokenCheckoutError, setTokenCheckoutError] = useState<string | null>(null)
   const [paypalInfo, setPaypalInfo] = useState<string | null>(null)
@@ -136,7 +137,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
     if (paymentMethod === 'paypal') {
       openPayPalCheckout()
-      setPaypalInfo('Complete your payment in the PayPal window. Once confirmed, email support@wanderwork.ai with your receipt and we will add your tokens within 24 hours.')
+      setPaypalInfo('Complete your payment in the PayPal window. Once confirmed, your tokens will be added within seconds.')
       return
     }
 
@@ -189,6 +190,10 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   useEffect(() => {
     setCreditBalanceOverride(baseCredits)
   }, [baseCredits])
+
+  useEffect(() => {
+    if (creditBalanceOverride !== null) setCurrentTokens(creditBalanceOverride)
+  }, [creditBalanceOverride])
 
   useEffect(() => {
     if (!firstCandidate?._id || !selectedCompany) { setHasCompanyRecruiters(false); return }
@@ -248,12 +253,22 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             </span>
           )}
         </div>
-        <StatCard
-          number={recruiterContactsLeft.toString()}
-          label="Recruiters Left"
-          onClick={onRecruiterContactsClick}
-          clickable
-        />
+        <div className="relative overflow-visible group/recruiters">
+          <StatCard
+            number={recruiterContactsLeft.toString()}
+            label="Recruiters Left"
+            onClick={onRecruiterContactsClick}
+            clickable
+          />
+          <button
+            type="button"
+            onClick={onRecruiterContactsClick}
+            className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/recruiters:opacity-100 transition-opacity duration-200"
+            style={{ background: '#BFE3D2', color: '#306770' }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
+          </button>
+        </div>
       </div>
       {/* Job Detail Card */}
       {(() => {
@@ -620,25 +635,72 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
             <div className="text-[13px] mb-4" style={{ color: '#787878' }}>
               <label className="block mb-2">Payment Method</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => {
-                  setPaymentMethod(e.target.value as any)
-                  setCodeError(null)
-                  setTokenCheckoutError(null)
-                  setPaypalInfo(null)
-                  setPromoCode('')
-                  setCustomPayment('')
-                  setOtherSuccess(false)
-                }}
-                className="w-full rounded-[10px] border px-3 py-2.5 text-[13px] outline-none appearance-none"
-                style={{ borderColor: '#DCDCDC', color: '#306770', background: 'white', cursor: 'pointer' }}
-              >
-                <option value="stripe">Stripe — Card checkout</option>
-                <option value="paypal">PayPal — PayPal account</option>
-                <option value="code">Use Code</option>
-                <option value="other">Other — Contact support</option>
-              </select>
+              {/* Custom payment method dropdown with logos */}
+              {(() => {
+                const pmOptions: { value: 'stripe' | 'paypal' | 'code' | 'other'; label: string; sub: string | null; icon: React.ReactNode }[] = [
+                  {
+                    value: 'stripe', label: 'Stripe', sub: 'Card checkout',
+                    icon: <span style={{ width: 24, height: 24, borderRadius: 5, background: '#635BFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, fontWeight: 800, color: 'white', fontFamily: 'Arial' }}>S</span>,
+                  },
+                  {
+                    value: 'paypal', label: 'PayPal', sub: 'PayPal account',
+                    icon: <span style={{ width: 24, height: 24, borderRadius: 5, background: '#003087', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, fontWeight: 800, color: '#009CDE', fontFamily: 'Arial', letterSpacing: '-0.5px' }}>PP</span>,
+                  },
+                  {
+                    value: 'code', label: 'Use Code', sub: null,
+                    icon: <span style={{ width: 24, height: 24, borderRadius: 5, background: '#F0FAF5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#36BF8F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>,
+                  },
+                ]
+                const selected = pmOptions.find(o => o.value === paymentMethod)!
+                return (
+                  <div style={{ position: 'relative' }}>
+                    {showPaymentDropdown && (
+                      <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowPaymentDropdown(false)} />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentDropdown(v => !v)}
+                      className="w-full rounded-[10px] border px-3 py-2.5 outline-none flex items-center gap-2.5"
+                      style={{ borderColor: '#DCDCDC', color: '#306770', background: 'white', cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      {selected.icon}
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{selected.label}{selected.sub && <span style={{ color: '#aaa', fontWeight: 400, marginLeft: 5 }}>{selected.sub}</span>}</span>
+                      <ChevronDown size={14} style={{ color: '#aaa', transform: showPaymentDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {showPaymentDropdown && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: '1px solid #DCDCDC', borderRadius: 10, zIndex: 50, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                        {pmOptions.map((opt, i) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setPaymentMethod(opt.value)
+                              setShowPaymentDropdown(false)
+                              setCodeError(null)
+                              setTokenCheckoutError(null)
+                              setPaypalInfo(null)
+                              setPromoCode('')
+                              setCustomPayment('')
+                              setOtherSuccess(false)
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+                            style={{
+                              background: paymentMethod === opt.value ? '#F0FAF5' : 'transparent',
+                              color: '#306770', border: 'none', cursor: 'pointer', fontSize: 13,
+                              borderTop: i > 0 ? '1px solid #F5F5F5' : 'none',
+                            }}
+                            onMouseEnter={e => { if (paymentMethod !== opt.value) e.currentTarget.style.background = '#FAFAFA' }}
+                            onMouseLeave={e => { if (paymentMethod !== opt.value) e.currentTarget.style.background = 'transparent' }}
+                          >
+                            {opt.icon}
+                            <span style={{ fontWeight: 600 }}>{opt.label}{opt.sub && <span style={{ color: '#aaa', fontWeight: 400, marginLeft: 5 }}>{opt.sub}</span>}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {paymentMethod === 'code' && (

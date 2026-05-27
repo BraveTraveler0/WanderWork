@@ -1,5 +1,5 @@
-const APP_URL = process.env.APP_URL || 'https://wanderwork.ai'
-const FROM_EMAIL = process.env.EMAIL_FROM || 'support@wanderwork.ai'
+const APP_URL = process.env.APP_URL || 'https://wanderwork.io'
+const FROM_EMAIL = process.env.EMAIL_FROM || 'support@wanderwork.io'
 
 const base = (content) => `
 <!DOCTYPE html>
@@ -35,7 +35,7 @@ const base = (content) => `
           <td align="center" style="padding:32px 0 0;">
             <p style="margin:0 0 8px;font-size:12px;color:#9ca3af;letter-spacing:1.5px;">WANDER/WORK</p>
             <p style="margin:0;font-size:11px;color:#c0c8cc;">
-              You're receiving this because you have an account at wanderwork.ai.<br/>
+              You're receiving this because you have an account at wanderwork.io.<br/>
               <a href="${APP_URL}" style="color:#306770;text-decoration:none;">Unsubscribe</a>
             </p>
           </td>

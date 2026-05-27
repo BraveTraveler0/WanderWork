@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const nodemailer = require('nodemailer');
 const dbUtils = require('../../utils/dbUtils.js');
 const Candidates = require('../../models/JobSeeker/jobSeeker.Candidate.js');
 const Jobs = require('../../models/JobSeeker/jobSeeker.Job.js');
@@ -718,6 +717,13 @@ const getAllJobs = asyncHandler(async (req, res) => {
 });
 
 const getAllApplications = asyncHandler(async (req, res) => {
+    const { email } = req.query;
+    if (email) {
+        const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
+        if (!candidate) return res.json([]);
+        const results = await Applications.find({ candidateId: candidate._id }).sort({ preparedAt: -1 }).lean();
+        return res.json(results);
+    }
     const results = await getAllApplicationsPure();
     res.json(results);
 });
@@ -1619,37 +1625,35 @@ Tailor every bullet point to match the target job description — highlight spec
         )
     }
 
-    // Send emails via SMTP if configured
-    const smtpUser = process.env.EMAIL_SMTP_USER
-    const smtpPass = process.env.EMAIL_SMTP_PASS
-    const adminEmail = process.env.ADMIN_EMAIL || smtpUser
+    // Send emails via SendGrid
+    const sgApiKey = process.env.SENDGRID_API_KEY
+    if (sgApiKey && sgApiKey !== 'SG.placeholder') {
+        const sgMail = require('@sendgrid/mail')
+        sgMail.setApiKey(sgApiKey)
 
-    if (smtpUser && smtpPass) {
-        const transporter = nodemailer.createTransport({
-            host: process.env.EMAIL_SMTP_HOST || 'smtp.gmail.com',
-            port: Number(process.env.EMAIL_SMTP_PORT) || 587,
-            secure: false,
-            auth: { user: smtpUser, pass: smtpPass },
-        })
-
+        const FROM_EMAIL = 'support@wanderwork.io'
+        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'sephrim07@gmail.com'
+        const safeCompany = company.replace(/[^a-z0-9]/gi, '-').toLowerCase()
         const sends = []
 
-        const safeCompany = company.replace(/[^a-z0-9]/gi, '-').toLowerCase()
-
         if (resume) {
-            const subject = `Your Resume — ${jobTitle} at ${company}`
+            const subject = `Your Resume for ${jobTitle} at ${company}`
             if (resumeContent) {
-                sends.push(transporter.sendMail({
-                    from: `"Wander/Work" <${smtpUser}>`,
+                sends.push(sgMail.send({
+                    from: FROM_EMAIL,
                     to: email,
                     subject,
-                    text: `Hi ${candidateGreeting},\n\nHere is your tailored resume for ${jobTitle} at ${company}:\n\n${'─'.repeat(60)}\n\n${resumeContent}\n\n${'─'.repeat(60)}\n\nGood luck!\nWander/Work Team`,
                     html: buildDocumentEmailHtml({ greeting: candidateGreeting, docLabel: 'tailored resume', jobTitle, company, content: resumeContent, hasAttachment: true }),
-                    attachments: [{ filename: `resume-${safeCompany}.rtf`, content: textToRtf(resumeContent), contentType: 'text/rtf', encoding: 'utf8' }],
+                    attachments: [{
+                        content: Buffer.from(textToRtf(resumeContent)).toString('base64'),
+                        type: 'text/rtf',
+                        filename: `resume-${safeCompany}.rtf`,
+                        disposition: 'attachment',
+                    }],
                 }))
             } else {
-                sends.push(transporter.sendMail({
-                    from: `"Wander/Work" <${smtpUser}>`,
+                sends.push(sgMail.send({
+                    from: FROM_EMAIL,
                     to: email,
                     subject,
                     text: `Hi ${candidateGreeting},\n\nYour resume request for ${jobTitle} at ${company} has been received.\n\nWe'll have it ready and sent to your email in minutes!\n\nWander/Work Team`,
@@ -1658,19 +1662,23 @@ Tailor every bullet point to match the target job description — highlight spec
         }
 
         if (coverLetter) {
-            const subject = `Your Cover Letter — ${jobTitle} at ${company}`
+            const subject = `Your Cover Letter for ${jobTitle} at ${company}`
             if (coverLetterContent) {
-                sends.push(transporter.sendMail({
-                    from: `"Wander/Work" <${smtpUser}>`,
+                sends.push(sgMail.send({
+                    from: FROM_EMAIL,
                     to: email,
                     subject,
-                    text: `Hi ${candidateGreeting},\n\nHere is your cover letter for ${jobTitle} at ${company}:\n\n${'─'.repeat(60)}\n\n${coverLetterContent}\n\n${'─'.repeat(60)}\n\nGood luck!\nWander/Work Team`,
                     html: buildDocumentEmailHtml({ greeting: candidateGreeting, docLabel: 'cover letter', jobTitle, company, content: coverLetterContent, hasAttachment: true }),
-                    attachments: [{ filename: `cover-letter-${safeCompany}.rtf`, content: textToRtf(coverLetterContent), contentType: 'text/rtf', encoding: 'utf8' }],
+                    attachments: [{
+                        content: Buffer.from(textToRtf(coverLetterContent)).toString('base64'),
+                        type: 'text/rtf',
+                        filename: `cover-letter-${safeCompany}.rtf`,
+                        disposition: 'attachment',
+                    }],
                 }))
             } else {
-                sends.push(transporter.sendMail({
-                    from: `"Wander/Work" <${smtpUser}>`,
+                sends.push(sgMail.send({
+                    from: FROM_EMAIL,
                     to: email,
                     subject,
                     text: `Hi ${candidateGreeting},\n\nYour cover letter request for ${jobTitle} at ${company} has been received.\n\nWe'll have it ready and sent to your email in minutes!\n\nWander/Work Team`,
@@ -1678,18 +1686,21 @@ Tailor every bullet point to match the target job description — highlight spec
             }
         }
 
-        if (adminEmail) {
-            const requested = [resume && 'Resume', coverLetter && 'Cover Letter'].filter(Boolean).join(' + ')
-            const adminBody = [
-                `Request: ${requested} | ${candidateName} <${email}>`,
-                `Job: ${jobTitle} at ${company}`,
-                `URL: ${jobUrl || 'N/A'}`,
-                `Tokens used: ${totalCost} | Remaining: ${tokensRemaining}`,
-                resumeContent ? `\n== RESUME ==\n${resumeContent}` : '',
-                coverLetterContent ? `\n== COVER LETTER ==\n${coverLetterContent}` : '',
-            ].filter(Boolean).join('\n')
-            sends.push(transporter.sendMail({ from: smtpUser, to: adminEmail, subject: `[Wanderwork] ${requested} — ${candidateName}`, text: adminBody }))
-        }
+        const requested = [resume && 'Resume', coverLetter && 'Cover Letter'].filter(Boolean).join(' + ')
+        const adminBody = [
+            `Request: ${requested} | ${candidateName} <${email}>`,
+            `Job: ${jobTitle} at ${company}`,
+            `URL: ${jobUrl || 'N/A'}`,
+            `Tokens used: ${totalCost} | Remaining: ${tokensRemaining}`,
+            resumeContent ? `\n== RESUME ==\n${resumeContent}` : '',
+            coverLetterContent ? `\n== COVER LETTER ==\n${coverLetterContent}` : '',
+        ].filter(Boolean).join('\n')
+        sends.push(sgMail.send({
+            from: FROM_EMAIL,
+            to: ADMIN_EMAIL,
+            subject: `[Wander/Work] ${requested} Request from ${candidateName}`,
+            text: adminBody,
+        }))
 
         try {
             await Promise.all(sends)
@@ -1698,7 +1709,7 @@ Tailor every bullet point to match the target job description — highlight spec
             // Still return ok — tokens were deducted, content was generated
         }
     } else {
-        console.warn('[CustomRequest] SMTP not configured — EMAIL_SMTP_USER and EMAIL_SMTP_PASS required')
+        console.warn('[CustomRequest] SendGrid not configured — SENDGRID_API_KEY required')
     }
 
     return res.json({ ok: true, tokensRemaining, application })

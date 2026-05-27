@@ -12,6 +12,9 @@ import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import TermsOfServicePage from './components/TermsOfServicePage'
 import PlansPage from './components/PlansPage'
 import ProfilePage from './components/ProfilePage'
+import MessagesPage, { getUnseenCount } from './components/MessagesPage'
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://application-server-cwqu.onrender.com'
 
 const LandingPage = lazy(() => import('./landing/LandingPage'))
 import {
@@ -422,8 +425,10 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade'>('dashboard')
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages'>('dashboard')
+  const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
+  const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [hamburgerHovered, setHamburgerHovered] = useState(false)
   const [logoText, setLogoText] = useState('')
@@ -467,6 +472,14 @@ function App() {
       setOauthError('LinkedIn sign-in failed. Please try again.')
       window.history.replaceState({}, '', window.location.pathname)
       setTimeout(() => setOauthError(null), 6000)
+    } else if (params.get('upgrade') === '1') {
+      setCurrentPage('plans')
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('coverletter') === '1') {
+      setCurrentPage('dashboard')
+      const jobId = params.get('jobId')
+      if (jobId) setPendingCoverLetterJobId(jobId)
+      window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
   const [showRecruiterNavModal, setShowRecruiterNavModal] = useState(false)
@@ -487,6 +500,28 @@ function App() {
   const [_token, setToken] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
+
+  useEffect(() => {
+    if (!pendingCoverLetterJobId || !transformedJobs.length) return
+    const match = transformedJobs.find((j: any) => j.backendId === pendingCoverLetterJobId || j.backendId?.toString() === pendingCoverLetterJobId)
+    if (match) {
+      setSelectedJobId(match.id)
+      setPendingCoverLetterJobId(null)
+    }
+  }, [pendingCoverLetterJobId, transformedJobs])
+
+  useEffect(() => {
+    if (!_user?.email) { setUnseenAppCount(0); return }
+    const fetchCount = () => {
+      fetch(`${API_BASE}/jobseeker/application?email=${encodeURIComponent(_user.email)}`)
+        .then(r => r.json())
+        .then((apps: any[]) => { if (Array.isArray(apps)) setUnseenAppCount(getUnseenCount(apps)) })
+        .catch(() => {})
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 30000)
+    return () => clearInterval(interval)
+  }, [_user?.email])
 
   const clearLocalAuth = () => {
     localStorage.removeItem('wanderworkToken')
@@ -848,6 +883,7 @@ function App() {
   // Menu dropdown component
   const menuItems = [
     { label: 'My Profile',      action: () => { setCurrentPage('profile'); setShowMenu(false) } },
+    { label: 'Messages',        action: () => { setCurrentPage('messages'); setUnseenAppCount(0); setShowMenu(false) } },
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
     { label: 'Privacy Policy',  action: () => { setCurrentPage('privacy'); setShowMenu(false) } },
@@ -1031,13 +1067,25 @@ function App() {
               <Users size={13} />
               <span className="hidden sm:inline">Contact Recruiters</span>
             </button>
-            <div className="w-[31px] h-[31px] rounded-full overflow-hidden flex items-center justify-center text-[11px] font-semibold" style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}>
-              {profileImage ? (
-                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                getInitials(`${safeData.Candidates[0]?.firstName || ''} ${safeData.Candidates[0]?.lastName || ''}`.trim() || _user?.displayName || _user?.email || 'User')
+            <button
+              className="relative"
+              onClick={() => { setCurrentPage('messages'); setUnseenAppCount(0) }}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              title="Messages"
+            >
+              <div className="w-[31px] h-[31px] rounded-full overflow-hidden flex items-center justify-center text-[11px] font-semibold" style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}>
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  getInitials(`${safeData.Candidates[0]?.firstName || ''} ${safeData.Candidates[0]?.lastName || ''}`.trim() || _user?.displayName || _user?.email || 'User')
+                )}
+              </div>
+              {unseenAppCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-[15px] h-[15px] rounded-full flex items-center justify-center text-[8px] font-bold text-white pointer-events-none" style={{ background: '#36BF8F', fontFamily: 'Manrope' }}>
+                  {unseenAppCount > 9 ? '9+' : unseenAppCount}
+                </span>
               )}
-            </div>
+            </button>
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -1075,7 +1123,14 @@ function App() {
           </div>
         )}
         
-        {loading ? (
+        {currentPage === 'messages' ? (
+          <MessagesPage
+            onBack={() => setCurrentPage('dashboard')}
+            email={_user?.email || safeData.Candidates[0]?.email || ''}
+            onGoToProfile={() => setCurrentPage('profile')}
+            inline
+          />
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div
               className="animate-spin"
@@ -1138,7 +1193,7 @@ function App() {
             </div>
 
             {/* Tablet + Desktop: Stats Panel sidebar */}
-            <div className="hidden md:flex md:flex-col md:w-[320px] lg:w-[480px] xl:w-[520px] 2xl:w-[600px] md:shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar md:pl-2 xl:pl-3">
+            <div id="stats-panel" className="hidden md:flex md:flex-col md:w-[320px] lg:w-[480px] xl:w-[520px] 2xl:w-[600px] md:shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar md:pl-2 xl:pl-3">
               {displayedJobId !== null && (
                 <StatsPanel
                   jobId={displayedJobId}

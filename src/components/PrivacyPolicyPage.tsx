@@ -166,7 +166,7 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
             <LI><strong>Withdraw Consent:</strong> Where processing is based on consent, withdraw your consent at any time without affecting the lawfulness of prior processing.</LI>
             <LI><strong>Opt-Out of Marketing:</strong> Unsubscribe from marketing emails at any time via the unsubscribe link in any email or by contacting us.</LI>
           </UL>
-          <P>To exercise any of these rights, contact us at <strong>privacy@wanderwork.ai</strong>. We will respond within 30 days (or the period required by applicable law).</P>
+          <P>To exercise any of these rights, contact us at <strong>privacy@wanderwork.io</strong>. We will respond within 30 days (or the period required by applicable law).</P>
 
           <H2>10. California Privacy Rights (CCPA/CPRA)</H2>
           <P>
@@ -180,12 +180,12 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
             <LI><strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your CCPA rights.</LI>
           </UL>
           <P>
-            To submit a verifiable consumer request, contact us at <strong>privacy@wanderwork.ai</strong> with "California Privacy Request" in the subject line.
+            To submit a verifiable consumer request, contact us at <strong>privacy@wanderwork.io</strong> with "California Privacy Request" in the subject line.
           </P>
 
           <H2>11. Children's Privacy</H2>
           <P>
-            The Services are not directed to children under the age of 16. We do not knowingly collect personal information from children under 16. If you become aware that a child has provided us with personal information without parental consent, please contact us immediately at <strong>privacy@wanderwork.ai</strong>. We will take steps to remove that information and terminate the child's account.
+            The Services are not directed to children under the age of 16. We do not knowingly collect personal information from children under 16. If you become aware that a child has provided us with personal information without parental consent, please contact us immediately at <strong>privacy@wanderwork.io</strong>. We will take steps to remove that information and terminate the child's account.
           </P>
 
           <H2>12. Third-Party Links &amp; Services</H2>
@@ -203,8 +203,8 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
           <P>
             <strong>Wander/Work, Inc.</strong><br />
             Attn: Privacy Team<br />
-            Email: <strong>privacy@wanderwork.ai</strong><br />
-            For legal notices: <strong>legal@wanderwork.ai</strong>
+            Email: <strong>privacy@wanderwork.io</strong><br />
+            For legal notices: <strong>legal@wanderwork.io</strong>
           </P>
           <P style={{ color: '#9CA3AF', fontSize: '12px', marginTop: '32px', borderTop: '1px solid #E5E7EB', paddingTop: '16px' }}>
             &copy; 2026 Wander/Work, Inc. All rights reserved.

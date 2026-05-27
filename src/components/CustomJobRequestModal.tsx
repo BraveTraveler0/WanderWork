@@ -243,7 +243,7 @@ export default function CustomJobRequestModal({
 
         {/* Note — above the submit button */}
         <p className="text-[13px] text-center mb-3 font-medium" style={{ color: '#306770' }}>
-          Your materials will be ready and sent to your email in minutes!
+          Your materials will be saved to your Messaging tab and sent to your email in minutes!
         </p>
 
         {/* Action Buttons */}

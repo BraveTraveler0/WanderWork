@@ -17,6 +17,7 @@ const syncRoutes = require('./routes/sync');
 // Import schedules
 require("./schedules/postsJobs");
 require("./schedules/starsJobs");
+const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -131,6 +132,7 @@ Object.entries(routes).forEach(([path, route]) => {
 
 // Initialize Airtable sync scheduler
 initScheduledSync();
+initJobDigestSchedule();
 if (process.env.ENABLE_RECRUITER_COMPANY_PAIRING_SCHEDULE !== 'false') {
   scheduleRecruiterCompanyPairing({
     intervalMs: Number(process.env.RECRUITER_COMPANY_PAIR_INTERVAL_MS) || undefined,
