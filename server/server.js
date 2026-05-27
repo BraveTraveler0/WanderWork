@@ -1,6 +1,5 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
-const bodyParser = require('body-parser');
 const cors = require("cors");
 const mongoose = require('mongoose'); // Add this import
 const connectDB = require("./config/dbConn");
@@ -34,12 +33,9 @@ const checkConnection = async (req, res, next) => {
     next();
 };
 
-// Middleware setup
-// Capture raw body for Stripe webhook signature verification
-app.use(bodyParser.json({
-  type: 'application/json; charset=utf-8',
-  verify: (req, res, buf) => { req.rawBody = buf; },
-}));
+// Stripe webhook must receive the raw body before express.json() parses it
+app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
+
 app.use(cors({
   origin: "*",
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],

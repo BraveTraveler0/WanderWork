@@ -125,10 +125,9 @@ router.post('/webhook', async (req, res) => {
 
   let event;
   try {
-    const rawBody = req.rawBody || req.body;
     event = webhookSecret
-      ? stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
-      : JSON.parse(rawBody.toString());
+      ? stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+      : JSON.parse(req.body.toString());
   } catch (err) {
     console.error('Stripe webhook signature error:', err.message);
     return res.status(400).send(`Webhook error: ${err.message}`);
