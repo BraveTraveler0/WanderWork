@@ -469,7 +469,7 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
       </section>
 
       {/* ── Testimonials ── */}
-      <section style={{ padding: isTablet ? '72px 28px 92px' : '56px 20px 76px', background: TEAL, position: 'relative', overflow: 'hidden' }}>
+      <section style={{ padding: isTablet ? '72px 28px 92px' : '56px 20px 76px', background: TEAL, position: 'relative', overflow: 'hidden', marginTop: 32 }}>
         {isTablet && (
           <video autoPlay muted loop playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}>
             <source src="/ResumeRain.mp4" type="video/mp4" />
