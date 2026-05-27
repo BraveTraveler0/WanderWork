@@ -228,8 +228,16 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Stats - Desktop only */}
       <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
-        <div className="relative overflow-visible">
+        <div className="relative overflow-visible group/tokens">
           <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
+          <button
+            type="button"
+            onClick={openTokens}
+            className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/tokens:opacity-100 transition-opacity duration-200"
+            style={{ background: '#BFE3D2', color: '#306770' }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
+          </button>
           {floatDelta !== null && (
             <span
               key={floatKey}

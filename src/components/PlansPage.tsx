@@ -1,6 +1,104 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Check, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, type Plan as StripePlan } from '../api/stripe'
+
+const LS_URLS: Record<string, string> = {
+  tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
+  pro: import.meta.env.VITE_LS_PRO_URL || '',
+  premium: import.meta.env.VITE_LS_PREMIUM_URL || '',
+}
+
+const PADDLE_URLS: Record<string, string> = {
+  tokens: import.meta.env.VITE_PADDLE_TOKENS_URL || '',
+  pro: import.meta.env.VITE_PADDLE_PRO_URL || '',
+  premium: import.meta.env.VITE_PADDLE_PREMIUM_URL || '',
+}
+
+function PaymentModal({ planKey, onClose, onStripe }: {
+  planKey: string
+  onClose: () => void
+  onStripe: () => void
+}) {
+  const options = [
+    {
+      key: 'stripe',
+      label: 'Credit / Debit Card',
+      sub: 'Powered by Stripe',
+      available: true,
+      onClick: () => { onClose(); onStripe() },
+    },
+    {
+      key: 'lemonsqueezy',
+      label: 'Lemon Squeezy',
+      sub: 'Cards, PayPal, and more',
+      available: !!LS_URLS[planKey],
+      onClick: () => { onClose(); window.open(LS_URLS[planKey], '_blank') },
+    },
+    {
+      key: 'paddle',
+      label: 'Paddle',
+      sub: 'Cards and local payment methods',
+      available: !!PADDLE_URLS[planKey],
+      onClick: () => { onClose(); window.open(PADDLE_URLS[planKey], '_blank') },
+    },
+  ]
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#fff', borderRadius: 20, padding: '32px 28px',
+          width: 360, boxShadow: '0 24px 60px rgba(0,0,0,0.18)',
+          position: 'relative',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}
+        >
+          <X size={18} />
+        </button>
+        <h3 style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 18, color: '#306770', marginBottom: 6 }}>
+          Choose payment method
+        </h3>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Select how you'd like to complete your purchase.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={opt.available ? opt.onClick : undefined}
+              disabled={!opt.available}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                padding: '14px 18px', borderRadius: 12, border: '1.5px solid #E4E4E4',
+                background: opt.available ? '#fff' : '#F9F9F9',
+                cursor: opt.available ? 'pointer' : 'not-allowed',
+                opacity: opt.available ? 1 : 0.45,
+                transition: 'border-color 0.2s, background 0.2s',
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => { if (opt.available) (e.currentTarget as HTMLButtonElement).style.borderColor = '#63B08D' }}
+              onMouseLeave={(e) => { if (opt.available) (e.currentTarget as HTMLButtonElement).style.borderColor = '#E4E4E4' }}
+            >
+              <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#306770' }}>{opt.label}</span>
+              <span style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                {opt.available ? opt.sub : 'Not configured yet'}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface Plan {
   name: string
@@ -234,7 +332,6 @@ function FaqItem({ item, index, visible }: { item: { q: string; a: string }; ind
   )
 }
 
-const PAYPAL_EMAIL = 'dcartercreative@gmail.com'
 
 const PlansPage = ({
   onBack,
@@ -251,6 +348,7 @@ const PlansPage = ({
   const [pageVisible, setPageVisible] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<StripePlan | 'tokens' | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [paymentModal, setPaymentModal] = useState<{ planKey: string; stripePlan?: StripePlan } | null>(null)
   const faqSection = useInView(0.1)
 
   useEffect(() => {
@@ -260,12 +358,8 @@ const PlansPage = ({
     return () => cancelAnimationFrame(t)
   }, [])
 
-  const handleCheckout = async (plan: StripePlan) => {
-    if (!userEmail && onSignUp) {
-      onSignUp()
-      return
-    }
-
+  const handleStripeCheckout = async (plan: StripePlan) => {
+    if (!userEmail && onSignUp) { onSignUp(); return }
     setCheckoutLoading(plan)
     setCheckoutError(null)
     try {
@@ -277,17 +371,9 @@ const PlansPage = ({
     }
   }
 
-  const handleTokenPurchase = () => {
-    const params = new URLSearchParams({
-      cmd: '_xclick',
-      business: PAYPAL_EMAIL,
-      amount: '1.00',
-      currency_code: 'USD',
-      item_name: 'Wander/Work Tokens (3)',
-      no_note: '1',
-      no_shipping: '1',
-    })
-    window.open(`https://www.paypal.com/cgi-bin/webscr?${params.toString()}`, '_blank')
+  const openPaymentModal = (planKey: string, stripePlan?: StripePlan) => {
+    if (!userEmail && onSignUp) { onSignUp(); return }
+    setPaymentModal({ planKey, stripePlan })
   }
 
   const plans: Plan[] = [
@@ -322,6 +408,7 @@ const PlansPage = ({
   ]
 
   return (
+    <>
     <div
       style={{
         minHeight: '100vh',
@@ -484,7 +571,7 @@ const PlansPage = ({
               plan={plan}
               index={i}
               pageVisible={pageVisible}
-              onCheckout={plan.stripePlan ? () => handleCheckout(plan.stripePlan!) : handleTokenPurchase}
+              onCheckout={() => openPaymentModal(plan.stripePlan ?? 'tokens', plan.stripePlan)}
               loading={!!checkoutLoading && checkoutLoading === (plan.stripePlan ?? 'tokens')}
             />
           ))}
@@ -553,6 +640,17 @@ const PlansPage = ({
 
       </div>
     </div>
+
+    {paymentModal && (
+      <PaymentModal
+        planKey={paymentModal.planKey}
+        onClose={() => setPaymentModal(null)}
+        onStripe={() => paymentModal!.stripePlan
+          ? handleStripeCheckout(paymentModal!.stripePlan!)
+          : undefined}
+      />
+    )}
+    </>
   )
 }
 

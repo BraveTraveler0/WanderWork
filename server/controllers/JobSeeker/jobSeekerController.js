@@ -677,7 +677,7 @@ const getEverything = asyncHandler(async (req, res) => {
                                 resume: {},
                                 status: 'active',
                                 paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                                tokenBalance: 30,
+                                tokenBalance: 100,
                                 recruiterContactsLeft: 10,
                                 recruiterContactsUpdatedAt: new Date(),
                             },

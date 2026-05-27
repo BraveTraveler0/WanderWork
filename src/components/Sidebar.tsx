@@ -632,7 +632,7 @@ const InfoField = ({ label, value, wide, hasArrow, onEdit }: { label: string, va
     >
       <p className="text-[12px] mb-1" style={{ color: '#787878' }}>{label}</p>
       <div className="flex items-center justify-between">
-        <p className={`text-[13px] ${wide ? 'lg:w-[230px]' : ''}`} style={{ color: '#1A1A2E' }}>{value}</p>
+        <p className={`text-[13px] truncate ${wide ? 'lg:w-[230px]' : ''}`} style={{ color: '#1A1A2E' }}>{value}</p>
         <div className="flex items-center gap-2">
           {hasArrow && <ChevronDown size={16} style={{ color: '#306770' }} />}
           {!hasArrow && (

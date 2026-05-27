@@ -120,7 +120,7 @@ const transformTallyData = (tallyPayload) => {
     resume_text: raw.resume_text || '',
     status: 'active',
     paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    tokenBalance: 30,
+    tokenBalance: 100,
     tokensUsed: 0,
     creditsBalance: 30,
     creditsUsed: 0,
