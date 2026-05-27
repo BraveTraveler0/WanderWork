@@ -119,15 +119,16 @@ router.post('/create-token-checkout-session', async (req, res) => {
 
 // ── POST /stripe/webhook ──────────────────────────────────────────────────────
 // Stripe sends raw body — must use express.raw() middleware (registered in server.js)
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   let event;
   try {
+    const rawBody = req.rawBody || req.body;
     event = webhookSecret
-      ? stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
-      : JSON.parse(req.body.toString());
+      ? stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+      : JSON.parse(rawBody.toString());
   } catch (err) {
     console.error('Stripe webhook signature error:', err.message);
     return res.status(400).send(`Webhook error: ${err.message}`);

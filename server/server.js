@@ -34,7 +34,11 @@ const checkConnection = async (req, res, next) => {
 };
 
 // Middleware setup
-app.use(bodyParser.json({ type: 'application/json; charset=utf-8' }));
+// Capture raw body for Stripe webhook signature verification
+app.use(bodyParser.json({
+  type: 'application/json; charset=utf-8',
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(cors({
   origin: "*",
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
