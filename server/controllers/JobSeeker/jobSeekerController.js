@@ -726,6 +726,7 @@ const getAllApplications = asyncHandler(async (req, res) => {
             $or: [
                 { coverLetter: { $exists: true, $ne: '' } },
                 { 'resume.content': { $exists: true, $ne: '' } },
+                { resume: { $type: 'string', $ne: '' } },
             ],
         }).sort({ preparedAt: -1 }).lean();
         return res.json(results);

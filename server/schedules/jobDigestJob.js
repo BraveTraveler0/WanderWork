@@ -77,7 +77,7 @@ async function sendWeeklyJobDigest() {
 }
 
 function initJobDigestSchedule() {
-  console.log('[JobDigest] Weekly digest scheduled: Mondays at 10 AM EST');
+  console.log('[JobDigest] Weekly digest scheduled: Tuesdays at 10 AM EST');
   cron.schedule(SCHEDULE, () => {
     sendWeeklyJobDigest().catch(err =>
       console.error('[JobDigest] Unexpected error:', err.message)

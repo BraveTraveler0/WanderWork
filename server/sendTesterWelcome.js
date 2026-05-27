@@ -203,7 +203,7 @@ async function main() {
   await mongoose.connect(process.env.DATABASE_URI);
   console.log('Connected to MongoDB.');
 
-  const TEST_EMAIL = 'darrienccarter@gmail.com'; // set to null to send to all
+  const TEST_EMAIL = null; // set to an email string to test a single address before blasting all
   const query = TEST_EMAIL
     ? { email: TEST_EMAIL }
     : { email: { $exists: true, $ne: '' } };
