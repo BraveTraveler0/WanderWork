@@ -721,7 +721,13 @@ const getAllApplications = asyncHandler(async (req, res) => {
     if (email) {
         const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
         if (!candidate) return res.json([]);
-        const results = await Applications.find({ candidateId: candidate._id }).sort({ preparedAt: -1 }).lean();
+        const results = await Applications.find({
+            candidateId: candidate._id,
+            $or: [
+                { coverLetter: { $exists: true, $ne: '' } },
+                { 'resume.content': { $exists: true, $ne: '' } },
+            ],
+        }).sort({ preparedAt: -1 }).lean();
         return res.json(results);
     }
     const results = await getAllApplicationsPure();
