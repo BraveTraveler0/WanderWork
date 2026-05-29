@@ -158,9 +158,10 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
       setSpecialties(specialties ?? [])
       setRecruiters(recruiters)
 
-      // Build sent list from contact history (last 90 days, email_sent only)
+      // Build sent list from all contact history (email_sent only, no time cutoff)
       const past: SentEntry[] = (contacts as any[])
-        .filter((c) => c.status === 'email_sent' && c.sentAt && new Date(c.sentAt).getTime() > cutoff)
+        .filter((c) => c.status === 'email_sent' && c.sentAt)
+        .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
         .map((c) => ({
           recruiter: c.recruiterId as RecruiterRecord,
           sentAt: c.sentAt,

@@ -169,9 +169,11 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
   if (!candidateId) return res.status(400).json({ message: 'candidateId required' })
 
   // Fetch candidate profile and contact history in parallel — they're independent
+  // Only exclude recruiters contacted in the last 90 days so older contacts re-enter the pool
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
   const [candidate, contacted] = await Promise.all([
     CandidateModel.findById(candidateId).lean(),
-    RecruiterContact.find({ candidateId }).select('recruiterId').lean(),
+    RecruiterContact.find({ candidateId, sentAt: { $gt: ninetyDaysAgo } }).select('recruiterId').lean(),
   ])
 
   if (!candidate) return res.status(404).json({ message: 'Candidate not found' })
