@@ -18,7 +18,6 @@ interface SentEntry {
 
 const DAILY_LIMIT = 10
 const TOKENS_PER_EMAIL = 10
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000
 const FADE_MS = 500
 
 const SPECIALTY_LABELS: Record<string, string> = {
@@ -148,7 +147,6 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   // Load paired recruiters + contact history on mount
   useEffect(() => {
     let cancelled = false
-    const cutoff = Date.now() - NINETY_DAYS_MS
 
     Promise.all([
       getPairedRecruiters(candidateId, 50, company),
