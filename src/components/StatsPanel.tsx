@@ -26,6 +26,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const firstCandidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const tokensCount = (firstCandidate?.tokenBalance ?? firstCandidate?.tokens ?? 30)
   const recruiterContactsLeft: number = firstCandidate?.recruiterContactsLeft ?? 10
+  const hasUploadedResume = !!(firstCandidate?.resume_text?.trim() || firstCandidate?.resumeLink)
+  const hasBasicProfile = !!(firstCandidate?.firstName?.trim() && firstCandidate?.targetRoles?.length)
+  const canOrder = hasUploadedResume && hasBasicProfile
   const [showCustomRequestModal, setShowCustomRequestModal] = useState<{ jobId: string | number; jobTitle: string; company: string; job?: any } | null>(null)
   const selectedJobForCompany = jobs?.find((job: any) => job.id === jobId) ?? data?.Jobs?.find((job: any) => job.id === jobId)
   const selectedCompany: string | undefined = selectedJobForCompany?.company
@@ -553,19 +556,29 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                       .
                     </p>
                   )}
-                  <button
-                    className="cta-glow w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
-                    style={{ background: '#306770' }}
-                    onClick={() => setShowCustomRequestModal({
-                      jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
-                      jobTitle: selectedJob.title,
-                      company: selectedJob.company,
-                      job: selectedJob
-                    })}
-                  >
-                    Get Resume or Cover Letter
-                    <span className="arrow-nudge"><ArrowRight size={14} /></span>
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }} className="sm:w-auto">
+                    <button
+                      className={`cta-glow w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap flex-shrink-0 transition-all duration-300${canOrder ? ' hover:scale-105' : ''}`}
+                      style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
+                      disabled={!canOrder}
+                      onClick={canOrder ? () => setShowCustomRequestModal({
+                        jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
+                        jobTitle: selectedJob.title,
+                        company: selectedJob.company,
+                        job: selectedJob
+                      }) : undefined}
+                    >
+                      Get Resume or Cover Letter
+                      <span className="arrow-nudge"><ArrowRight size={14} /></span>
+                    </button>
+                    {!canOrder && (
+                      <p style={{ fontSize: 11, color: '#AAAAAA', margin: 0, lineHeight: 1.4 }}>
+                        {!hasUploadedResume
+                          ? 'Upload a resume in your profile to unlock this.'
+                          : 'Add your name and a target role in your profile to unlock this.'}
+                      </p>
+                    )}
+                  </div>
                   {hasCompanyRecruiters && (
                     <button
                       className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
