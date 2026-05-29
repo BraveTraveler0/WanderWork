@@ -504,7 +504,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
             const resetToken = jwtUtils.generateToken(user);
 
             // Include this token in the recovery email
-            const appUrl = process.env.APP_URL || 'http://localhost:5173';
+            const appUrl = process.env.APP_URL || 'https://wanderwork.io';
             const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
             const displayName = user.displayName || user.email.split('@')[0];
             const emailMessage = {
