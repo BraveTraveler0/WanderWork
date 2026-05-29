@@ -6,6 +6,7 @@
 const cron = require('node-cron');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
 const { pairAllCandidates } = require('./services/jobPairingService');
+const { syncRecruiters } = require('./services/recruiterSyncService');
 
 let isRunning = false;
 let lastSyncTime = null;
@@ -32,6 +33,7 @@ async function runSync() {
     await dedupeJobs();
     await purgeOldJobs(60);
     await expireOldApplications(30);
+    await syncRecruiters().catch((e) => console.warn('[RecruiterSync] Failed (non-fatal):', e.message));
 
     lastSyncTime = new Date();
     lastSyncStatus = 'success';

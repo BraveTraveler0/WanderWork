@@ -5,6 +5,7 @@
 
 const express = require('express');
 const { triggerSync, getSyncStatus } = require('../airtable-scheduler');
+const { syncRecruiters } = require('../services/recruiterSyncService');
 
 const router = express.Router();
 
@@ -15,11 +16,15 @@ const router = express.Router();
 router.post('/airtable', async (req, res) => {
   try {
     console.log('📥 Manual Airtable sync requested...');
-    await triggerSync();
-    
+    const [, recruiterResult] = await Promise.all([
+      triggerSync(),
+      syncRecruiters().catch((e) => ({ error: e.message })),
+    ]);
+
     res.json({
       success: true,
       message: 'Airtable sync completed',
+      recruiters: recruiterResult,
       timestamp: new Date().toISOString(),
       status: getSyncStatus(),
     });
