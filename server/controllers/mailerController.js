@@ -28,7 +28,7 @@ const reportBug = asyncHandler(async (req, res) => {
         const senderInfo = email ? `Sender: ${email}` : (id ? `User ID: ${id}` : 'Anonymous');
         const emailMessage = {
             to: BUG_REPORT_EMAIL,
-            from: 'support@aontechnology.io',
+            from: process.env.EMAIL_FROM || 'support@wanderwork.io',
             replyTo: email || BUG_REPORT_EMAIL,
             subject: 'Bug Report - WanderWork',
             text: `Bug Report\n\n${bug}\n\n${senderInfo}`,
