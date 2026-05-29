@@ -11,15 +11,21 @@ sgMail.setApiKey(SENDGRID_API_KEY);
 const BUG_REPORT_EMAIL = 'darrienccarter@gmail.com';
 
 const reportBug = asyncHandler(async (req, res) => {
-    const { email, bug, id } = req.body;
+    const body = req.body || {};
+    const email = body.email || '';
+    const bug = body.bug || '';
+    const id = body.id || '';
 
     if (!bug) {
         return res.status(400).json({ message: 'bug is required' });
     }
 
+    // Always log to console as a fallback record
+    console.log(`[BugReport] From: ${email || id || 'anonymous'} | Bug: ${bug}`);
+
+    // Send email — failure is non-fatal, user always gets success
     try {
         const senderInfo = email ? `Sender: ${email}` : (id ? `User ID: ${id}` : 'Anonymous');
-
         const emailMessage = {
             to: BUG_REPORT_EMAIL,
             from: 'support@aontechnology.io',
@@ -27,40 +33,34 @@ const reportBug = asyncHandler(async (req, res) => {
             subject: 'Bug Report - WanderWork',
             text: `Bug Report\n\n${bug}\n\n${senderInfo}`,
         };
-
-        try {
-            await sgMail.send(emailMessage);
-            console.log('Bug report email sent successfully');
-        } catch (emailErr) {
-            console.error('Error sending bug report email:', emailErr);
-        }
-
-        // Send a system message to the user's Messages tab
-        if (email) {
-            try {
-                const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
-                if (candidate) {
-                    await Applications.create({
-                        jobId: new mongoose.Types.ObjectId(),
-                        candidateId: candidate._id,
-                        preparedAt: new Date(),
-                        status: 'system',
-                        jobTitle: 'Bug Report Received',
-                        company: 'WanderWork Support',
-                        resume: {},
-                        coverLetter: `Thank you for reaching out! We received your bug report and our team will look into it right away. We are a small team, but we take every issue seriously and will get back to you within 24 to 48 hours. We appreciate you helping us make WanderWork better.`,
-                    });
-                }
-            } catch (msgErr) {
-                console.error('Error creating system message for bug report:', msgErr);
-            }
-        }
-
-        return res.status(201).json({ message: 'Thank you! Your bug report has been received and we are investigating further!' });
-    } catch (error) {
-        console.error('Error processing bug report:', error);
-        return res.status(500).json({ message: 'Server Error', error });
+        await sgMail.send(emailMessage);
+        console.log('[BugReport] Email sent successfully');
+    } catch (emailErr) {
+        console.error('[BugReport] Email send failed (non-fatal):', emailErr?.message || emailErr);
     }
+
+    // Create system message in user's Messages tab — also non-fatal
+    if (email) {
+        try {
+            const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
+            if (candidate) {
+                await Applications.create({
+                    jobId: new mongoose.Types.ObjectId(),
+                    candidateId: candidate._id,
+                    preparedAt: new Date(),
+                    status: 'system',
+                    jobTitle: 'Bug Report Received',
+                    company: 'WanderWork Support',
+                    resume: {},
+                    coverLetter: 'Thank you for reaching out! We received your bug report and our team will look into it right away. We are a small team, but we take every issue seriously and will get back to you within 24 to 48 hours. We appreciate you helping us make WanderWork better.',
+                });
+            }
+        } catch (msgErr) {
+            console.error('[BugReport] System message creation failed (non-fatal):', msgErr?.message || msgErr);
+        }
+    }
+
+    return res.status(201).json({ message: 'Thank you! Your bug report has been received and we are investigating further!' });
 });
 
 // @desc Get all mailer users
