@@ -25,10 +25,17 @@ export default function ReportBugPage({ onBack, userEmail }: ReportBugPageProps)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: userEmail || '', bug: bug.trim() }),
       })
-      if (!res.ok) throw new Error('Something went wrong')
+      if (!res.ok) {
+        let serverMsg = `Server error ${res.status}`
+        try { const j = await res.json(); if (j?.message) serverMsg = j.message } catch {}
+        console.error('[BugReport] failed:', res.status, serverMsg)
+        throw new Error(serverMsg)
+      }
       setSubmitted(true)
-    } catch {
-      setError('We had trouble sending your report. Please try again.')
+    } catch (err: any) {
+      const msg = err?.message || 'Unknown error'
+      console.error('[BugReport] catch:', msg)
+      setError(`We had trouble sending your report. (${msg})`)
     } finally {
       setLoading(false)
     }
