@@ -54,7 +54,7 @@ function LandingNavbar({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp:
         >
           WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
         </p>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#306770', background: '#EEF6F7', border: '1px solid #C8DEDE', borderRadius: 6, padding: '2px 7px', letterSpacing: 1 }}>BETA</span>
+        <span style={{ fontSize: 9, fontWeight: 500, color: '#AAAAAA', background: 'transparent', border: '1px solid #DCDCDC', borderRadius: 5, padding: '1px 6px', letterSpacing: 0.5 }}>BETA</span>
       </div>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <button
