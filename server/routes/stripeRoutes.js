@@ -5,7 +5,7 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const APP_URL = process.env.APP_URL || 'https://wanderwork.io';
 
 // Price IDs — set these in .env after creating products in your Stripe dashboard
 // STRIPE_PRO_PRICE_ID     → recurring $19/mo price

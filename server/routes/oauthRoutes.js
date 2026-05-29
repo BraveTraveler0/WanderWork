@@ -7,8 +7,8 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { sendWelcomeEmail } = require('../utils/welcomeEmail');
 
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
-const SERVER_URL = process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 8000}`;
+const APP_URL = process.env.APP_URL || 'https://wanderwork.io';
+const SERVER_URL = process.env.PUBLIC_SERVER_URL || 'https://application-server-cwqu.onrender.com';
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 

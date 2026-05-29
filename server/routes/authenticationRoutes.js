@@ -29,7 +29,7 @@ router.get('/signup/verify', async (req, res) => {
         user.verificationToken = null;
         await user.save();
 
-        res.redirect(`https://www.aonverse.com/auth/signup/interests`);
+        res.redirect(`https://wanderwork.io`);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
