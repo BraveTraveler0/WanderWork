@@ -40,19 +40,22 @@ function LandingNavbar({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp:
         opacity: 1,
       }}
     >
-      <p
-        style={{
-          fontFamily: 'Manrope, sans-serif',
-          fontWeight: 700,
-          fontSize: '28px',
-          letterSpacing: '4px',
-          color: '#306770',
-          lineHeight: 1,
-          margin: 0,
-        }}
-      >
-        WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <p
+          style={{
+            fontFamily: 'Manrope, sans-serif',
+            fontWeight: 700,
+            fontSize: '28px',
+            letterSpacing: '4px',
+            color: '#306770',
+            lineHeight: 1,
+            margin: 0,
+          }}
+        >
+          WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
+        </p>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#306770', background: '#EEF6F7', border: '1px solid #C8DEDE', borderRadius: 6, padding: '2px 7px', letterSpacing: 1 }}>BETA</span>
+      </div>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <button
           onClick={onSignIn}

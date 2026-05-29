@@ -13,6 +13,7 @@ import TermsOfServicePage from './components/TermsOfServicePage'
 import PlansPage from './components/PlansPage'
 import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
+import ReportBugPage from './components/ReportBugPage'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://application-server-cwqu.onrender.com'
 
@@ -425,7 +426,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages'>('dashboard')
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug'>('dashboard')
   const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
   const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
@@ -886,6 +887,7 @@ function App() {
     { label: 'Messages',        action: () => { setCurrentPage('messages'); setUnseenAppCount(0); setShowMenu(false) } },
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
+    { label: 'Report a Bug',    action: () => { setCurrentPage('reportbug'); setShowMenu(false) } },
     { label: 'Privacy Policy',  action: () => { setCurrentPage('privacy'); setShowMenu(false) } },
     { label: 'Terms of Service',action: () => { setCurrentPage('terms'); setShowMenu(false) } },
     { label: 'Sign Out',        action: () => {
@@ -1000,6 +1002,10 @@ function App() {
   // Render different pages
   if (currentPage === 'settings') {
     return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} />
+  }
+
+  if (currentPage === 'reportbug') {
+    return <ReportBugPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
   }
 
   if (currentPage === 'privacy') {

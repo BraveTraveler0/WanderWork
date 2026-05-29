@@ -1,10 +1,14 @@
 const asyncHandler = require('express-async-handler')
 const Mailer = require('../models/joinlist')
 const sgMail = require('@sendgrid/mail')
-
+const mongoose = require('mongoose')
+const Candidates = require('../models/JobSeeker/jobSeeker.Candidate.js')
+const Applications = require('../models/JobSeeker/jobSeeker.Application.js')
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 sgMail.setApiKey(SENDGRID_API_KEY);
+
+const BUG_REPORT_EMAIL = 'darrienccarter@gmail.com';
 
 const reportBug = asyncHandler(async (req, res) => {
     const { email, bug, id } = req.body;
@@ -14,41 +18,45 @@ const reportBug = asyncHandler(async (req, res) => {
     }
 
     try {
-        // If email is provided, send only the bug report
+        const senderInfo = email ? `Sender: ${email}` : (id ? `User ID: ${id}` : 'Anonymous');
+
+        const emailMessage = {
+            to: BUG_REPORT_EMAIL,
+            from: 'support@aontechnology.io',
+            replyTo: email || BUG_REPORT_EMAIL,
+            subject: 'Bug Report - WanderWork',
+            text: `Bug Report\n\n${bug}\n\n${senderInfo}`,
+        };
+
+        try {
+            await sgMail.send(emailMessage);
+            console.log('Bug report email sent successfully');
+        } catch (emailErr) {
+            console.error('Error sending bug report email:', emailErr);
+        }
+
+        // Send a system message to the user's Messages tab
         if (email) {
-            const emailMessage = {
-                to: 'support@aontechnology.io',
-                from: 'support@aontechnology.io',
-                subject: "Bug Report!",
-                text: `${bug}. \nSender: ${email}\n`,
-            };
-
             try {
-                await sgMail.send(emailMessage);
-                console.log('Email sent successfully');
-                return res.status(201).json({ message: `Thank you! Your bug report has been received and we are investigating further!` });
-            } catch (error) {
-                console.error('Error sending email:', error);
-                return res.status(500).json({ message: 'Error sending email', error });
-            }
-        } else {
-            // If email is not provided, send both bug report and ID
-            const emailMessage = {
-                to: 'support@aontechnology.io',
-                from: 'support@aontechnology.io',
-                subject: "Bug Report!",
-                text: `\nBug: ${bug}\nUser ID: ${id}`,
-            };
-
-            try {
-                await sgMail.send(emailMessage);
-                console.log('Email sent successfully');
-                return res.status(201).json({ message: `Thank you! Your bug report has been received and we are investigating further!` });
-            } catch (error) {
-                console.error('Error sending email:', error);
-                return res.status(500).json({ message: 'Error sending email', error });
+                const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
+                if (candidate) {
+                    await Applications.create({
+                        jobId: new mongoose.Types.ObjectId(),
+                        candidateId: candidate._id,
+                        preparedAt: new Date(),
+                        status: 'system',
+                        jobTitle: 'Bug Report Received',
+                        company: 'WanderWork Support',
+                        resume: {},
+                        coverLetter: `Thank you for reaching out! We received your bug report and our team will look into it right away. We are a small team, but we take every issue seriously and will get back to you within 24 to 48 hours. We appreciate you helping us make WanderWork better.`,
+                    });
+                }
+            } catch (msgErr) {
+                console.error('Error creating system message for bug report:', msgErr);
             }
         }
+
+        return res.status(201).json({ message: 'Thank you! Your bug report has been received and we are investigating further!' });
     } catch (error) {
         console.error('Error processing bug report:', error);
         return res.status(500).json({ message: 'Server Error', error });

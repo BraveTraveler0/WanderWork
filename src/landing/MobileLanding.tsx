@@ -169,9 +169,12 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
         background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(220,224,230,0.8)',
       }}>
-        <p style={{ fontWeight: 700, fontSize: '20px', letterSpacing: '3px', color: TEAL, margin: 0 }}>
-          WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{ fontWeight: 700, fontSize: '20px', letterSpacing: '3px', color: TEAL, margin: 0 }}>
+            WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
+          </p>
+          <span style={{ fontSize: 9, fontWeight: 700, color: TEAL, background: '#EEF6F7', border: '1px solid #C8DEDE', borderRadius: 5, padding: '2px 6px', letterSpacing: 1 }}>BETA</span>
+        </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={onSignUp} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '10px', color: 'white', background: TEAL, border: 'none', cursor: 'pointer', fontFamily: FONT }}>
             Sign Up

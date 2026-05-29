@@ -699,7 +699,8 @@ const getEverything = asyncHandler(async (req, res) => {
             getAllCandidateJobPairingsPure(),
             getAllContactJobPairingsPure(),
         ]);
-        res.json({ Applications, Candidates: allCandidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing });
+        const filteredApplications = Applications.filter((a) => a.status !== 'system');
+        res.json({ Applications: filteredApplications, Candidates: allCandidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: 'An error occurred collecting data.' });

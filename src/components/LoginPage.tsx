@@ -157,9 +157,12 @@ export default function LoginPage({ onLogin, onForgotPassword, onBackToLanding, 
       >
         <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-8 md:p-10 border border-white/20">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl md:text-4xl font-bold text-[#306770] mb-2 tracking-wide break-words" style={{ lineHeight: '1.1' }}>
-              WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 2 }}>
+              <h1 className="text-3xl md:text-4xl font-bold text-[#306770] tracking-wide break-words" style={{ lineHeight: '1.1', margin: 0 }}>
+                WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
+              </h1>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#306770', background: '#EEF6F7', border: '1px solid #C8DEDE', borderRadius: 6, padding: '2px 7px', letterSpacing: 1, alignSelf: 'flex-start', marginTop: 4 }}>BETA</span>
+            </div>
             <p className="text-gray-600 text-base">Work smarter, wander farther</p>
           </div>
 

@@ -66,9 +66,14 @@ const MessagesPage = ({
     `${a.jobTitle} ${a.company}`.toLowerCase().includes(search.toLowerCase())
   )
 
-  const resumeText = typeof selected?.resume === 'string'
+  const resumeContent = typeof selected?.resume === 'string'
     ? selected.resume
-    : selected?.resume?.text || selected?.resume?.content || selected?.resume?.resume_text || JSON.stringify(selected?.resume || '', null, 2)
+    : selected?.resume?.text || selected?.resume?.content || selected?.resume?.resume_text || ''
+  const resumeText = resumeContent || (
+    selected?.resume && typeof selected.resume === 'object' && Object.keys(selected.resume).length > 0
+      ? JSON.stringify(selected.resume, null, 2)
+      : ''
+  )
 
   const outerStyle = inline
     ? { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0, fontFamily: 'Manrope' }
@@ -152,7 +157,7 @@ const MessagesPage = ({
                         <Mail size={10} /> Cover Letter
                       </span>
                     )}
-                    {app.resume && (
+                    {(typeof app.resume === 'string' ? app.resume : app.resume?.text || app.resume?.content || app.resume?.resume_text) && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: '#36BF8F', background: '#F0FAF5', borderRadius: 6, padding: '2px 7px' }}>
                         <FileText size={10} /> Resume
                       </span>
