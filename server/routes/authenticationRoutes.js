@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const authenticationController = require('../controllers/authenticationController')
 const User = require('../models/User')
+const { requireAuth } = require('../middleware/requireAuth')
 
 router.route('/signup')
     .post(authenticationController.createNewUser)
@@ -34,8 +35,8 @@ router.get('/signup/verify', async (req, res) => {
     }
 });
 
-router.route('/refresh').post(authenticationController.refreshSession);
-router.route('/startSession').post(authenticationController.startSession);
+router.route('/refresh').post(requireAuth, authenticationController.refreshSession);
+router.route('/startSession').post(requireAuth, authenticationController.startSession);
 router.route('/endSession').post(authenticationController.endSession);
 
 router.route('/login')

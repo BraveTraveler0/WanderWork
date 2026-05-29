@@ -89,34 +89,6 @@ router.route('/contactJobPairing/:id')
 router.route('/update')
     .patch(jobSeekerController.UpdateAllData)
 
-// ── SMTP diagnostics — hit GET /api/jobseeker/test-email to verify connection ──
-router.get('/test-email', async (req, res) => {
-    const nodemailer = require('nodemailer')
-    const smtpUser = process.env.EMAIL_SMTP_USER
-    const smtpPass = process.env.EMAIL_SMTP_PASS
-    if (!smtpUser || !smtpPass) {
-        return res.status(500).json({ ok: false, error: 'EMAIL_SMTP_USER / EMAIL_SMTP_PASS not set in .env' })
-    }
-    const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_SMTP_HOST || 'smtp.gmail.com',
-        port: Number(process.env.EMAIL_SMTP_PORT) || 587,
-        secure: false,
-        auth: { user: smtpUser, pass: smtpPass },
-    })
-    try {
-        await transporter.verify()
-        const to = req.query.to || 'darrienccarter@gmail.com'
-        await transporter.sendMail({
-            from: `"Wanderwork Test" <${smtpUser}>`,
-            to,
-            subject: 'Wanderwork SMTP Test',
-            text: `SMTP is working correctly. Sent from ${smtpUser} at ${new Date().toISOString()}`,
-        })
-        res.json({ ok: true, message: `Test email sent to ${to} from ${smtpUser}` })
-    } catch (e) {
-        res.status(500).json({ ok: false, error: e.message })
-    }
-})
 
 router.route('/send-welcome-email')
     .post(jobSeekerController.sendPlanWelcomeEmail)
