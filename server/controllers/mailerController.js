@@ -8,7 +8,13 @@ const Applications = require('../models/JobSeeker/jobSeeker.Application.js')
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
-const BUG_REPORT_EMAIL = 'darrienccarter@gmail.com';
+function getBugReportEmail() {
+    const easternHour = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+    ).getHours();
+    // 11 PM (23:00) and later → night recipient
+    return easternHour >= 23 ? 'dsdavisjr3@gmail.com' : 'darrienccarter@gmail.com';
+}
 
 const reportBug = asyncHandler(async (req, res) => {
     const body = req.body || {};
@@ -26,10 +32,11 @@ const reportBug = asyncHandler(async (req, res) => {
     // Send email — failure is non-fatal, user always gets success
     try {
         const senderInfo = email ? `Sender: ${email}` : (id ? `User ID: ${id}` : 'Anonymous');
+        const recipient = getBugReportEmail();
         const emailMessage = {
-            to: BUG_REPORT_EMAIL,
+            to: recipient,
             from: process.env.EMAIL_FROM || 'support@wanderwork.io',
-            replyTo: email || BUG_REPORT_EMAIL,
+            replyTo: email || recipient,
             subject: 'Bug Report - WanderWork',
             text: `Bug Report\n\n${bug}\n\n${senderInfo}`,
         };
