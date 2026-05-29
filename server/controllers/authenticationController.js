@@ -1,4 +1,5 @@
 const asyncHandler = require('express-async-handler')
+const crypto = require('crypto')
 const User = require('../models/User')
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
 const jwtUtils = require('../utils/jwtUtils')
@@ -412,8 +413,12 @@ const createNewUser = asyncHandler(async (req, res) => {
       sendWelcomeEmail({ email: normalizedEmail, firstName: safeFirstName }).catch(() => {});
     });
 
+    // Generate a secure verification token and save it to the user
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await User.findByIdAndUpdate(user._id, { verificationToken });
+
     // Send verification email
-    const verificationLink = `https://application-server-cwqu.onrender.com/auth/signup/verify?email=${email}&redirect=interests`;
+    const verificationLink = `https://application-server-cwqu.onrender.com/auth/signup/verify?email=${encodeURIComponent(email)}&token=${verificationToken}`;
     const emailMessage = {
       to: email,
       from: 'support@aontechnology.io',
