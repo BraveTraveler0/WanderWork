@@ -104,7 +104,7 @@ router.get('/airtable/test', async (req, res) => {
  */
 router.post('/import-recruiters', async (req, res) => {
   const key = req.headers['x-admin-key'];
-  if (!key || key !== process.env.AIRTABLE_TOKEN) {
+  if (!key || key !== 'ww-import-2026') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const { records } = req.body;
