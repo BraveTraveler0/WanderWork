@@ -112,4 +112,24 @@ async function syncRecruiters() {
   return { upserted, skipped, total: records.length }
 }
 
-module.exports = { syncRecruiters }
+async function upsertRecruiters(records) {
+  let upserted = 0, skipped = 0
+  for (const doc of records) {
+    if (!doc.airtableId) { skipped++; continue }
+    try {
+      await Recruiter.findOneAndUpdate(
+        { airtableId: doc.airtableId },
+        { $set: doc },
+        { upsert: true, new: true }
+      )
+      upserted++
+    } catch (e) {
+      console.warn(`[upsertRecruiters] Skipped ${doc.airtableId}: ${e.message}`)
+      skipped++
+    }
+  }
+  console.log(`[upsertRecruiters] Done — upserted: ${upserted}, skipped: ${skipped}`)
+  return { upserted, skipped, total: records.length }
+}
+
+module.exports = { syncRecruiters, upsertRecruiters }

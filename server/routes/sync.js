@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { triggerSync, getSyncStatus } = require('../airtable-scheduler');
-const { syncRecruiters } = require('../services/recruiterSyncService');
+const { syncRecruiters, upsertRecruiters } = require('../services/recruiterSyncService');
 
 const router = express.Router();
 
@@ -94,6 +94,28 @@ router.get('/airtable/test', async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+/**
+ * POST /sync/import-recruiters
+ * Directly import pre-parsed recruiter records (bypasses Airtable API)
+ * Requires x-admin-key header matching AIRTABLE_TOKEN env var
+ */
+router.post('/import-recruiters', async (req, res) => {
+  const key = req.headers['x-admin-key'];
+  if (!key || key !== process.env.AIRTABLE_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { records } = req.body;
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: 'records array required' });
+  }
+  try {
+    const result = await upsertRecruiters(records);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
