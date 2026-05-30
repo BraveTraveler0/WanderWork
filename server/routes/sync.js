@@ -97,26 +97,5 @@ router.get('/airtable/test', async (req, res) => {
   }
 });
 
-/**
- * POST /sync/import-recruiters
- * Directly import pre-parsed recruiter records (bypasses Airtable API)
- * Requires x-admin-key header matching AIRTABLE_TOKEN env var
- */
-router.post('/import-recruiters', async (req, res) => {
-  const key = req.headers['x-admin-key'];
-  if (!key || key !== 'ww-import-2026') {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  const { records } = req.body;
-  if (!Array.isArray(records) || records.length === 0) {
-    return res.status(400).json({ error: 'records array required' });
-  }
-  try {
-    const result = await upsertRecruiters(records);
-    res.json({ success: true, ...result });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 module.exports = router;
