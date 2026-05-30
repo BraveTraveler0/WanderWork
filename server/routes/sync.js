@@ -98,4 +98,16 @@ router.get('/airtable/test', async (req, res) => {
 });
 
 
+router.post('/import-recruiters', async (req, res) => {
+  if (req.headers['x-admin-key'] !== 'ww-import-2026') return res.status(401).json({ error: 'Unauthorized' });
+  const { records } = req.body;
+  if (!Array.isArray(records) || !records.length) return res.status(400).json({ error: 'records required' });
+  try {
+    const result = await upsertRecruiters(records);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
