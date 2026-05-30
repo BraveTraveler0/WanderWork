@@ -101,35 +101,82 @@ const SPECIALTY_RULES = [
   {
     specialty: 'tech',
     patterns: [
-      /technical/i, /software/i, /engineer/i, /developer/i, /devops/i,
-      /cloud/i, /data\s*(science|engineer)/i, /fullstack/i, /full.stack/i,
-      /front.end/i, /back.end/i, /platform/i, /machine learning/i, /\bml\b/i,
-      /\bai\b/i, /react/i, /node/i, /python/i, /java\b/i, /typescript/i,
+      /software/i, /engineer/i, /developer/i, /devops/i, /cloud/i,
+      /fullstack/i, /full.stack/i, /front.end/i, /back.end/i,
+      /machine learning/i, /\bml\b/i, /react/i, /node/i, /python/i,
+      /java\b/i, /typescript/i, /cybersecurity/i, /infrastructure/i,
+      /\bsre\b/i, /embedded/i, /firmware/i, /blockchain/i, /web3/i,
+      /semiconductor/i, /quantum/i, /robotics/i,
     ],
   },
   {
     specialty: 'creative',
     patterns: [
       /creative/i, /design/i, /\bux\b/i, /\bui\b/i, /brand/i, /art direct/i,
-      /content/i, /copy/i, /media/i, /advertising/i, /marketing/i,
-      /motion/i, /video/i, /animation/i, /graphic/i, /visual/i, /figma/i,
+      /advertising/i, /marketing/i, /motion/i, /animation/i, /graphic/i,
+      /visual/i, /figma/i, /illustration/i, /copywriter/i, /content (creator|strategist)/i,
+      /social media/i, /\bseo\b/i, /media buyer/i,
+    ],
+  },
+  {
+    specialty: 'product',
+    patterns: [
+      /product manager/i, /product owner/i, /product lead/i,
+      /product recruit/i, /product design/i, /product strategy/i,
+      /program manager/i, /project manager/i, /scrum master/i,
+    ],
+  },
+  {
+    specialty: 'data',
+    patterns: [
+      /data scien/i, /data engineer/i, /data analyst/i, /business intelligence/i,
+      /\bBI\b/i, /analytics/i, /machine learning/i, /\bML\b/i, /\bai\b.{0,10}recruit/i,
+      /data.*recruit/i, /\bLLM\b/i, /\bgenai\b/i, /generative ai/i,
+    ],
+  },
+  {
+    specialty: 'sales',
+    patterns: [
+      /\bsales\b/i, /account executive/i, /account manager/i, /business development/i,
+      /go.to.market/i, /\bgtm\b/i, /revenue/i, /\bsdr\b/i, /\bbdr\b/i,
+      /customer success/i, /partnerships/i,
+    ],
+  },
+  {
+    specialty: 'operations',
+    patterns: [
+      /operat/i, /supply chain/i, /logistics/i, /procurement/i, /chief of staff/i,
+      /\bhr\b/i, /human resource/i, /people ops/i, /talent ops/i,
+      /\bea\b.{0,10}recruit/i, /executive assistant/i,
+    ],
+  },
+  {
+    specialty: 'finance',
+    patterns: [
+      /finance/i, /accounting/i, /\bcpa\b/i, /\bcfo\b/i, /investment/i,
+      /private equity/i, /\bvc\b/i, /venture/i, /fintech/i, /banking/i,
+      /financial.*recruit/i,
     ],
   },
   {
     specialty: 'business',
+    // Reserved for executive/C-suite/leadership search specifically
     patterns: [
-      /business/i, /sales/i, /finance/i, /operation/i, /strategy/i,
-      /consult/i, /executive/i, /management/i, /\bhr\b/i, /human resource/i,
-      /product manager/i, /project manager/i, /scrum/i, /agile/i,
+      /executive search/i, /c-suite/i, /\bceo\b/i, /\bcoo\b/i,
+      /chief.*officer/i, /board.*recruit/i, /vp.*search/i,
+      /senior.*leader/i, /leadership.*search/i,
     ],
   },
   {
     specialty: 'healthcare',
-    patterns: [/medical/i, /health/i, /clinical/i, /nurs/i, /pharma/i, /biotech/i],
+    patterns: [
+      /medical/i, /health/i, /clinical/i, /nurs/i, /pharma/i, /biotech/i,
+      /physician/i, /dental/i, /hospital/i, /life science/i, /therapeutics/i,
+    ],
   },
   {
     specialty: 'legal',
-    patterns: [/legal/i, /attorney/i, /\blaw\b/i, /compliance/i],
+    patterns: [/legal/i, /attorney/i, /\blaw\b/i, /compliance/i, /paralegal/i],
   },
 ]
 
@@ -187,8 +234,12 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
   }
 
   const isGeneral = specialties.length === 1 && specialties[0] === 'general'
+  // Always include 'general' recruiters (broad startup/agency recruiters) alongside specialty matches
+  const specialtyFilter = isGeneral
+    ? { $exists: true }
+    : { $in: [...new Set([...specialties, 'general'])] }
   const filter = {
-    specialty: isGeneral ? { $exists: true } : { $in: specialties },
+    specialty: specialtyFilter,
     email: { $nin: [null, ''] },
     status: 'active',
   }
