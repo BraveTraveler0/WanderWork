@@ -25,8 +25,13 @@ const COMPANY_HINTS = [
   { specialty: 'finance', pattern: /capital|equity|ventures|fund|asset|wealth|financial/i },
 ]
 
-function classifySpecialty(jobTitle = '', company = '') {
-  const text = `${jobTitle} ${company}`
+function classifySpecialty(jobTitle = '', company = '', tags = '') {
+  // Tags like "Design", "FrontEnd", "AI" are the most reliable signal
+  if (/\bDesign\b/.test(tags)) return 'creative'
+  if (/\bFrontEnd\b/.test(tags)) return 'tech'
+  if (/\bAI\b/.test(tags) && !/\bDesign\b/.test(tags)) return 'data'
+
+  const text = `${jobTitle} ${company} ${tags}`
   const scores = SPECIALTY_RULES.map(({ specialty, patterns }) => ({
     specialty,
     score: patterns.reduce((n, p) => n + (p.test(text) ? 1 : 0), 0),
@@ -87,7 +92,7 @@ function transformRecord(record) {
     company:     f.company_name || null,
     location:    f.Location || null,
     source:      f.source || null,
-    specialty:   classifySpecialty(f.job_title, f.company_name),
+    specialty:   classifySpecialty(f.job_title, f.company_name, f.tags || ''),
     emailTemplate,
     status:      'active',
     score:       typeof f.score === 'number' ? f.score : 0,
