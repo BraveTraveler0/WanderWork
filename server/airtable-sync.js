@@ -18,9 +18,14 @@ const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
 const MONGO_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/aon';
 const crypto = require('crypto');
 
-if (!AIRTABLE_BASE_ID) {
-  throw new Error('AIRTABLE_BASE_ID environment variable is required');
-}
+const validateAirtableConfig = () => {
+  const missing = [];
+  if (!AIRTABLE_BASE_ID) missing.push('AIRTABLE_BASE_ID');
+  if (!AIRTABLE_TOKEN) missing.push('AIRTABLE_TOKEN');
+  if (missing.length) {
+    throw new Error(`${missing.join(', ')} environment variable${missing.length > 1 ? 's are' : ' is'} required for Airtable sync`);
+  }
+};
 
 const normalizeUrl = (raw) => {
   if (!raw) return '';
@@ -130,6 +135,7 @@ const deriveResumeFields = (resumeText) => {
 
 const updateAirtableCandidateFields = async (recordId, fields) => {
   const token = AIRTABLE_TOKEN;
+  if (!AIRTABLE_BASE_ID) return { updated: false, reason: 'missing_base_id' };
   if (!token) return { updated: false, reason: 'missing_token' };
   if (!recordId || !fields || !Object.keys(fields).length) return { updated: false, reason: 'no_fields' };
 
@@ -167,9 +173,7 @@ const TABLE_VIEWS = {
  * Fetch records from Airtable with pagination
  */
 async function fetchFromAirtable(tableName) {
-  if (!AIRTABLE_TOKEN) {
-    throw new Error('AIRTABLE_TOKEN not set in .env');
-  }
+  validateAirtableConfig();
 
   const records = [];
   let offset = null;
