@@ -9,6 +9,35 @@ const { syncRecruiters, upsertRecruiters } = require('../services/recruiterSyncS
 
 const router = express.Router();
 
+function getSyncSecret() {
+  return process.env.N8N_SYNC_SECRET || process.env.SYNC_ADMIN_KEY || process.env.IMPORT_ADMIN_KEY || '';
+}
+
+function requireSyncSecret(req, res, next) {
+  const configuredSecret = getSyncSecret();
+  const providedSecret = req.headers['x-n8n-secret'] || req.headers['x-admin-key'];
+
+  if (!configuredSecret) {
+    return res.status(503).json({
+      success: false,
+      error: 'Sync secret is not configured. Set N8N_SYNC_SECRET on the server.',
+    });
+  }
+
+  if (providedSecret !== configuredSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  next();
+}
+
+function recordsFromBody(body) {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.records)) return body.records;
+  if (body && typeof body === 'object') return [body];
+  return [];
+}
+
 /**
  * POST /api/sync/airtable
  * Manually trigger an Airtable sync
@@ -16,10 +45,16 @@ const router = express.Router();
 router.post('/airtable', async (req, res) => {
   try {
     console.log('📥 Manual Airtable sync requested...');
-    const [, recruiterResult] = await Promise.all([
-      triggerSync(),
-      syncRecruiters().catch((e) => ({ error: e.message })),
-    ]);
+    await triggerSync();
+
+    let recruiterResult = {
+      skipped: true,
+      reason: 'Airtable recruiter sync disabled. Use POST /sync/recruiters from n8n.',
+    };
+
+    if (process.env.ENABLE_AIRTABLE_RECRUITER_SYNC === 'true') {
+      recruiterResult = await syncRecruiters().catch((e) => ({ error: e.message }));
+    }
 
     res.json({
       success: true,
@@ -99,8 +134,23 @@ router.get('/airtable/test', async (req, res) => {
 
 
 
-router.post('/import-recruiters', async (req, res) => {
-  if (req.headers['x-admin-key'] !== 'ww-import-2026') return res.status(401).json({ error: 'Unauthorized' });
+router.post('/recruiters', requireSyncSecret, async (req, res) => {
+  const records = recordsFromBody(req.body);
+  if (!records.length) return res.status(400).json({ success: false, error: 'Recruiter record or records array required' });
+  try {
+    const result = await upsertRecruiters(records);
+    res.json({
+      success: true,
+      message: 'Recruiters upserted into MongoDB',
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/import-recruiters', requireSyncSecret, async (req, res) => {
   const { records } = req.body;
   if (!Array.isArray(records) || !records.length) return res.status(400).json({ error: 'records required' });
   try { res.json({ success: true, ...await upsertRecruiters(records) }); }

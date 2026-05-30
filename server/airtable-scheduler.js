@@ -33,7 +33,11 @@ async function runSync() {
     await dedupeJobs();
     await purgeOldJobs(60);
     await expireOldApplications(30);
-    await syncRecruiters().catch((e) => console.warn('[RecruiterSync] Failed (non-fatal):', e.message));
+    if (process.env.ENABLE_AIRTABLE_RECRUITER_SYNC === 'true') {
+      await syncRecruiters().catch((e) => console.warn('[RecruiterSync] Failed (non-fatal):', e.message));
+    } else {
+      console.log('[RecruiterSync] Airtable recruiter sync disabled; n8n should post recruiters to /sync/recruiters');
+    }
 
     lastSyncTime = new Date();
     lastSyncStatus = 'success';

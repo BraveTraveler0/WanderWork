@@ -41,7 +41,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 
 // UTF-8 Header Middleware
 app.use((req, res, next) => {

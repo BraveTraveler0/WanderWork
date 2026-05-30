@@ -1,8 +1,10 @@
 /**
- * Syncs recruiter data from Airtable into MongoDB.
- * Designed to run inside an existing Mongoose connection.
+ * Syncs recruiter data into MongoDB.
+ * Airtable remains supported, but n8n can post normalized recruiter leads here directly.
  */
 const Recruiter = require('../models/JobSeeker/jobSeeker.Recruiter')
+
+const VALID_SPECIALTIES = new Set(['tech', 'creative', 'product', 'data', 'sales', 'operations', 'finance', 'business', 'healthcare', 'legal', 'general'])
 
 const SPECIALTY_RULES = [
   { specialty: 'tech', patterns: [/software/i, /engineer/i, /developer/i, /\bIT\b/, /devops/i, /cloud/i, /cybersecurity/i, /fullstack/i, /full.stack/i, /front.end/i, /back.end/i, /platform/i, /infrastructure/i, /\bsre\b/i, /machine learning/i, /\bml\b/i, /semiconductor/i, /quantum/i, /robotics/i, /blockchain/i, /web3/i, /embedded/i, /firmware/i] },
@@ -25,6 +27,65 @@ const COMPANY_HINTS = [
   { specialty: 'finance', pattern: /capital|equity|ventures|fund|asset|wealth|financial/i },
 ]
 
+function safeStr(value) {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const text = safeStr(value)
+    if (text) return text
+  }
+  return ''
+}
+
+function cleanEmail(email) {
+  const value = safeStr(email).toLowerCase()
+  if (!value) return ''
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : ''
+}
+
+function cleanUrl(url) {
+  let value = safeStr(url)
+  if (!value) return ''
+  if (!/^https?:\/\//i.test(value)) value = `https://${value}`
+  return value.replace(/\/+$/, '')
+}
+
+function normalizeTags(tags) {
+  if (Array.isArray(tags)) {
+    return [...new Set(tags.map(safeStr).filter(Boolean))]
+  }
+  return [...new Set(
+    safeStr(tags)
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  )]
+}
+
+function parseDate(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function parseScore(value) {
+  const score = Number(value)
+  return Number.isFinite(score) ? score : 0
+}
+
+function compactDoc(doc) {
+  return Object.fromEntries(
+    Object.entries(doc).filter(([, value]) => {
+      if (value === undefined || value === null || value === '') return false
+      if (Array.isArray(value) && value.length === 0) return false
+      return true
+    })
+  )
+}
+
 function classifySpecialty(jobTitle = '', company = '', tags = '') {
   // Tags like "Design", "FrontEnd", "AI" are the most reliable signal
   if (/\bDesign\b/.test(tags)) return 'creative'
@@ -43,6 +104,75 @@ function classifySpecialty(jobTitle = '', company = '', tags = '') {
     if (pattern.test(company)) return specialty
   }
   return scores[0].specialty
+}
+
+function normalizeRecruiterPayload(record = {}, options = {}) {
+  const tags = normalizeTags(firstNonEmpty(record.tags, record.Tags))
+  const firstName = firstNonEmpty(record.firstName, record.first_name, record.First_Name)
+  const lastName = firstNonEmpty(record.lastName, record.last_name, record.Last_Name)
+  const name = firstNonEmpty(
+    record.name,
+    record.recruiter_name,
+    record.fullName,
+    record.full_name,
+    [firstName, lastName].filter(Boolean).join(' '),
+    'Unknown'
+  )
+  const email = cleanEmail(firstNonEmpty(record.email, record.contactable_email, record.work_email))
+  const personalEmail = cleanEmail(firstNonEmpty(record.personalEmail, record.personal_email, record.personalEmailAddress))
+  const linkedinUrl = cleanUrl(firstNonEmpty(record.linkedinUrl, record.linkedin_url, record.linkedin, record.profile_url))
+  const jobTitle = firstNonEmpty(record.jobTitle, record.job_title, record.position, record.headline)
+  const company = firstNonEmpty(record.company, record.company_name, record.companyName)
+  const city = firstNonEmpty(record.city, record.City)
+  const state = firstNonEmpty(record.state, record.State)
+  const country = firstNonEmpty(record.country, record.Country).toUpperCase()
+  const location = firstNonEmpty(record.location, record.Location, [city, state, country].filter(Boolean).join(', '))
+  const explicitSpecialty = safeStr(record.specialty).toLowerCase()
+
+  return compactDoc({
+    airtableId: firstNonEmpty(record.airtableId, record.airtable_id),
+    leadKey: firstNonEmpty(record.leadKey, record.lead_key, record.Lead_Key),
+    firstName,
+    lastName,
+    name,
+    email: email || personalEmail,
+    personalEmail,
+    mobileNumber: firstNonEmpty(record.mobileNumber, record.mobile_number, record.phone),
+    linkedinUrl,
+    publicIdentifier: firstNonEmpty(record.publicIdentifier, record.public_identifier),
+    jobTitle,
+    company,
+    companyWebsite: cleanUrl(firstNonEmpty(record.companyWebsite, record.company_website)),
+    companyDomain: firstNonEmpty(record.companyDomain, record.company_domain),
+    companyLinkedin: cleanUrl(firstNonEmpty(record.companyLinkedin, record.company_linkedin)),
+    location,
+    city,
+    state,
+    country,
+    source: firstNonEmpty(record.source, options.source, 'n8n'),
+    sourceRunId: firstNonEmpty(record.run_id, record.sourceRunId),
+    headline: firstNonEmpty(record.headline, record['Attachment Summary']),
+    industry: firstNonEmpty(record.industry),
+    tags,
+    contactMethod: firstNonEmpty(record.contactMethod, record.contact_method),
+    specialty: VALID_SPECIALTIES.has(explicitSpecialty) ? explicitSpecialty : classifySpecialty(jobTitle, company, tags.join(',')),
+    emailTemplate: firstNonEmpty(record.emailTemplate, record.email_template, record['Attachment Summary']),
+    status: 'active',
+    score: parseScore(record.score),
+    lastSeenAt: parseDate(firstNonEmpty(record.lastSeenAt, record.last_seen_at)),
+  })
+}
+
+function buildRecruiterLookup(doc) {
+  const candidates = []
+  if (doc.airtableId) candidates.push({ airtableId: doc.airtableId })
+  if (doc.leadKey) candidates.push({ leadKey: doc.leadKey })
+  if (doc.email) candidates.push({ email: doc.email })
+  if (doc.linkedinUrl) candidates.push({ linkedinUrl: doc.linkedinUrl })
+  if (doc.name && doc.company) candidates.push({ name: doc.name, company: doc.company })
+
+  if (!candidates.length) return null
+  return candidates.length === 1 ? candidates[0] : { $or: candidates }
 }
 
 async function fetchAllRecruiters() {
@@ -80,7 +210,7 @@ function transformRecord(record) {
     if (s?.state === 'generated' && s?.value) return s.value
     return null
   })()
-  return {
+  return normalizeRecruiterPayload({
     airtableId:  record.id,
     leadKey:     f.Lead_Key || null,
     firstName:   f.First_Name || null,
@@ -94,10 +224,9 @@ function transformRecord(record) {
     source:      f.source || null,
     specialty:   classifySpecialty(f.job_title, f.company_name, f.tags || ''),
     emailTemplate,
-    status:      'active',
     score:       typeof f.score === 'number' ? f.score : 0,
     lastSeenAt:  f.last_seen_at ? new Date(f.last_seen_at) : null,
-  }
+  }, { source: 'airtable' })
 }
 
 async function syncRecruiters() {
@@ -126,17 +255,22 @@ async function syncRecruiters() {
 
 async function upsertRecruiters(records) {
   let upserted = 0, skipped = 0
-  for (const doc of records) {
-    if (!doc.airtableId) { skipped++; continue }
+  for (const record of records) {
+    const doc = normalizeRecruiterPayload(record)
+    const lookup = buildRecruiterLookup(doc)
+    if (!lookup) {
+      skipped++
+      continue
+    }
     try {
       await Recruiter.findOneAndUpdate(
-        { airtableId: doc.airtableId },
+        lookup,
         { $set: doc },
-        { upsert: true, new: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       )
       upserted++
     } catch (e) {
-      console.warn(`[upsertRecruiters] Skipped ${doc.airtableId}: ${e.message}`)
+      console.warn(`[upsertRecruiters] Skipped ${doc.leadKey || doc.email || doc.linkedinUrl || doc.name}: ${e.message}`)
       skipped++
     }
   }
@@ -144,4 +278,4 @@ async function upsertRecruiters(records) {
   return { upserted, skipped, total: records.length }
 }
 
-module.exports = { syncRecruiters, upsertRecruiters }
+module.exports = { syncRecruiters, upsertRecruiters, normalizeRecruiterPayload, classifySpecialty }
