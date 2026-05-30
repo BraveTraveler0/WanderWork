@@ -234,30 +234,40 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
   }
 
   const isGeneral = specialties.length === 1 && specialties[0] === 'general'
-  // Always include 'general' recruiters (broad startup/agency recruiters) alongside specialty matches
-  const specialtyFilter = isGeneral
-    ? { $exists: true }
-    : { $in: [...new Set([...specialties, 'general'])] }
-  const filter = {
-    specialty: specialtyFilter,
-    email: { $nin: [null, ''] },
-    status: 'active',
-  }
+  const lim = Number(limit)
+  const baseFilter = { email: { $nin: [null, ''] }, status: 'active' }
 
-  const raw = await Recruiter.find(filter)
-    .sort({ score: -1 })
-    .limit(Number(limit) * 3) // fetch extra to allow for dedup
-    .lean()
+  // Step 1: fetch specialty-matched recruiters first
+  const specialtyResults = isGeneral ? [] : await Recruiter.find({
+    ...baseFilter,
+    specialty: { $in: specialties },
+  }).sort({ score: -1 }).limit(lim * 2).lean()
 
-  // Deduplicate by email so the same person never appears twice
+  // Step 2: fill remaining slots with 'general' recruiters
   const seen = new Set()
   const recruiters = []
-  for (const r of raw) {
+
+  for (const r of specialtyResults) {
     const key = r.email?.toLowerCase().trim()
     if (key && seen.has(key)) continue
     if (key) seen.add(key)
     recruiters.push(r)
-    if (recruiters.length >= Number(limit)) break
+    if (recruiters.length >= lim) break
+  }
+
+  if (recruiters.length < lim) {
+    const generalResults = await Recruiter.find({
+      ...baseFilter,
+      specialty: 'general',
+    }).sort({ score: -1 }).limit((lim - recruiters.length) * 2).lean()
+
+    for (const r of generalResults) {
+      const key = r.email?.toLowerCase().trim()
+      if (key && seen.has(key)) continue
+      if (key) seen.add(key)
+      recruiters.push(r)
+      if (recruiters.length >= lim) break
+    }
   }
 
   res.json({ specialties, recruiters })
