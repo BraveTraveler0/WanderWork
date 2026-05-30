@@ -9,7 +9,7 @@ export interface User {
 const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
   (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
-  "http://localhost:8000";
+  "https://wanderwork-backend-server.onrender.com";
 
 function getAuthHeader(): Record<string, string> {
   try {

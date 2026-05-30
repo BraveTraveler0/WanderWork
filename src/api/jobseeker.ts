@@ -105,7 +105,7 @@ export interface JobSeekerData {
 const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
   (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
-  'http://localhost:8000';
+  'https://wanderwork-backend-server.onrender.com';
 
 const TIMEOUT_MS = 10000;
 
