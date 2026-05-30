@@ -3,6 +3,8 @@
  * Airtable remains supported, but n8n can post normalized recruiter leads here directly.
  */
 const Recruiter = require('../models/JobSeeker/jobSeeker.Recruiter')
+const RecruiterContact = require('../models/JobSeeker/jobSeeker.RecruiterContact')
+const RecruiterJobPairing = require('../models/JobSeeker/jobSeeker.RecruiterJobPairing')
 
 const VALID_SPECIALTIES = new Set(['tech', 'creative', 'product', 'data', 'sales', 'operations', 'finance', 'business', 'healthcare', 'legal', 'general'])
 
@@ -87,21 +89,42 @@ function compactDoc(doc) {
 }
 
 function classifySpecialty(jobTitle = '', company = '', tags = '') {
-  // Tags like "Design", "FrontEnd", "AI" are the most reliable signal
-  if (/\bDesign\b/.test(tags)) return 'creative'
-  if (/\bFrontEnd\b/.test(tags)) return 'tech'
-  if (/\bAI\b/.test(tags) && !/\bDesign\b/.test(tags)) return 'data'
+  const title = safeStr(jobTitle)
+  const companyText = safeStr(company)
+  const tagText = safeStr(tags)
+  const titleLower = title.toLowerCase()
 
-  const text = `${jobTitle} ${company} ${tags}`
-  const scores = SPECIALTY_RULES.map(({ specialty, patterns }) => ({
+  // Explicit recruiter title signals should beat broad n8n niche tags.
+  if (/\b(data|analytics|machine learning|ml|ai|genai|llm)\b/i.test(title)) return 'data'
+  if (/\b(technical|engineering|engineer|software|developer|it|cloud|cyber|infrastructure|devops|sre)\b/i.test(title)) return 'tech'
+  if (/\b(product recruiter|product talent|product acquisition|product hiring)\b/i.test(titleLower)) return 'product'
+  if (/\b(sales|gtm|revenue|account executive|customer success|partnerships)\b/i.test(title)) return 'sales'
+  if (/\b(finance|accounting|cpa|cfo|investment|banking|private equity|venture capital)\b/i.test(title)) return 'finance'
+  if (/\b(operations|supply chain|logistics|procurement|people ops|talent ops|hr)\b/i.test(title)) return 'operations'
+  if (/\b(healthcare|medical|clinical|nursing|pharma|biotech|life science)\b/i.test(title)) return 'healthcare'
+  if (/\b(legal|attorney|counsel|compliance|paralegal)\b/i.test(title)) return 'legal'
+
+  const text = `${title} ${companyText}`
+  const scoreMap = new Map(SPECIALTY_RULES.map(({ specialty }) => [specialty, 0]))
+  for (const { specialty, patterns } of SPECIALTY_RULES) {
+    scoreMap.set(specialty, patterns.reduce((n, p) => n + (p.test(text) ? 1 : 0), scoreMap.get(specialty) || 0))
+  }
+
+  // n8n tags are helpful, but broad target-niche tags should not override
+  // an explicit title/company signal.
+  if (/\bDesign\b/.test(tagText)) scoreMap.set('creative', (scoreMap.get('creative') || 0) + 2)
+  if (/\bFrontEnd\b/.test(tagText)) scoreMap.set('tech', (scoreMap.get('tech') || 0) + 2)
+  if (/\bAI\b/.test(tagText)) scoreMap.set('data', (scoreMap.get('data') || 0) + 2)
+
+  const scores = [...scoreMap.entries()].map(([specialty, score]) => ({
     specialty,
-    score: patterns.reduce((n, p) => n + (p.test(text) ? 1 : 0), 0),
+    score,
   })).filter((s) => s.score > 0).sort((a, b) => b.score - a.score)
 
   if (!scores.length) return 'general'
   if (scores.length === 1 || scores[0].score > scores[1].score) return scores[0].specialty
   for (const { specialty, pattern } of COMPANY_HINTS) {
-    if (pattern.test(company)) return specialty
+    if (pattern.test(companyText)) return specialty
   }
   return scores[0].specialty
 }
@@ -123,6 +146,7 @@ function normalizeRecruiterPayload(record = {}, options = {}) {
   const linkedinUrl = cleanUrl(firstNonEmpty(record.linkedinUrl, record.linkedin_url, record.linkedin, record.profile_url))
   const jobTitle = firstNonEmpty(record.jobTitle, record.job_title, record.position, record.headline)
   const company = firstNonEmpty(record.company, record.company_name, record.companyName)
+  const headline = firstNonEmpty(record.headline, record['Attachment Summary'])
   const city = firstNonEmpty(record.city, record.City)
   const state = firstNonEmpty(record.state, record.State)
   const country = firstNonEmpty(record.country, record.Country).toUpperCase()
@@ -151,11 +175,11 @@ function normalizeRecruiterPayload(record = {}, options = {}) {
     country,
     source: firstNonEmpty(record.source, options.source, 'n8n'),
     sourceRunId: firstNonEmpty(record.run_id, record.sourceRunId),
-    headline: firstNonEmpty(record.headline, record['Attachment Summary']),
+    headline,
     industry: firstNonEmpty(record.industry),
     tags,
     contactMethod: firstNonEmpty(record.contactMethod, record.contact_method),
-    specialty: VALID_SPECIALTIES.has(explicitSpecialty) ? explicitSpecialty : classifySpecialty(jobTitle, company, tags.join(',')),
+    specialty: VALID_SPECIALTIES.has(explicitSpecialty) ? explicitSpecialty : classifySpecialty([jobTitle, headline].filter(Boolean).join(' '), company, tags.join(',')),
     emailTemplate: firstNonEmpty(record.emailTemplate, record.email_template, record['Attachment Summary']),
     status: 'active',
     score: parseScore(record.score),
@@ -173,6 +197,114 @@ function buildRecruiterLookup(doc) {
 
   if (!candidates.length) return null
   return candidates.length === 1 ? candidates[0] : { $or: candidates }
+}
+
+function buildDuplicateLookup(doc) {
+  const candidates = []
+  if (doc.leadKey) candidates.push({ leadKey: doc.leadKey })
+  if (doc.email) candidates.push({ email: doc.email })
+  if (doc.linkedinUrl) candidates.push({ linkedinUrl: doc.linkedinUrl })
+  if (!candidates.length) return null
+  return candidates.length === 1 ? candidates[0] : { $or: candidates }
+}
+
+function mergeRecruiterData(primary, duplicate) {
+  const merged = { ...primary }
+  const stringFields = [
+    'airtableId', 'leadKey', 'firstName', 'lastName', 'name', 'email', 'personalEmail',
+    'mobileNumber', 'linkedinUrl', 'publicIdentifier', 'jobTitle', 'company',
+    'companyWebsite', 'companyDomain', 'companyLinkedin', 'location', 'city', 'state',
+    'country', 'source', 'sourceRunId', 'headline', 'industry', 'contactMethod',
+    'emailTemplate', 'status',
+  ]
+
+  for (const field of stringFields) {
+    if (!safeStr(merged[field]) && safeStr(duplicate[field])) merged[field] = duplicate[field]
+  }
+
+  const primaryTags = Array.isArray(primary.tags) ? primary.tags : []
+  const duplicateTags = Array.isArray(duplicate.tags) ? duplicate.tags : []
+  merged.tags = [...new Set([...primaryTags, ...duplicateTags].map(safeStr).filter(Boolean))]
+  merged.score = Math.max(Number(primary.score) || 0, Number(duplicate.score) || 0)
+
+  if ((!merged.specialty || merged.specialty === 'general') && duplicate.specialty && duplicate.specialty !== 'general') {
+    merged.specialty = duplicate.specialty
+  }
+
+  const primarySeen = primary.lastSeenAt ? new Date(primary.lastSeenAt).getTime() : 0
+  const duplicateSeen = duplicate.lastSeenAt ? new Date(duplicate.lastSeenAt).getTime() : 0
+  if (duplicateSeen > primarySeen) merged.lastSeenAt = duplicate.lastSeenAt
+
+  return compactDoc(merged)
+}
+
+async function mergeDuplicateRecruitersForDoc(doc) {
+  const lookup = buildDuplicateLookup(doc)
+  if (!lookup) return 0
+
+  const matches = await Recruiter.find(lookup).lean()
+  if (matches.length <= 1) return 0
+
+  const sorted = matches.sort((a, b) => {
+    const sourceScore = Number(Boolean(b.sourceRunId)) - Number(Boolean(a.sourceRunId))
+    if (sourceScore) return sourceScore
+    const updated = new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+    if (updated) return updated
+    return (Number(b.score) || 0) - (Number(a.score) || 0)
+  })
+
+  let primary = sorted[0]
+  const duplicates = sorted.slice(1)
+  for (const duplicate of duplicates) {
+    primary = mergeRecruiterData(primary, duplicate)
+  }
+
+  const duplicateIds = duplicates.map((duplicate) => duplicate._id)
+  const { _id, __v, createdAt, updatedAt, ...updateDoc } = primary
+  await Recruiter.updateOne({ _id: primary._id }, { $set: updateDoc })
+  await Promise.all([
+    RecruiterContact.updateMany({ recruiterId: { $in: duplicateIds } }, { $set: { recruiterId: primary._id } }),
+    RecruiterJobPairing.updateMany({ recruiterId: { $in: duplicateIds } }, { $set: { recruiterId: primary._id } }),
+  ])
+  await Recruiter.deleteMany({ _id: { $in: duplicateIds } })
+
+  return duplicateIds.length
+}
+
+async function dedupeRecruiters() {
+  const recruiters = await Recruiter.find({}).lean()
+  let groupsMerged = 0
+  let duplicatesRemoved = 0
+
+  for (const recruiter of recruiters) {
+    const removed = await mergeDuplicateRecruitersForDoc(recruiter)
+    if (removed > 0) {
+      groupsMerged++
+      duplicatesRemoved += removed
+    }
+  }
+
+  return { groupsMerged, duplicatesRemoved, totalChecked: recruiters.length }
+}
+
+async function reclassifyRecruiterSpecialties() {
+  const recruiters = await Recruiter.find({}).select('_id jobTitle company headline tags specialty').lean()
+  let updated = 0
+
+  for (const recruiter of recruiters) {
+    const tags = Array.isArray(recruiter.tags) ? recruiter.tags.join(',') : ''
+    const nextSpecialty = classifySpecialty(
+      [recruiter.jobTitle, recruiter.headline].filter(Boolean).join(' '),
+      recruiter.company,
+      tags
+    )
+    if (nextSpecialty && nextSpecialty !== recruiter.specialty) {
+      await Recruiter.updateOne({ _id: recruiter._id }, { $set: { specialty: nextSpecialty } })
+      updated++
+    }
+  }
+
+  return { updated, totalChecked: recruiters.length }
 }
 
 async function fetchAllRecruiters() {
@@ -254,7 +386,7 @@ async function syncRecruiters() {
 }
 
 async function upsertRecruiters(records) {
-  let upserted = 0, skipped = 0
+  let upserted = 0, skipped = 0, duplicatesRemoved = 0
   for (const record of records) {
     const doc = normalizeRecruiterPayload(record)
     const lookup = buildRecruiterLookup(doc)
@@ -263,11 +395,12 @@ async function upsertRecruiters(records) {
       continue
     }
     try {
-      await Recruiter.findOneAndUpdate(
+      const saved = await Recruiter.findOneAndUpdate(
         lookup,
         { $set: doc },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       )
+      duplicatesRemoved += await mergeDuplicateRecruitersForDoc(saved.toObject ? saved.toObject() : saved)
       upserted++
     } catch (e) {
       console.warn(`[upsertRecruiters] Skipped ${doc.leadKey || doc.email || doc.linkedinUrl || doc.name}: ${e.message}`)
@@ -275,7 +408,14 @@ async function upsertRecruiters(records) {
     }
   }
   console.log(`[upsertRecruiters] Done — upserted: ${upserted}, skipped: ${skipped}`)
-  return { upserted, skipped, total: records.length }
+  return { upserted, skipped, duplicatesRemoved, total: records.length }
 }
 
-module.exports = { syncRecruiters, upsertRecruiters, normalizeRecruiterPayload, classifySpecialty }
+module.exports = {
+  syncRecruiters,
+  upsertRecruiters,
+  dedupeRecruiters,
+  reclassifyRecruiterSpecialties,
+  normalizeRecruiterPayload,
+  classifySpecialty,
+}

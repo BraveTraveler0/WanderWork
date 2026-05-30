@@ -5,7 +5,12 @@
 
 const express = require('express');
 const { triggerSync, getSyncStatus } = require('../airtable-scheduler');
-const { syncRecruiters, upsertRecruiters } = require('../services/recruiterSyncService');
+const {
+  syncRecruiters,
+  upsertRecruiters,
+  dedupeRecruiters,
+  reclassifyRecruiterSpecialties,
+} = require('../services/recruiterSyncService');
 
 const router = express.Router();
 
@@ -143,6 +148,22 @@ router.post('/recruiters', requireSyncSecret, async (req, res) => {
       success: true,
       message: 'Recruiters upserted into MongoDB',
       ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/recruiters/maintenance', requireSyncSecret, async (req, res) => {
+  try {
+    const dedupe = await dedupeRecruiters();
+    const reclassify = await reclassifyRecruiterSpecialties();
+    res.json({
+      success: true,
+      message: 'Recruiter maintenance completed',
+      dedupe,
+      reclassify,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
