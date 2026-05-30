@@ -244,10 +244,21 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
     status: 'active',
   }
 
-  const recruiters = await Recruiter.find(filter)
+  const raw = await Recruiter.find(filter)
     .sort({ score: -1 })
-    .limit(Number(limit))
+    .limit(Number(limit) * 3) // fetch extra to allow for dedup
     .lean()
+
+  // Deduplicate by email so the same person never appears twice
+  const seen = new Set()
+  const recruiters = []
+  for (const r of raw) {
+    const key = r.email?.toLowerCase().trim()
+    if (key && seen.has(key)) continue
+    if (key) seen.add(key)
+    recruiters.push(r)
+    if (recruiters.length >= Number(limit)) break
+  }
 
   res.json({ specialties, recruiters })
 })

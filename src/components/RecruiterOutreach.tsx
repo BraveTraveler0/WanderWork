@@ -154,7 +154,15 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
     ]).then(([{ specialties, recruiters }, contacts]) => {
       if (cancelled) return
       setSpecialties(specialties ?? [])
-      setRecruiters(recruiters)
+      // Deduplicate by email client-side as a safety net
+      const seenEmails = new Set<string>()
+      const unique = (recruiters as RecruiterRecord[]).filter(r => {
+        const key = r.email?.toLowerCase().trim()
+        if (!key || seenEmails.has(key)) return false
+        seenEmails.add(key)
+        return true
+      })
+      setRecruiters(unique)
 
       // Build sent list from all contact history (email_sent only, no time cutoff)
       const past: SentEntry[] = (contacts as any[])
