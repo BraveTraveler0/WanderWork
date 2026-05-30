@@ -235,40 +235,31 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
 
   const isGeneral = specialties.length === 1 && specialties[0] === 'general'
   const lim = Number(limit)
+  const specialtySlots = isGeneral ? 0 : Math.round(lim * 0.7)
+  const generalSlots   = lim - specialtySlots
   const baseFilter = { email: { $nin: [null, ''] }, status: 'active' }
 
-  // Step 1: fetch specialty-matched recruiters first
-  const specialtyResults = isGeneral ? [] : await Recruiter.find({
-    ...baseFilter,
-    specialty: { $in: specialties },
-  }).sort({ score: -1 }).limit(lim * 2).lean()
+  const [specialtyRaw, generalRaw] = await Promise.all([
+    specialtySlots > 0
+      ? Recruiter.find({ ...baseFilter, specialty: { $in: specialties } }).sort({ score: -1 }).limit(specialtySlots * 2).lean()
+      : Promise.resolve([]),
+    Recruiter.find({ ...baseFilter, specialty: 'general' }).sort({ score: -1 }).limit(generalSlots * 2).lean(),
+  ])
 
-  // Step 2: fill remaining slots with 'general' recruiters
   const seen = new Set()
-  const recruiters = []
-
-  for (const r of specialtyResults) {
-    const key = r.email?.toLowerCase().trim()
-    if (key && seen.has(key)) continue
-    if (key) seen.add(key)
-    recruiters.push(r)
-    if (recruiters.length >= lim) break
-  }
-
-  if (recruiters.length < lim) {
-    const generalResults = await Recruiter.find({
-      ...baseFilter,
-      specialty: 'general',
-    }).sort({ score: -1 }).limit((lim - recruiters.length) * 2).lean()
-
-    for (const r of generalResults) {
+  const pick = (pool, slots) => {
+    const out = []
+    for (const r of pool) {
       const key = r.email?.toLowerCase().trim()
       if (key && seen.has(key)) continue
       if (key) seen.add(key)
-      recruiters.push(r)
-      if (recruiters.length >= lim) break
+      out.push(r)
+      if (out.length >= slots) break
     }
+    return out
   }
+
+  const recruiters = [...pick(specialtyRaw, specialtySlots), ...pick(generalRaw, generalSlots)]
 
   res.json({ specialties, recruiters })
 })
