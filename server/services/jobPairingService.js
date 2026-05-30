@@ -12,8 +12,10 @@ const SENIORITY_TIERS = [
   { level: 4, keywords: ['director', 'head of', 'principal'] },
   { level: 3, keywords: ['senior', 'sr.', 'sr ', 'lead ', 'staff ', 'manager', 'architect'] },
   { level: 2, keywords: ['mid ', 'mid-level', 'associate', 'ii ', 'iii '] },
-  { level: 1, keywords: ['junior', 'jr.', 'jr ', 'entry level', 'entry-level', 'intern', 'apprentice', 'trainee', 'graduate'] },
+  { level: 1, keywords: ['junior', 'jr.', 'jr ', 'entry level', 'entry-level', 'intern', 'internship', 'apprentice', 'apprenticeship', 'trainee', 'graduate', 'new grad', 'new graduate', 'early career', 'campus', 'student', 'co-op', 'fellowship'] },
 ]
+
+const LOW_LEVEL_JOB_PATTERN = /\b(junior|jr|entry level|intern|internship|apprentice|apprenticeship|trainee|new grad|new graduate|early career|campus|student|co op|fellowship)\b/
 
 function detectSeniorityLevel(text) {
   const t = normalizeText(text)
@@ -21,6 +23,24 @@ function detectSeniorityLevel(text) {
     if (tier.keywords.some(k => t.includes(k))) return tier.level
   }
   return 2 // default to mid if undetectable
+}
+
+function isLowLevelJob(job) {
+  const text = normalizeText([
+    job.title,
+    job.jobType,
+    job.shortDescription,
+    job.summary,
+    toArray(job.tags).join(' '),
+  ].filter(Boolean).join(' '))
+  return LOW_LEVEL_JOB_PATTERN.test(text)
+}
+
+function isSeniorityCompatible(candSeniority, job) {
+  // Senior+ candidates should not be matched to entry, intern, apprentice,
+  // trainee, or new-grad roles. Those jobs are for lower-experience users.
+  if (candSeniority >= 3 && isLowLevelJob(job)) return false
+  return true
 }
 
 function candidateSeniority(candidate) {
@@ -149,6 +169,15 @@ function scoreJob(candidate, job, keywords, candSeniority) {
   const matchedSkills = []
   let score = 0
 
+  if (!isSeniorityCompatible(candSeniority, job)) {
+    return {
+      score: 0,
+      matchedSkills: [],
+      excluded: true,
+      reason: 'Skipped because this role is below the candidate seniority level',
+    }
+  }
+
   // Seniority match/mismatch
   const jobSeniority = detectSeniorityLevel(title)
   const seniorityDiff = candSeniority - jobSeniority
@@ -239,9 +268,15 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
   const candSeniority = candidateSeniority(candidate)
   const scored = jobs
     .map((job) => ({ job, ...scoreJob(candidate, job, keywords, candSeniority) }))
-    .filter((item) => item.score >= minScore)
+    .filter((item) => !item.excluded && item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
+
+  const scoredJobIds = scored.map((item) => item.job._id)
+  await CandidateJobPairings.deleteMany({
+    candidateId: candidate._id,
+    ...(scoredJobIds.length ? { jobId: { $nin: scoredJobIds } } : {}),
+  })
 
   if (!scored.length) {
     return { candidateId, totalJobs: jobs.length, paired: 0, pairings: [] }
@@ -261,7 +296,7 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
             reason: item.reason,
             pairedAt,
             source: 'mongo',
-            algorithmVersion: 'deterministic-v1',
+            algorithmVersion: 'deterministic-v2',
           },
         },
         upsert: true,
@@ -304,4 +339,7 @@ module.exports = {
   pairCandidateJobs,
   pairAllCandidates,
   scoreJob,
+  candidateSeniority,
+  isLowLevelJob,
+  isSeniorityCompatible,
 }

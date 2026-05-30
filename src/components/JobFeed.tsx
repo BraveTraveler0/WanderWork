@@ -172,6 +172,44 @@ function getJobTime(job: any): number {
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
+const LOW_LEVEL_JOB_RE = /\b(junior|jr|entry level|intern|internship|apprentice|apprenticeship|trainee|new grad|new graduate|early career|campus|student|co op|fellowship)\b/
+
+const SENIORITY_TIERS = [
+  { level: 5, re: /\b(vp|vice president|chief|cto|cpo|c level|partner|managing director)\b/ },
+  { level: 4, re: /\b(director|head of|principal)\b/ },
+  { level: 3, re: /\b(senior|sr|lead|staff|manager|architect)\b/ },
+  { level: 2, re: /\b(mid|mid level|associate|ii|iii)\b/ },
+  { level: 1, re: LOW_LEVEL_JOB_RE },
+]
+
+function seniorityLevelFromText(value: unknown): number {
+  const text = _normSearch(Array.isArray(value) ? value.join(' ') : String(value || ''))
+  for (const tier of SENIORITY_TIERS) {
+    if (tier.re.test(text)) return tier.level
+  }
+  return 2
+}
+
+function candidateSeniorityLevel(candidate: any): number {
+  const explicit = seniorityLevelFromText(candidate?.seniority)
+  if (explicit !== 2) return explicit
+  return seniorityLevelFromText([
+    candidate?.targetRoles,
+    candidate?.work_experience,
+    candidate?.summary,
+  ].filter(Boolean).join(' '))
+}
+
+function isLowLevelJobForSeniorFilter(job: any): boolean {
+  const text = _normSearch([
+    job?.title,
+    job?.jobType,
+    job?.description,
+    Array.isArray(job?.skills) ? job.skills.join(' ') : job?.skills,
+  ].filter(Boolean).join(' '))
+  return LOW_LEVEL_JOB_RE.test(text)
+}
+
 const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -297,6 +335,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
   const candidate = data?.Candidates?.[0]
   const candidateId = candidate?._id
+  const candidateLevel = useMemo(() => candidateSeniorityLevel(candidate), [candidate])
   const candidateKeywords = useMemo(() => {
     const values: string[] = []
     const addValue = (value: any) => {
@@ -410,6 +449,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const matchedSet = useMemo(() => {
     const set = new Set<number>()
     for (const job of visibleJobsList) {
+      if (candidateLevel >= 3 && isLowLevelJobForSeniorFilter(job)) continue
       if (candidateKeywords.length > 0) {
         const entry = jobSearchTexts.get(job.id)
         if (!entry) continue
@@ -429,7 +469,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       }
     }
     return set
-  }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts])
+  }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts, candidateLevel])
 
   const visibleJobs = useMemo(() => visibleJobsList
     .filter((job: any) => !discardedJobs.has(job.id))
