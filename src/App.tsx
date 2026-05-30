@@ -888,8 +888,6 @@ function App() {
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
     { label: 'Report a Bug',    action: () => { setCurrentPage('reportbug'); setShowMenu(false) } },
-    { label: 'Privacy Policy',  action: () => { setCurrentPage('privacy'); setShowMenu(false) } },
-    { label: 'Terms of Service',action: () => { setCurrentPage('terms'); setShowMenu(false) } },
     { label: 'Sign Out',        action: () => {
       clearLocalAuth()
       setShowLogin(false)
