@@ -4,6 +4,7 @@ import { ArrowLeft, Briefcase, Eye, EyeOff, Link2, Lock, Mail, MapPin, Phone, Up
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { AnimatePresence, motion } from 'motion/react'
 import { uploadCandidateResume } from '../api/jobseeker'
+import TermsOfServicePage from './TermsOfServicePage'
 
 interface SignupPageProps {
   onSignup: (user: any, token: string) => void
@@ -33,7 +34,17 @@ const SIGNUP_STEPS = [
   },
 ]
 
-function GoogleSignupButton({ onSignup, onError }: { onSignup: (user: any, token: string) => void; onError: (message: string) => void }) {
+function GoogleSignupButton({
+  onSignup,
+  onError,
+  termsAccepted,
+  onRequireTerms,
+}: {
+  onSignup: (user: any, token: string) => void
+  onError: (message: string) => void
+  termsAccepted: boolean
+  onRequireTerms: () => void
+}) {
   const [googleLoading, setGoogleLoading] = useState(false)
 
   const googleSignup = useGoogleLogin({
@@ -63,7 +74,13 @@ function GoogleSignupButton({ onSignup, onError }: { onSignup: (user: any, token
   return (
     <button
       type="button"
-      onClick={() => googleSignup()}
+      onClick={() => {
+        if (!termsAccepted) {
+          onRequireTerms()
+          return
+        }
+        googleSignup()
+      }}
       disabled={googleLoading}
       className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
     >
@@ -83,8 +100,28 @@ function GoogleSignupButton({ onSignup, onError }: { onSignup: (user: any, token
   )
 }
 
-function SocialSignupBox({ onSignup, onError }: { onSignup: (user: any, token: string) => void; onError: (message: string) => void }) {
+function SocialSignupBox({
+  onSignup,
+  onError,
+  termsAccepted,
+  onTermsAcceptedChange,
+  onShowTerms,
+  termsError,
+  onRequireTerms,
+}: {
+  onSignup: (user: any, token: string) => void
+  onError: (message: string) => void
+  termsAccepted: boolean
+  onTermsAcceptedChange: (checked: boolean) => void
+  onShowTerms: () => void
+  termsError: string | null
+  onRequireTerms: () => void
+}) {
   const handleLinkedIn = () => {
+    if (!termsAccepted) {
+      onRequireTerms()
+      return
+    }
     window.location.href = `${BASE_URL}/oauth/linkedin`
   }
 
@@ -94,7 +131,7 @@ function SocialSignupBox({ onSignup, onError }: { onSignup: (user: any, token: s
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {GOOGLE_CLIENT_ID ? (
           <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-            <GoogleSignupButton onSignup={onSignup} onError={onError} />
+            <GoogleSignupButton onSignup={onSignup} onError={onError} termsAccepted={termsAccepted} onRequireTerms={onRequireTerms} />
           </GoogleOAuthProvider>
         ) : null}
         <button
@@ -108,6 +145,13 @@ function SocialSignupBox({ onSignup, onError }: { onSignup: (user: any, token: s
           Continue with LinkedIn
         </button>
       </div>
+      <TermsAgreement
+        checked={termsAccepted}
+        onChange={onTermsAcceptedChange}
+        onShowTerms={onShowTerms}
+        error={termsError}
+        className="mt-4"
+      />
       <div className="mt-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-[#C8DEDE]" />
         <span className="text-xs font-medium text-gray-500">or fill out your profile manually</span>
@@ -144,6 +188,23 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupField, string>>>({})
   const [step, setStep] = useState(0)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsError, setTermsError] = useState<string | null>(null)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+
+  const requireTerms = () => {
+    const message = 'Please accept the Terms of Service before creating an account.'
+    setTermsError(message)
+    setError(message)
+  }
+
+  const setTermsAgreement = (checked: boolean) => {
+    setTermsAccepted(checked)
+    if (checked) {
+      setTermsError(null)
+      if (error === 'Please accept the Terms of Service before creating an account.') setError(null)
+    }
+  }
 
   const setField = (field: SignupField, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -209,6 +270,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     }
     if (!validateStep(1)) {
       setStep(1)
+      return
+    }
+    if (!termsAccepted) {
+      requireTerms()
       return
     }
     setLoading(true)
@@ -352,7 +417,15 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             <p className="text-base text-gray-600">Create your profile and start matching with remote jobs</p>
           </div>
 
-          <SocialSignupBox onSignup={onSignup} onError={setError} />
+          <SocialSignupBox
+            onSignup={onSignup}
+            onError={setError}
+            termsAccepted={termsAccepted}
+            onTermsAcceptedChange={setTermsAgreement}
+            onShowTerms={() => setShowTermsModal(true)}
+            termsError={termsError}
+            onRequireTerms={requireTerms}
+          />
         </div>
 
         <form onSubmit={handleSubmit} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} className="rounded-2xl border border-white/20 bg-white/95 p-6 shadow-2xl backdrop-blur-xl md:p-12">
@@ -449,6 +522,50 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
           </p>
         </form>
       </div>
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <TermsOfServicePage onBack={() => setShowTermsModal(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TermsAgreement({
+  checked,
+  onChange,
+  onShowTerms,
+  error,
+  className = '',
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  onShowTerms: () => void
+  error?: string | null
+  className?: string
+}) {
+  return (
+    <div className={`rounded-xl border p-3 text-left ${error ? 'border-red-300 bg-red-50/95' : 'border-[#C8DEDE] bg-[#F7FBFB]'} ${className}`}>
+      <div className="flex items-start gap-3">
+        <input
+          id="signup-terms"
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-1 h-4 w-4 rounded border-gray-300 text-[#306770] focus:ring-[#306770]"
+          aria-invalid={Boolean(error)}
+        />
+        <div className="text-sm font-medium text-gray-700">
+          <label htmlFor="signup-terms">I agree to the </label>
+          <button type="button" onClick={onShowTerms} className="font-semibold text-[#306770] underline-offset-2 hover:underline">
+            Terms of Service
+          </button>
+          <span>.</span>
+        </div>
+      </div>
+      {error && <span className="mt-2 block text-xs font-semibold text-red-700">{error}</span>}
     </div>
   )
 }
