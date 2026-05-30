@@ -227,7 +227,7 @@ async function purgeJunkJobs() {
 const AIRTABLE_TOKEN = process.env.AIRTABLE_TOKEN;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const RESUME_EXTRACT_WEBHOOK = process.env.N8N_RESUME_EXTRACT_WEBHOOK_URL || '';
-const PUBLIC_SERVER_URL = process.env.PUBLIC_SERVER_URL || 'https://application-server-cwqu.onrender.com';
+const PUBLIC_SERVER_URL = process.env.PUBLIC_SERVER_URL || 'https://wanderwork-backend-server.onrender.com';
 const CUSTOM_REQUEST_WEBHOOK = process.env.N8N_CUSTOM_REQUEST_WEBHOOK_URL || '';
 
 async function updateAirtableCandidateSkills(candidate, skills) {

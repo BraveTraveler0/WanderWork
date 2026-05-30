@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'https://application-server-cwqu.onrender.com';
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wanderwork-backend-server.onrender.com';
 
 export type Plan = 'pro' | 'premium';
 

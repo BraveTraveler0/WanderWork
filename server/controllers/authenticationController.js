@@ -418,7 +418,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(user._id, { verificationToken });
 
     // Send verification email
-    const verificationLink = `https://application-server-cwqu.onrender.com/auth/signup/verify?email=${encodeURIComponent(email)}&token=${verificationToken}`;
+    const verificationLink = `https://wanderwork-backend-server.onrender.com/auth/signup/verify?email=${encodeURIComponent(email)}&token=${verificationToken}`;
     const emailMessage = {
       to: email,
       from: 'support@aontechnology.io',

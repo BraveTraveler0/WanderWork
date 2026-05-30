@@ -15,7 +15,7 @@ import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://application-server-cwqu.onrender.com'
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wanderwork-backend-server.onrender.com'
 
 const LandingPage = lazy(() => import('./landing/LandingPage'))
 import {
