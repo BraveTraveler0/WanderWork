@@ -1597,6 +1597,122 @@ function buildDocumentEmailHtml({ greeting, docLabel, jobTitle, company, content
 </html>`
 }
 
+function normalizeCustomDocumentFormat(value) {
+    return String(value || '').trim().toLowerCase() === 'doc' ? 'doc' : 'pdf'
+}
+
+function safeDocumentFilename(value, fallback = 'document') {
+    const slug = String(value || fallback)
+        .replace(/[^a-z0-9]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase()
+    return slug || fallback
+}
+
+function buildWordDocBuffer(content, title) {
+    const esc = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(title)}</title>
+  <style>
+    @page { margin: 0.75in; }
+    body { font-family: Arial, sans-serif; color: #1A1A2E; font-size: 11pt; line-height: 1.45; }
+    ul { margin-top: 4px; margin-bottom: 4px; }
+    li { margin-bottom: 3px; }
+  </style>
+</head>
+<body>
+${styledDocumentTextToEmailHtml(content || '')}
+</body>
+</html>`
+    return Buffer.from(html, 'utf8')
+}
+
+function normalizePdfText(value) {
+    return String(value || '')
+        .normalize('NFKD')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ')
+}
+
+function wrapPdfLines(text, maxChars = 92) {
+    const lines = []
+    for (const rawLine of normalizePdfText(text).split('\n')) {
+        let line = rawLine.trimEnd()
+        if (!line.trim()) {
+            lines.push('')
+            continue
+        }
+        while (line.length > maxChars) {
+            let splitAt = line.lastIndexOf(' ', maxChars)
+            if (splitAt < 40) splitAt = maxChars
+            lines.push(line.slice(0, splitAt).trimEnd())
+            line = line.slice(splitAt).trimStart()
+        }
+        lines.push(line)
+    }
+    return lines
+}
+
+function pdfEscape(value) {
+    return String(value || '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
+}
+
+function buildPdfBuffer(content) {
+    const lines = wrapPdfLines(content)
+    const maxLinesPerPage = 48
+    const pages = []
+    for (let i = 0; i < Math.max(lines.length, 1); i += maxLinesPerPage) {
+        pages.push(lines.slice(i, i + maxLinesPerPage))
+    }
+
+    const objects = [null]
+    const addObject = (body) => {
+        objects.push(body)
+        return objects.length - 1
+    }
+
+    const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    const pageIds = []
+
+    for (const pageLines of pages) {
+        const streamLines = ['BT', '/F1 10 Tf', '72 742 Td', '14 TL']
+        for (const line of pageLines) {
+            streamLines.push(line ? `(${pdfEscape(line)}) Tj` : '')
+            streamLines.push('T*')
+        }
+        streamLines.push('ET')
+        const stream = streamLines.join('\n')
+        const contentId = addObject(`<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`)
+        const pageId = addObject(`<< /Type /Page /Parent __PAGES_ID__ 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`)
+        pageIds.push(pageId)
+    }
+
+    const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`)
+    const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)
+
+    let pdf = '%PDF-1.4\n'
+    const offsets = [0]
+    for (let id = 1; id < objects.length; id++) {
+        offsets[id] = Buffer.byteLength(pdf, 'latin1')
+        pdf += `${id} 0 obj\n${String(objects[id]).replace(/__PAGES_ID__/g, String(pagesId))}\nendobj\n`
+    }
+    const xrefOffset = Buffer.byteLength(pdf, 'latin1')
+    pdf += `xref\n0 ${objects.length}\n`
+    pdf += '0000000000 65535 f \n'
+    for (let id = 1; id < objects.length; id++) {
+        pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`
+    }
+    pdf += `trailer\n<< /Size ${objects.length} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+    return Buffer.from(pdf, 'latin1')
+}
+
 async function callOpenAI(systemPrompt, userPrompt, maxTokens = 1500) {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) return null
@@ -1627,6 +1743,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     if (!email) return res.status(400).json({ message: 'Email is required.' });
 
     const { firstName, lastName, jobId, jobTitle, company, jobUrl, resume, coverLetter } = payload;
+    const fileFormat = normalizeCustomDocumentFormat(payload.fileFormat || payload.documentFormat || payload.outputFormat);
     const totalCost = (resume ? 1 : 0) + (coverLetter ? 1 : 0);
     if (totalCost === 0) return res.status(400).json({ message: 'No items requested.' });
 
@@ -1877,7 +1994,33 @@ Tailor every bullet point to match the target job description — highlight spec
 
         const FROM_EMAIL = 'support@wanderwork.io'
         const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'sephrim07@gmail.com'
-        const safeCompany = company.replace(/[^a-z0-9]/gi, '-').toLowerCase()
+        const safeCompany = safeDocumentFilename(company, 'company')
+        const buildAttachments = ({ content, filenameBase, documentType, title }) => {
+            const attachments = [{
+                content: Buffer.from(textToRtf(content, { documentType })).toString('base64'),
+                type: 'text/rtf',
+                filename: `${filenameBase}.rtf`,
+                disposition: 'attachment',
+            }]
+
+            if (fileFormat === 'doc') {
+                attachments.push({
+                    content: buildWordDocBuffer(content, title).toString('base64'),
+                    type: 'application/msword',
+                    filename: `${filenameBase}.doc`,
+                    disposition: 'attachment',
+                })
+            } else {
+                attachments.push({
+                    content: buildPdfBuffer(content).toString('base64'),
+                    type: 'application/pdf',
+                    filename: `${filenameBase}.pdf`,
+                    disposition: 'attachment',
+                })
+            }
+
+            return attachments
+        }
         const sends = []
 
         if (resume) {
@@ -1888,12 +2031,12 @@ Tailor every bullet point to match the target job description — highlight spec
                     to: email,
                     subject,
                     html: buildDocumentEmailHtml({ greeting: candidateGreeting, docLabel: 'tailored resume', jobTitle, company, content: resumeContent, hasAttachment: true }),
-                    attachments: [{
-                        content: Buffer.from(textToRtf(resumeContent, { documentType: 'resume' })).toString('base64'),
-                        type: 'text/rtf',
-                        filename: `resume-${safeCompany}.rtf`,
-                        disposition: 'attachment',
-                    }],
+                    attachments: buildAttachments({
+                        content: resumeContent,
+                        filenameBase: `resume-${safeCompany}`,
+                        documentType: 'resume',
+                        title: `Resume for ${jobTitle || 'Role'} at ${company || 'Company'}`,
+                    }),
                 }))
             } else {
                 sends.push(sgMail.send({
@@ -1913,12 +2056,12 @@ Tailor every bullet point to match the target job description — highlight spec
                     to: email,
                     subject,
                     html: buildDocumentEmailHtml({ greeting: candidateGreeting, docLabel: 'cover letter', jobTitle, company, content: coverLetterContent, hasAttachment: true }),
-                    attachments: [{
-                        content: Buffer.from(textToRtf(coverLetterContent)).toString('base64'),
-                        type: 'text/rtf',
-                        filename: `cover-letter-${safeCompany}.rtf`,
-                        disposition: 'attachment',
-                    }],
+                    attachments: buildAttachments({
+                        content: coverLetterContent,
+                        filenameBase: `cover-letter-${safeCompany}`,
+                        documentType: 'coverLetter',
+                        title: `Cover Letter for ${jobTitle || 'Role'} at ${company || 'Company'}`,
+                    }),
                 }))
             } else {
                 sends.push(sgMail.send({
@@ -1935,6 +2078,7 @@ Tailor every bullet point to match the target job description — highlight spec
             `Request: ${requested} | ${candidateName} <${email}>`,
             `Job: ${jobTitle} at ${company}`,
             `URL: ${jobUrl || 'N/A'}`,
+            `Attachment format: RTF + ${fileFormat.toUpperCase()}`,
             `Tokens used: ${totalCost} | Remaining: ${tokensRemaining}`,
             resumeContent ? `\n== RESUME ==\n${resumeContent}` : '',
             coverLetterContent ? `\n== COVER LETTER ==\n${coverLetterContent}` : '',
@@ -1956,7 +2100,7 @@ Tailor every bullet point to match the target job description — highlight spec
         console.warn('[CustomRequest] SendGrid not configured — SENDGRID_API_KEY required')
     }
 
-    return res.json({ ok: true, tokensRemaining, application })
+    return res.json({ ok: true, tokensRemaining, application, fileFormat, includedFormats: ['rtf', fileFormat] })
 });
 
 const UpdateAllData = asyncHandler(async (req, res) => {

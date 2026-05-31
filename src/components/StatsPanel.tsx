@@ -7,7 +7,7 @@ const INTERESTED_KEY = 'wanderworkInterestedJobs'
 function loadInterestedOverrides(): Record<number, boolean> {
   try { return JSON.parse(localStorage.getItem(INTERESTED_KEY) || '{}') } catch { return {} }
 }
-import CustomJobRequestModal from './CustomJobRequestModal'
+import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
 import RecruiterOutreach from './RecruiterOutreach'
 
 interface StatsPanelProps {
@@ -207,7 +207,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
     return () => { cancelled = true }
   }, [selectedCompany, firstCandidate?._id])
 
-  const handleCustomRequest = async (options: { resume: boolean; coverLetter: boolean }) => {
+  const handleCustomRequest = async (options: CustomJobRequestOptions) => {
     if (!showCustomRequestModal) return
     const totalCost = (options.resume ? 1 : 0) + (options.coverLetter ? 1 : 0)
     if (totalCost <= 0) return
@@ -221,7 +221,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       company: showCustomRequestModal.company,
       jobUrl: showCustomRequestModal.job?.url || '',
       resume: options.resume,
-      coverLetter: options.coverLetter
+      coverLetter: options.coverLetter,
+      fileFormat: options.fileFormat
     }
 
     const result = await submitCustomRequest(webhookPayload)

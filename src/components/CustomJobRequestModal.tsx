@@ -1,11 +1,19 @@
 import { useState } from 'react'
 import { X, FileText, Mail, Users } from 'lucide-react'
 
+export type CustomDocumentFormat = 'pdf' | 'doc'
+
+export interface CustomJobRequestOptions {
+  resume: boolean
+  coverLetter: boolean
+  fileFormat: CustomDocumentFormat
+}
+
 interface CustomJobRequestModalProps {
   jobTitle: string
   company: string
   onClose: () => void
-  onSubmit: (options: { resume: boolean; coverLetter: boolean }) => Promise<void> | void
+  onSubmit: (options: CustomJobRequestOptions) => Promise<void> | void
   currentCredits: number
 }
 
@@ -18,6 +26,7 @@ export default function CustomJobRequestModal({
 }: CustomJobRequestModalProps) {
   const [selectedResume, setSelectedResume] = useState(false)
   const [selectedCoverLetter, setSelectedCoverLetter] = useState(false)
+  const [fileFormat, setFileFormat] = useState<CustomDocumentFormat>('pdf')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -31,7 +40,7 @@ export default function CustomJobRequestModal({
     setSubmitting(true)
     setError(null)
     setSuccess(null)
-    Promise.resolve(onSubmit({ resume: selectedResume, coverLetter: selectedCoverLetter }))
+    Promise.resolve(onSubmit({ resume: selectedResume, coverLetter: selectedCoverLetter, fileFormat }))
       .then(() => {
         setSuccess('Request submitted successfully. You will receive your materials soon.')
         setTimeout(() => {
@@ -52,7 +61,7 @@ export default function CustomJobRequestModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[20px] w-full max-w-[520px] shadow-[0_30px_90px_rgba(0,0,0,0.16)] p-6 sm:p-8 relative"
+        className="bg-white rounded-[20px] w-full max-w-[520px] max-h-[calc(100vh-32px)] overflow-y-auto shadow-[0_30px_90px_rgba(0,0,0,0.16)] p-6 sm:p-8 relative"
         style={{ fontFamily: 'Manrope' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -219,6 +228,70 @@ export default function CustomJobRequestModal({
           </div>
         </div>
 
+        {/* Format Choice */}
+        <div
+          className="mb-6 rounded-[12px] border p-4 transition-all"
+          style={{
+            borderColor: hasSelection ? '#D7E4E7' : '#E5E7EB',
+            background: hasSelection ? '#F8FBFC' : '#F9FAFB',
+            opacity: hasSelection ? 1 : 0.55,
+          }}
+        >
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[13px] font-semibold text-black">Extra file format</p>
+              <p className="text-[11px]" style={{ color: '#787878' }}>
+                RTF is always included. Choose one extra format.
+              </p>
+            </div>
+            {!hasSelection && (
+              <span className="text-[11px] font-medium" style={{ color: '#9CA3AF' }}>
+                Select a material first
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              { value: 'pdf', label: 'PDF' },
+              { value: 'doc', label: 'DOC' },
+            ] as const).map((option) => {
+              const checked = fileFormat === option.value
+              return (
+                <label
+                  key={option.value}
+                  className="flex items-center gap-2 rounded-[10px] border px-3 py-2 transition-all"
+                  style={{
+                    borderColor: hasSelection && checked ? '#306770' : '#D1D5DB',
+                    background: hasSelection && checked ? '#FFFFFF' : '#F3F4F6',
+                    color: hasSelection ? '#1A1A2E' : '#9CA3AF',
+                    cursor: hasSelection ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="custom-document-format"
+                    value={option.value}
+                    checked={checked}
+                    disabled={!hasSelection}
+                    onChange={() => setFileFormat(option.value)}
+                    className="sr-only"
+                  />
+                  <span
+                    className="flex h-4 w-4 items-center justify-center rounded-full border-2"
+                    style={{
+                      borderColor: hasSelection && checked ? '#306770' : '#C8CED6',
+                      background: hasSelection && checked ? '#306770' : '#FFFFFF',
+                    }}
+                  >
+                    {checked && hasSelection && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                  </span>
+                  <span className="text-[13px] font-semibold">{option.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Cost Summary */}
         {hasSelection && (
           <div
@@ -243,7 +316,7 @@ export default function CustomJobRequestModal({
 
         {/* Note — above the submit button */}
         <p className="text-[13px] text-center mb-3 font-medium" style={{ color: '#306770' }}>
-          Your materials will be saved to your Messaging tab and sent to your email in minutes!
+          Your materials will be saved to your Messaging tab and sent to your email in RTF plus {fileFormat.toUpperCase()}.
         </p>
 
         {/* Action Buttons */}

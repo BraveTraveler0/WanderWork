@@ -1,7 +1,7 @@
 import { Trash2, Filter, X, RotateCcw, Sparkles } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { submitCustomRequest, updateJobSeeker } from '../api/jobseeker.ts'
-import CustomJobRequestModal from './CustomJobRequestModal'
+import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
 
 // ─── Module-level description processing ─────────────────────────────────────
 // Defined outside the component so they are never recreated on re-render.
@@ -596,7 +596,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
   const currentCredits = creditBalanceOverride ?? baseCredits
 
-  const handleCustomRequest = async (options: { resume: boolean; coverLetter: boolean }) => {
+  const handleCustomRequest = async (options: CustomJobRequestOptions) => {
     if (!showCustomRequestModal) return
     const totalCost = (options.resume ? 1 : 0) + (options.coverLetter ? 1 : 0)
     if (totalCost <= 0) return
@@ -610,7 +610,8 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       company: showCustomRequestModal.company,
       jobUrl: showCustomRequestModal.job?.url || '',
       resume: options.resume,
-      coverLetter: options.coverLetter
+      coverLetter: options.coverLetter,
+      fileFormat: options.fileFormat
     }
 
     const result = await submitCustomRequest(webhookPayload)
