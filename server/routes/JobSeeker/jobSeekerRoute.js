@@ -4,7 +4,7 @@ const fs = require('fs')
 const multer = require('multer')
 const router = express.Router()
 const jobSeekerController = require('../../controllers/JobSeeker/jobSeekerController')
-const { optionalAuth, requireAuth } = require('../../middleware/requireAuth')
+const { requireAuth } = require('../../middleware/requireAuth')
 const { claimWeeklyToken } = require('../../services/weeklyTokenService')
 
 const resumeUploadDir = path.join(__dirname, '../../uploads/resumes')
@@ -15,8 +15,15 @@ const ALLOWED_RESUME_MIMETYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
+const ALLOWED_DOCUMENT_MIMETYPES = new Set([
+  ...ALLOWED_RESUME_MIMETYPES,
+  'application/rtf',
+  'text/rtf',
+  'text/plain',
+])
 const resumeUpload = multer({
   dest: resumeUploadDir,
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype)) {
       cb(null, true)
@@ -26,36 +33,44 @@ const resumeUpload = multer({
   },
 })
 const coverLetterUpload = multer({
-  dest: coverLetterUploadDir
+  dest: coverLetterUploadDir,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_DOCUMENT_MIMETYPES.has(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(Object.assign(new Error('Only PDF, DOCX, RTF, and TXT files are accepted.'), { status: 400 }))
+    }
+  },
 })
 
 router.route('/')
     .get(requireAuth, jobSeekerController.getEverything)
 
 router.route('/candidate')
-    .get(jobSeekerController.getAllCandidates)
+    .get(requireAuth, jobSeekerController.getAllCandidates)
 
 // Static sub-paths must come before /:id to avoid being swallowed as the id param
 router.route('/candidate/resume')
-    .post(resumeUpload.single('resume'), jobSeekerController.updateCandidateResume)
+    .post(requireAuth, resumeUpload.single('resume'), jobSeekerController.updateCandidateResume)
 
 router.route('/candidate/cover-letter')
-    .post(coverLetterUpload.single('coverLetter'), jobSeekerController.updateCandidateCoverLetter)
+    .post(requireAuth, coverLetterUpload.single('coverLetter'), jobSeekerController.updateCandidateCoverLetter)
 
 router.route('/candidate/:id')
-    .get(jobSeekerController.getCandidateById)
+    .get(requireAuth, jobSeekerController.getCandidateById)
 
 router.route('/candidate/:id/skills')
-    .patch(jobSeekerController.updateCandidateSkills)
+    .patch(requireAuth, jobSeekerController.updateCandidateSkills)
 
 router.route('/candidate/:id/pair-jobs')
-    .post(jobSeekerController.pairCandidateJobsHandler)
+    .post(requireAuth, jobSeekerController.pairCandidateJobsHandler)
 
 router.route('/pair-jobs')
-    .post(jobSeekerController.pairAllCandidatesHandler)
+    .post(requireAuth, jobSeekerController.pairAllCandidatesHandler)
 
 router.route('/custom-request')
-    .post(optionalAuth, jobSeekerController.submitCustomRequest)
+    .post(requireAuth, jobSeekerController.submitCustomRequest)
 
 router.route('/job')
     .get(jobSeekerController.getAllJobs)
@@ -64,35 +79,35 @@ router.route('/job/:id')
     .get(jobSeekerController.getJobById)
 
 router.route('/jobCandidatePairing')
-    .get(jobSeekerController.getAllCandidateJobPairings)
+    .get(requireAuth, jobSeekerController.getAllCandidateJobPairings)
 
 router.route('/jobCandidatePairing/:id')
-    .get(jobSeekerController.getCandidateJobPariringById)
+    .get(requireAuth, jobSeekerController.getCandidateJobPariringById)
 
 router.route('/application')
-    .get(jobSeekerController.getAllApplications)
+    .get(requireAuth, jobSeekerController.getAllApplications)
 
 router.route('/application/:id')
-    .get(jobSeekerController.getApplicationById)
+    .get(requireAuth, jobSeekerController.getApplicationById)
 
 router.route('/contact')
-    .get(jobSeekerController.getAllContacts)
+    .get(requireAuth, jobSeekerController.getAllContacts)
 
 router.route('/contact/:id')
-    .get(jobSeekerController.getContactById)
+    .get(requireAuth, jobSeekerController.getContactById)
 
 router.route('/contactJobPairing')
-    .get(jobSeekerController.getAllContactJobPairings)
+    .get(requireAuth, jobSeekerController.getAllContactJobPairings)
 
 router.route('/contactJobPairing/:id')
-    .get(jobSeekerController.getContactJobPairingById)
+    .get(requireAuth, jobSeekerController.getContactJobPairingById)
 
 router.route('/update')
-    .patch(jobSeekerController.UpdateAllData)
+    .patch(requireAuth, jobSeekerController.UpdateAllData)
 
 
 router.route('/send-welcome-email')
-    .post(jobSeekerController.sendPlanWelcomeEmail)
+    .post(requireAuth, jobSeekerController.sendPlanWelcomeEmail)
 
 router.route('/claim-weekly-token')
     .post(async (req, res) => {

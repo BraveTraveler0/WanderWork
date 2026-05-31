@@ -25,7 +25,7 @@ async function optionalAuth(req, res, next) {
       const decoded = verifyToken(header.slice(7))
       if (decoded) {
         const user = await findTokenUser(decoded)
-        if (user) req.user = { ...decoded, _id: user._id, email: user.email, displayName: user.displayName }
+        if (user) req.user = { ...decoded, _id: user._id, email: user.email, displayName: user.displayName, isAdmin: !!user.isAdmin, isMod: !!user.isMod }
         else req.authError = 'user_not_found'
       } else {
         req.authError = 'invalid_token'
@@ -50,7 +50,7 @@ async function requireAuth(req, res, next) {
     const user = await findTokenUser(decoded)
     if (!user) return res.status(401).json({ message: 'User no longer exists' })
 
-    req.user = { ...decoded, _id: user._id, email: user.email, displayName: user.displayName }
+    req.user = { ...decoded, _id: user._id, email: user.email, displayName: user.displayName, isAdmin: !!user.isAdmin, isMod: !!user.isMod }
     next()
   } catch (error) {
     next(error)

@@ -178,6 +178,9 @@ export async function uploadCandidateResume(email: string, file: File): Promise<
   form.append('resume', file);
   const res = await fetch(`${BASE_URL}/jobseeker/candidate/resume`, {
     method: 'POST',
+    headers: {
+      ...getAuthHeader(),
+    },
     body: form
   });
   if (!res.ok) {
@@ -194,6 +197,9 @@ export async function uploadCandidateCoverLetter(email: string, file: File): Pro
   form.append('coverLetter', file);
   const res = await fetch(`${BASE_URL}/jobseeker/candidate/cover-letter`, {
     method: 'POST',
+    headers: {
+      ...getAuthHeader(),
+    },
     body: form
   });
   if (!res.ok) throw new Error(`Upload failed ${res.status} ${res.statusText}`);
@@ -203,7 +209,7 @@ export async function uploadCandidateCoverLetter(email: string, file: File): Pro
 export async function submitCustomRequest(payload: Record<string, any>): Promise<any> {
   const res = await fetch(`${BASE_URL}/jobseeker/custom-request`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...getAuthHeader() },
     body: JSON.stringify(payload || {})
   });
   const text = await res.text();

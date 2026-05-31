@@ -461,27 +461,52 @@ const createCareerCandidate = asyncHandler(async (req, res) => {
 // @route PATCH /users
 // @access Private
 const updateUser = asyncHandler(async (req, res) => {
-    const { id, title, titleTut } = req.body
+    const id = req.params.id || req.body?.id;
+    const authId = req.user?._id || req.user?.id;
+    const isAdmin = req.user?.isAdmin === true;
 
-    // Confirm data 
-    if (!id || !title) {
-        return res.status(400).json({ message: 'Both id and title fields are required' })
+    if (!id) {
+        return res.status(400).json({ message: 'User ID is required' })
+    }
+    if (!isAdmin && String(id) !== String(authId)) {
+        return res.status(403).json({ message: 'Forbidden' })
     }
 
-    // Does the user exist to update?
     const user = await User.findById(id).exec()
 
     if (!user) {
-        return res.status(400).json({ message: 'User not found' })
+        return res.status(404).json({ message: 'User not found' })
     }
 
-    user.title = title
-    user._id = id
-    user.titleTut = titleTut
+    if (req.body?.email && String(req.body.email).toLowerCase() !== String(user.email || '').toLowerCase()) {
+        return res.status(403).json({ message: 'Email changes are not allowed here' })
+    }
+
+    const allowedFields = [
+        'displayName',
+        'title',
+        'titleTut',
+        'bio',
+        'bioTut',
+        'postTut',
+        'profImageTut',
+        'backImageTut',
+        'bgColor',
+        'notifications',
+        'paymentProvider',
+    ];
+
+    for (const field of allowedFields) {
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+            user[field] = req.body[field];
+        }
+    }
 
     const updatedUser = await user.save()
 
-    res.json({ message: `${updatedUser.displayName} updated` })
+    const sanitized = updatedUser.toObject();
+    delete sanitized.password;
+    res.json(sanitized)
 })
 
 const updateBgColor = asyncHandler(async (req, res) => {

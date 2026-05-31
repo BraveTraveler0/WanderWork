@@ -4,6 +4,7 @@ const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
+const { requireAuth } = require('../middleware/requireAuth');
 
 const APP_URL = process.env.APP_URL || 'https://wanderwork.io';
 
@@ -15,11 +16,35 @@ const PRICE_IDS = {
   premium: process.env.STRIPE_PREMIUM_PRICE_ID,
 };
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getPromoTokenAmount(code) {
+  const normalizedCode = String(code || '').trim().toLowerCase();
+  const configuredAmounts = (process.env.PROMO_CODE_TOKEN_AMOUNTS || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  for (const entry of configuredAmounts) {
+    const [rawCode, rawAmount] = entry.split(':').map((part) => part?.trim());
+    if (rawCode?.toLowerCase() === normalizedCode) {
+      const amount = Number(rawAmount);
+      if (Number.isInteger(amount) && amount > 0 && amount <= 1000) return amount;
+    }
+  }
+
+  const defaultAmount = Number(process.env.PROMO_CODE_TOKEN_AMOUNT || 10);
+  return Number.isInteger(defaultAmount) && defaultAmount > 0 && defaultAmount <= 1000 ? defaultAmount : 10;
+}
+
 // ── POST /stripe/create-checkout-session ─────────────────────────────────────
 // Body: { plan: 'pro' | 'premium', email: string }
 // Returns: { url: string } — Stripe-hosted checkout page
-router.post('/create-checkout-session', async (req, res) => {
-  const { plan, email } = req.body || {};
+router.post('/create-checkout-session', requireAuth, async (req, res) => {
+  const { plan } = req.body || {};
+  const email = normalizeEmail(req.user?.email);
 
   if (!plan || !PRICE_IDS[plan]) {
     return res.status(400).json({
@@ -28,9 +53,10 @@ router.post('/create-checkout-session', async (req, res) => {
         : 'plan must be "pro" or "premium".',
     });
   }
+  if (!email) return res.status(401).json({ message: 'Authentication required.' });
 
   try {
-    const user = email ? await User.findOne({ email: String(email).toLowerCase() }) : null;
+    const user = await User.findOne({ email });
 
     // Reuse existing Stripe customer if available
     let customer = user?.stripeId || undefined;
@@ -64,19 +90,20 @@ router.post('/create-checkout-session', async (req, res) => {
 // POST /stripe/create-token-checkout-session
 // Body: { tokens: number, email: string }
 // Creates a one-time Stripe Checkout payment for token packs.
-router.post('/create-token-checkout-session', async (req, res) => {
-  const { tokens, email } = req.body || {};
+router.post('/create-token-checkout-session', requireAuth, async (req, res) => {
+  const { tokens } = req.body || {};
   const tokenQty = Number(tokens);
+  const normalizedEmail = normalizeEmail(req.user?.email);
 
   if (!Number.isInteger(tokenQty) || tokenQty < 1 || tokenQty > 1000) {
     return res.status(400).json({ message: 'tokens must be a whole number between 1 and 1000.' });
   }
+  if (!normalizedEmail) return res.status(401).json({ message: 'Authentication required.' });
 
   const amountCents = Math.max(50, Math.round((tokenQty / 3) * 100));
 
   try {
-    const normalizedEmail = email ? String(email).toLowerCase() : '';
-    const user = normalizedEmail ? await User.findOne({ email: normalizedEmail }) : null;
+    const user = await User.findOne({ email: normalizedEmail });
 
     let customer = user?.stripeId || undefined;
     if (!customer && normalizedEmail) {
@@ -194,16 +221,13 @@ router.post('/webhook', async (req, res) => {
 // ── POST /stripe/redeem-code ──────────────────────────────────────────────────
 // Body: { code, email, tokens }
 // Validates promo code server-side (PROMO_CODES env var), prevents reuse, adds tokens atomically.
-router.post('/redeem-code', async (req, res) => {
-  const { code, email, tokens } = req.body || {};
-  if (!code || !email) {
-    return res.status(400).json({ message: 'code and email are required.' });
+router.post('/redeem-code', requireAuth, async (req, res) => {
+  const { code } = req.body || {};
+  const normalizedEmail = normalizeEmail(req.user?.email);
+  if (!code) {
+    return res.status(400).json({ message: 'code is required.' });
   }
-
-  const tokenQty = Number(tokens);
-  if (!Number.isInteger(tokenQty) || tokenQty < 1 || tokenQty > 1000) {
-    return res.status(400).json({ message: 'tokens must be a whole number between 1 and 1000.' });
-  }
+  if (!normalizedEmail) return res.status(401).json({ message: 'Authentication required.' });
 
   const validCodes = (process.env.PROMO_CODES || '')
     .split(',')
@@ -214,9 +238,9 @@ router.post('/redeem-code', async (req, res) => {
   if (!validCodes.includes(normalizedCode)) {
     return res.status(400).json({ message: 'Invalid code. Please check and try again.' });
   }
+  const tokenQty = getPromoTokenAmount(normalizedCode);
 
   try {
-    const normalizedEmail = String(email).toLowerCase();
     const candidate = await Candidate.findOne({ email: normalizedEmail });
     if (!candidate) {
       return res.status(404).json({ message: 'No account found for this email.' });
@@ -241,8 +265,9 @@ router.post('/redeem-code', async (req, res) => {
 });
 
 // ── POST /stripe/create-payment-intent (legacy — kept for compatibility) ──────
-router.post('/create-payment-intent', async (req, res) => {
-  const { amount, userId, contentCreator } = req.body;
+router.post('/create-payment-intent', requireAuth, async (req, res) => {
+  const { amount, contentCreator } = req.body;
+  const userId = req.user?._id;
   try {
     if (!userId) return res.status(400).json({ message: 'Must include User ID for security reasons' });
     const user = await User.findById(userId);
@@ -264,11 +289,11 @@ router.post('/create-payment-intent', async (req, res) => {
 
 // ── GET /stripe/portal ────────────────────────────────────────────────────────
 // Opens Stripe Customer Portal so users can manage/cancel subscriptions
-router.post('/portal', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ message: 'email is required' });
+router.post('/portal', requireAuth, async (req, res) => {
+  const email = normalizeEmail(req.user?.email);
+  if (!email) return res.status(401).json({ message: 'Authentication required.' });
 
-  const user = await User.findOne({ email: String(email).toLowerCase() });
+  const user = await User.findOne({ email });
   if (!user?.stripeId) return res.status(404).json({ message: 'No Stripe customer found for this account.' });
 
   try {

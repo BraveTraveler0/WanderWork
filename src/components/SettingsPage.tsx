@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, CreditCard, Eye, Files, Upload, WalletCards, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { updateUser } from '../api/users'
+import { changePassword, updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
 
@@ -111,7 +111,6 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     })
   })
 
-  const [storedPassword, setStoredPassword] = useState(() => localStorage.getItem('wanderworkPassword') || 'password123')
   const [userId] = useState(() => localStorage.getItem('wanderworkUserId') || '')
   const [paymentProvider, setPaymentProvider] = useState<'stripe' | 'paypal'>(() => {
     const saved = localStorage.getItem('wanderworkPaymentProvider')
@@ -313,8 +312,8 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
   const handleChangePassword = async () => {
     setPasswordStatus(null)
-    if (passwordForm.current !== storedPassword) {
-      setPasswordStatus({ type: 'error', message: 'Current password is incorrect.' })
+    if (!passwordForm.current) {
+      setPasswordStatus({ type: 'error', message: 'Enter your current password.' })
       return
     }
     if (passwordForm.next.length < 8) {
@@ -326,20 +325,11 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       return
     }
     try {
-      if (userId) {
-        await updateUser(userId, { password: passwordForm.next })
-        setPasswordStatus({ type: 'success', message: 'Password updated on server.' })
-      } else {
-        setPasswordStatus({ type: 'success', message: 'Password updated locally (no userId).' })
-      }
-      setStoredPassword(passwordForm.next)
-      localStorage.setItem('wanderworkPassword', passwordForm.next)
+      await changePassword(passwordForm.current, passwordForm.next)
+      setPasswordStatus({ type: 'success', message: 'Password updated.' })
       setPasswordForm({ current: '', next: '', confirm: '' })
-    } catch (err) {
-      setPasswordStatus({ type: 'error', message: 'Failed to update password on server; stored locally.' })
-      setStoredPassword(passwordForm.next)
-      localStorage.setItem('wanderworkPassword', passwordForm.next)
-      setPasswordForm({ current: '', next: '', confirm: '' })
+    } catch (err: any) {
+      setPasswordStatus({ type: 'error', message: err?.message || 'Failed to update password.' })
     }
   }
 

@@ -2,10 +2,19 @@ const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wande
 
 export type Plan = 'pro' | 'premium';
 
+function getAuthHeader(): Record<string, string> {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('wanderworkToken') : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function createCheckoutSession(plan: Plan, email: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/stripe/create-checkout-session`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ plan, email }),
   });
   if (!res.ok) {
@@ -20,7 +29,7 @@ export async function createCheckoutSession(plan: Plan, email: string): Promise<
 export async function createTokenCheckoutSession(tokens: number, email: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/stripe/create-token-checkout-session`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ tokens, email }),
   });
   if (!res.ok) {
@@ -35,7 +44,7 @@ export async function createTokenCheckoutSession(tokens: number, email: string):
 export async function redeemPromoCode(code: string, email: string, tokens: number): Promise<{ tokenBalance: number; added: number }> {
   const res = await fetch(`${BASE_URL}/stripe/redeem-code`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ code, email, tokens }),
   });
   let j: any = {};
@@ -47,7 +56,7 @@ export async function redeemPromoCode(code: string, email: string, tokens: numbe
 export async function openCustomerPortal(email: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/stripe/portal`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ email }),
   });
   if (!res.ok) {

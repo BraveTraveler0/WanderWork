@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const { triggerSync, getSyncStatus } = require('../airtable-scheduler');
 const {
   syncRecruiters,
@@ -45,7 +46,9 @@ function requireSyncSecret(req, res, next) {
     });
   }
 
-  if (providedSecret !== configuredSecret) {
+  const provided = Buffer.from(String(providedSecret || ''));
+  const expected = Buffer.from(String(configuredSecret));
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
@@ -117,7 +120,7 @@ function recordsFromBody(body) {
  * POST /api/sync/airtable
  * Manually trigger an Airtable sync
  */
-router.post('/airtable', async (req, res) => {
+router.post('/airtable', requireSyncSecret, async (req, res) => {
   try {
     console.log('📥 Manual Airtable sync requested...');
     await triggerSync();
@@ -152,7 +155,7 @@ router.post('/airtable', async (req, res) => {
  * GET /api/sync/status
  * Get the current sync status
  */
-router.get('/status', (req, res) => {
+router.get('/status', requireSyncSecret, (req, res) => {
   res.json({
     success: true,
     status: getSyncStatus(),
@@ -163,7 +166,7 @@ router.get('/status', (req, res) => {
  * GET /api/sync/airtable/test
  * Test Airtable connection
  */
-router.get('/airtable/test', async (req, res) => {
+router.get('/airtable/test', requireSyncSecret, async (req, res) => {
   try {
     const token = process.env.AIRTABLE_TOKEN;
     const baseId = process.env.AIRTABLE_BASE_ID;

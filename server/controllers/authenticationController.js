@@ -250,8 +250,7 @@ const googlelogin = asyncHandler(async (req, res) => {
 
 const refreshSession = asyncHandler(async(req, res) => {
     try {
-        const {userId} = req.body;
-        const user = await User.findById(userId);
+        const user = await User.findById(req.user?._id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -290,16 +289,19 @@ const createNewUser = asyncHandler(async (req, res) => {
     calendlyUrl,
   } = req.body;
 
-  console.log(email)
+  const normalizedEmail = normalizeEmail(email);
 
   // Confirm data
-  if (!email || !password) {
+  if (!normalizedEmail || !password) {
     return res.status(400).json({ message: 'All fields are required' });
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters' });
   }
 
   try {
     // Check for duplicate email
-    const duplicate = await User.findOne({ email }).lean().exec();
+    const duplicate = await User.findOne({ email: normalizedEmail }).lean().exec();
 
     if (duplicate) {
       return res.status(409).json({ message: 'Duplicate email' });
@@ -346,7 +348,6 @@ const createNewUser = asyncHandler(async (req, res) => {
         "Nature & Science"
         ]
 
-    const normalizedEmail = String(email).trim().toLowerCase();
     const safeFirstName = String(firstName || displayName || normalizedEmail.split('@')[0] || 'User').trim();
     const safeLastName = String(lastName || 'Candidate').trim();
     const roleList = Array.isArray(targetRoles)
@@ -418,15 +419,13 @@ const createNewUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(user._id, { verificationToken });
 
     // Send verification email
-    const verificationLink = `https://wanderwork-backend-server.onrender.com/auth/signup/verify?email=${encodeURIComponent(email)}&token=${verificationToken}`;
+    const verificationLink = `https://wanderwork-backend-server.onrender.com/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
     const emailMessage = {
-      to: email,
-      from: 'support@aontechnology.io',
+      to: normalizedEmail,
+      from: process.env.EMAIL_FROM || 'support@wanderwork.io',
       subject: 'Verify your email',
       html: `<p>Click <a href="${verificationLink}">here</a> to verify your email and complete the signup process.</p>`,
     };
-
-    console.log('fire')
 
     try {
       if (SENDGRID_API_KEY) await sgMail.send(emailMessage);
@@ -454,9 +453,13 @@ const twitterLogin = asyncHandler(async (req, res) => {
 
 const deleteUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
+    const authenticatedEmail = normalizeEmail(req.user?.email);
 
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
+    }
+    if (normalizeEmail(email) !== authenticatedEmail) {
+        return res.status(403).json({ message: 'Forbidden' });
     }
 
     try {
@@ -497,11 +500,10 @@ const forgotPassword = asyncHandler(async (req, res) => {
     try {
         // Find the user by email
         const user = await User.findOne({ email });
-        console.log(user)
 
         if (user) {
             // Generate a unique reset token
-            const resetToken = jwtUtils.generateToken(user);
+            const resetToken = jwtUtils.generateToken(user, '1h', true);
 
             // Include this token in the recovery email
             const appUrl = process.env.APP_URL || 'https://wanderwork.io';
@@ -543,10 +545,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
             // Send the email to the user
             await sgMail.send(emailMessage);
             console.log(`Recovery email sent successfully to ${user.email}`);
-            return res.status(201).json({ message: `Recovery email sent to ${user.email}. Check your inbox for further instructions.` });
-        } else {
-            return res.status(404).json({ message: 'User not found' });
         }
+        return res.status(201).json({ message: 'If that account exists, a recovery email has been sent.' });
     } catch (error) {
         console.error('Error sending recovery email:', error);
         return res.status(500).json({ message: 'Server Error', error });
@@ -557,8 +557,6 @@ const resetPassword = asyncHandler(async (req, res) => {
     const { password, confirmPassword, resetToken } = req.body;
     const decoded = jwtUtils.verifyToken(resetToken);
     const email = decoded?.email;
-
-    console.log(email)
 
     if (!email || !password || !confirmPassword || !resetToken) {
         return res.status(400).json({ message: 'Email, password, confirm password, and reset token are required' });
@@ -599,9 +597,10 @@ const resetPassword = asyncHandler(async (req, res) => {
 })
 
 const changePassword = asyncHandler(async (req, res) => {
-    const { email, currentPassword, password } = req.body;
+    const { currentPassword, password } = req.body;
+    const email = normalizeEmail(req.user?.email);
     // Confirm data
-    if (!email || !confirmPassword || !password) {
+    if (!email || !currentPassword || !password) {
         return res.status(400).json({ message: 'Email, current password, and new password are required' });
     }
 
@@ -651,7 +650,7 @@ const updateUserLoginInfo = async(user) => {
 };
 
 const startSession = asyncHandler(async (req, res) => {
-    const { id } = req.body;
+    const id = req.user?._id;
     if (!id) {
         return res.status(400).json({ message: 'Id is required' });
     }
@@ -688,7 +687,7 @@ const startSession = asyncHandler(async (req, res) => {
 });
 
 const endSession = asyncHandler(async (req, res) => {
-    const { id } = req.body;
+    const id = req.user?._id;
     if (!id) {
         return res.status(400).json({ message: 'Id is required' });
     }

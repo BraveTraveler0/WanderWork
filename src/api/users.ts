@@ -35,11 +35,23 @@ export async function getUserByIdPost(id: string): Promise<User> {
 export async function updateUser(id: string, data: Partial<User> & Record<string, unknown>): Promise<User> {
   const res = await fetch(`${BASE_URL}/users/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeader() },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update user: ${res.status}`);
   return res.json();
+}
+
+export async function changePassword(currentPassword: string, password: string): Promise<{ message: string }> {
+  const res = await fetch(`${BASE_URL}/auth/changePassword`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    body: JSON.stringify({ currentPassword, password }),
+  });
+  let payload: any = {};
+  try { payload = await res.json(); } catch {}
+  if (!res.ok) throw new Error(payload?.message || `Failed to update password: ${res.status}`);
+  return payload;
 }
 
 export async function deleteAccount(): Promise<{ success: boolean }> {

@@ -1,6 +1,7 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const mongoose = require('mongoose'); // Add this import
 const connectDB = require("./config/dbConn");
 const path = require('path');
@@ -20,6 +21,9 @@ const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
+app.set('trust proxy', 1);
 
 // Connection check middleware
 const checkConnection = async (req, res, next) => {
@@ -36,12 +40,39 @@ const checkConnection = async (req, res, next) => {
 // Stripe webhook must receive the raw body before express.json() parses it
 app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
 
+const defaultAllowedOrigins = [
+  'https://wanderwork.io',
+  'https://www.wanderwork.io',
+  'https://wanderwork.onrender.com',
+  'https://wanderwork-backend-server.onrender.com',
+];
+const configuredAllowedOrigins = String(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
+
 app.use(cors({
-  origin: "*",
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin) || /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
 app.use(express.json({ limit: '25mb' }));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please try again later.' },
+});
+app.use(['/auth/login', '/auth/signup', '/auth/forgotPassword', '/auth/resetPassword', '/oauth/google'], authLimiter);
 
 // UTF-8 Header Middleware
 app.use((req, res, next) => {
@@ -71,23 +102,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 const passport = require('passport');
 const session = require('express-session');
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'ww-session-secret',
+  name: 'ww.oauth.sid',
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || require('crypto').randomBytes(64).toString('hex'),
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 10 * 60 * 1000 }, // 10-min session for OAuth only
+  cookie: {
+    secure: isProduction,
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000,
+  }, // 10-min session for OAuth only
 }));
 app.use(passport.initialize());
 app.use(passport.session());
-
-// const rateLimit = require("express-rate-limit");
-
-// const limiter = rateLimit({
-//   windowMs: 60 * 1000,
-//   max: 100,
-//   message: "Too many requests, please try again later."
-// });
-
-// app.use(limiter);
 
 // Route definitions
 const routes = {

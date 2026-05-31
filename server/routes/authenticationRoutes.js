@@ -9,7 +9,8 @@ router.route('/signup')
 
 router.get('/signup/verify', async (req, res) => {
     try {
-        const { email, token } = req.query;
+        const email = String(req.query.email || '').trim().toLowerCase();
+        const { token } = req.query;
 
         if (!email || !token) {
             return res.status(400).json({ message: 'Invalid verification link.' });
@@ -38,7 +39,7 @@ router.get('/signup/verify', async (req, res) => {
 
 router.route('/refresh').post(requireAuth, authenticationController.refreshSession);
 router.route('/startSession').post(requireAuth, authenticationController.startSession);
-router.route('/endSession').post(authenticationController.endSession);
+router.route('/endSession').post(requireAuth, authenticationController.endSession);
 
 router.route('/login')
     .post(authenticationController.login)
@@ -47,10 +48,10 @@ router.route('/googlelogin')
     .post(authenticationController.googlelogin)
 
 router.route('/delete')
-    .delete(authenticationController.deleteUser)
+    .delete(requireAuth, authenticationController.deleteUser)
 
 router.route('/changePassword')
-    .post(authenticationController.changePassword)
+    .post(requireAuth, authenticationController.changePassword)
 
 router.route('/forgotPassword')
     .post(authenticationController.forgotPassword)

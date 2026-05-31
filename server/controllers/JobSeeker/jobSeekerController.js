@@ -699,8 +699,24 @@ const getEverything = asyncHandler(async (req, res) => {
             getAllCandidateJobPairingsPure(),
             getAllContactJobPairingsPure(),
         ]);
-        const filteredApplications = Applications.filter((a) => a.status !== 'system');
-        res.json({ Applications: filteredApplications, Candidates: allCandidates, Jobs, Contacts, CandidateJobPairing, ContactJobPairing });
+        const visibleCandidates = req.user?.email
+            ? allCandidates.filter((c) => String(c.email || '').toLowerCase() === req.user.email.toLowerCase())
+            : allCandidates;
+        const candidateIds = new Set(visibleCandidates.map((c) => String(c._id)));
+        const filteredApplications = Applications.filter((a) =>
+            a.status !== 'system' && (req.user?.email ? candidateIds.has(String(a.candidateId)) : true)
+        );
+        const filteredCandidatePairing = CandidateJobPairing.filter((p) =>
+            req.user?.email ? candidateIds.has(String(p.candidateId)) : true
+        );
+        res.json({
+            Applications: filteredApplications,
+            Candidates: visibleCandidates,
+            Jobs,
+            Contacts: req.user?.email ? [] : Contacts,
+            CandidateJobPairing: filteredCandidatePairing,
+            ContactJobPairing: req.user?.email ? [] : ContactJobPairing,
+        });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: 'An error occurred collecting data.' });
@@ -708,6 +724,10 @@ const getEverything = asyncHandler(async (req, res) => {
 });
 
 const getAllCandidates = asyncHandler(async (req, res) => {
+    if (req.user?.email) {
+        const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }).lean().exec();
+        return res.json(candidate ? [candidate] : []);
+    }
     const results = await getAllCandidatesPure();
     res.json(results);
 });
@@ -718,7 +738,7 @@ const getAllJobs = asyncHandler(async (req, res) => {
 });
 
 const getAllApplications = asyncHandler(async (req, res) => {
-    const { email } = req.query;
+    const email = req.user?.email || req.query.email;
     if (email) {
         const candidate = await Candidates.findOne({ email: String(email).toLowerCase() }, '_id').lean();
         if (!candidate) return res.json([]);
@@ -737,16 +757,27 @@ const getAllApplications = asyncHandler(async (req, res) => {
 });
 
 const getAllContacts = asyncHandler(async (req, res) => {
+    if (req.user?.email) return res.json([]);
     const results = await getAllContactsPure();
     res.json(results);
 });
 
 const getAllCandidateJobPairings = asyncHandler(async (req, res) => {
+    if (req.user?.email) {
+        const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }, '_id').lean();
+        if (!candidate) return res.json([]);
+        const results = await CandidateJobPairings.find(
+            { candidateId: candidate._id },
+            { candidateId: 1, jobId: 1, score: 1, matchedSkills: 1, reason: 1, pairedAt: 1 }
+        ).lean().exec();
+        return res.json(results);
+    }
     const results = await getAllCandidateJobPairingsPure();
     res.json(results);
 });
 
 const getAllContactJobPairings = asyncHandler(async (req, res) => {
+    if (req.user?.email) return res.json([]);
     const results = await getAllContactJobPairingsPure();
     res.json(results);
 });
@@ -854,20 +885,23 @@ const getCandidateById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-        return res.statusCode(400).json({message: 'Candidate ID must be supplied.'});
+        return res.status(400).json({message: 'Candidate ID must be supplied.'});
     }
     try
     {
-        const results = Candidates.FindById(id);
-        if (!results?.length) {
-            return res.statusCode(400).json({message: 'No Candidate found.'});
+        const results = await Candidates.findById(id).lean().exec();
+        if (!results) {
+            return res.status(404).json({message: 'No Candidate found.'});
+        }
+        if (req.user?.email && String(results.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+            return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
         }
         res.json(results);
     }
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occurred when trying to collect Candidate ' + id});
+        res.status(500).json({message: 'An error occurred when trying to collect Candidate ' + id});
     }
 });
 
@@ -898,9 +932,15 @@ const getApplicationById = asyncHandler(async (req, res) => {
     }
     try
     {
-        const results = Applications.FindById(id);
-        if(!results?.length) {
-            return res.statusCode(400).json({message: 'No Application found.'});
+        const results = await Applications.findById(id).lean().exec();
+        if(!results) {
+            return res.status(404).json({message: 'No Application found.'});
+        }
+        if (req.user?.email) {
+            const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }, '_id').lean().exec();
+            if (!candidate || String(results.candidateId) !== String(candidate._id)) {
+                return res.status(403).json({ message: 'Forbidden: application does not belong to this account.' });
+            }
         }
         res.json(results);
     }
@@ -918,9 +958,15 @@ const getCandidateJobPariringById = asyncHandler(async (req, res) => {
     }
     try
     {
-        const results = CandidateJobPairings.FindById(id);
-        if(!results?.length) {
-            return res.statusCode(400).json({message: 'No Candidate+Job pairing found.'});
+        const results = await CandidateJobPairings.findById(id).lean().exec();
+        if(!results) {
+            return res.status(404).json({message: 'No Candidate+Job pairing found.'});
+        }
+        if (req.user?.email) {
+            const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }, '_id').lean().exec();
+            if (!candidate || String(results.candidateId) !== String(candidate._id)) {
+                return res.status(403).json({ message: 'Forbidden: pairing does not belong to this account.' });
+            }
         }
         res.json(results);
     }
@@ -938,6 +984,7 @@ const getContactById = asyncHandler(async (req, res) => {
     }
     try
     {
+        if (req.user?.email) return res.status(403).json({ message: 'Forbidden.' });
         const results = Contacts.FindById(id);
         if(!results?.length) {
             return res.statusCode(400).json({message: 'No contact found.'});
@@ -958,6 +1005,7 @@ const getContactJobPairingById = asyncHandler(async (req, res) => {
     }
     try
     {
+        if (req.user?.email) return res.status(403).json({ message: 'Forbidden.' });
         const results = ContactJobPairings.FindById(id);
         if(!results?.length) {
             return res.statusCode(400).json({message: 'No Contact+Job pairing found.'});
@@ -987,6 +1035,14 @@ const updateCandidateSkills = asyncHandler(async (req, res) => {
         : String(skills).split(',').map((s) => s.trim()).filter(Boolean);
 
     try {
+        const existing = await Candidates.findById(id).select('email').lean().exec();
+        if (!existing) {
+            return res.status(404).json({ message: 'Candidate not found.' });
+        }
+        if (req.user?.email && String(existing.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+            return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
+        }
+
         const candidate = await Candidates.findByIdAndUpdate(
             id,
             { skills: normalizedSkills },
@@ -1027,6 +1083,11 @@ const pairCandidateJobsHandler = asyncHandler(async (req, res) => {
     if (!id) return res.status(400).json({ message: 'Candidate ID must be supplied.' });
 
     try {
+        const candidate = await Candidates.findById(id).select('email').lean().exec();
+        if (!candidate) return res.status(404).json({ message: 'Candidate not found.' });
+        if (req.user?.email && String(candidate.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+            return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
+        }
         const result = await pairCandidateJobs(id, { limit, minScore });
         return res.json(result);
     } catch (err) {
@@ -1035,13 +1096,17 @@ const pairCandidateJobsHandler = asyncHandler(async (req, res) => {
 });
 
 const pairAllCandidatesHandler = asyncHandler(async (req, res) => {
+    const adminEmail = process.env.ADMIN_EMAIL || '';
+    if (!adminEmail || String(req.user?.email || '').toLowerCase() !== adminEmail.toLowerCase()) {
+        return res.status(403).json({ message: 'Admin access required.' });
+    }
     const { limit, minScore } = req.body || {};
     const results = await pairAllCandidates({ limit, minScore });
     res.json({ candidates: results.length, results });
 });
 
 const updateCandidateResume = asyncHandler(async (req, res) => {
-    const { email } = req.body || {};
+    const email = req.user?.email || req.body?.email;
     const file = req.file;
 
     if (!email) {
@@ -1054,6 +1119,9 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     const candidate = await Candidates.findOne({ email: String(email).toLowerCase() });
     if (!candidate) {
         return res.status(404).json({ message: 'Candidate not found.' });
+    }
+    if (req.user?.email && String(candidate.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+        return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
     }
 
     // Only count an existing resume if a real URL or non-empty object (not the default `{}`) exists
@@ -1292,7 +1360,7 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
 
 // ── Shared OpenAI helper ─────────────────────────────────────────────────────
 const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
-    const { email } = req.body || {};
+    const email = req.user?.email || req.body?.email;
     const file = req.file;
 
     if (!email) {
@@ -1305,6 +1373,9 @@ const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
     const candidate = await Candidates.findOne({ email: String(email).toLowerCase() });
     if (!candidate) {
         return res.status(404).json({ message: 'Candidate not found.' });
+    }
+    if (req.user?.email && String(candidate.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+        return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
     }
 
     const ext = path.extname(file.originalname || '').toLowerCase();
@@ -1881,41 +1952,93 @@ Tailor every bullet point to match the target job description — highlight spec
 });
 
 const UpdateAllData = asyncHandler(async (req, res) => {
-    const {data} = req.body;
-    
-    await Promise.all([
-        dbUtils.bulkUpsert('JobSeeker.Applications', data.Applications),
-        dbUtils.bulkUpsert('JobSeeker.Candidates', data.Candidates),
-        dbUtils.bulkUpsert('JobSeeker.Jobs', data.Jobs),
-        dbUtils.bulkUpsert('JobSeeker.Contacts', data.Contacts),
-        dbUtils.bulkUpsert('JobSeeker.CandidateJobPairing', data.CandidateJobPairing || data.CandidateJobPairings),
-        dbUtils.bulkUpsert('JobSeeker.ContactJobPairing', data.ContactJobPairing || data.ContactJobPairings)
+    const { data } = req.body || {};
+    const userEmail = String(req.user?.email || '').toLowerCase();
+    if (!userEmail) return res.status(401).json({ message: 'Authentication required.' });
+    if (!data || typeof data !== 'object') return res.status(400).json({ message: 'data is required.' });
+
+    const candidate = await Candidates.findOne({ email: userEmail }).lean().exec();
+    if (!candidate) return res.status(404).json({ message: 'Candidate not found.' });
+    const candidateId = candidate._id;
+    const candidateIdString = String(candidateId);
+
+    const editableCandidateFields = new Set([
+        'firstName',
+        'lastName',
+        'phone',
+        'location',
+        'targetRoles',
+        'seniority',
+        'skills',
+        'urls',
+        'resume',
+        'resumeLink',
+        'coverLetter',
+        'coverLetterLink',
+        'profileImage',
+        'summary',
+        'work_experience',
+        'education',
     ]);
 
-    const candidateIds = new Set();
-    if (Array.isArray(data.Candidates)) {
-        data.Candidates.forEach((candidate) => {
-            if (candidate?._id) candidateIds.add(String(candidate._id));
-        });
+    let candidateUpdated = false;
+    for (const patch of Array.isArray(data.Candidates) ? data.Candidates : []) {
+        if (patch?._id && String(patch._id) !== candidateIdString) {
+            return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account.' });
+        }
+        if (patch?.email && String(patch.email).toLowerCase() !== userEmail) {
+            return res.status(403).json({ message: 'Email changes are not allowed from this endpoint.' });
+        }
+
+        const setFields = {};
+        for (const [key, value] of Object.entries(patch || {})) {
+            if (editableCandidateFields.has(key)) setFields[key] = value;
+        }
+
+        if (Object.keys(setFields).length) {
+            await Candidates.updateOne({ _id: candidateId }, { $set: setFields });
+            candidateUpdated = true;
+        }
+    }
+
+    let applicationUpdates = 0;
+    const allowedStatuses = new Set(['interested', 'not_interested', 'prepared', 'applied', 'dismissed']);
+    for (const application of Array.isArray(data.Applications) ? data.Applications : []) {
+        if (application?.candidateId && String(application.candidateId) !== candidateIdString) {
+            return res.status(403).json({ message: 'Forbidden: application does not belong to this account.' });
+        }
+        if (!application?.jobId) continue;
+
+        const status = allowedStatuses.has(application.status) ? application.status : 'interested';
+        await Applications.findOneAndUpdate(
+            { jobId: application.jobId, candidateId },
+            {
+                $set: {
+                    status,
+                    preparedAt: application.preparedAt ? new Date(application.preparedAt) : new Date(),
+                },
+                $setOnInsert: {
+                    jobId: application.jobId,
+                    candidateId,
+                    resume: {},
+                    coverLetter: '',
+                },
+            },
+            { upsert: true }
+        );
+        applicationUpdates++;
     }
 
     let pairing = { updated: false };
     try {
-        if (candidateIds.size > 0) {
-            const results = [];
-            for (const candidateId of candidateIds) {
-                results.push(await pairCandidateJobs(candidateId));
-            }
-            pairing = { updated: true, results };
-        } else if (Array.isArray(data.Jobs) && data.Jobs.length > 0) {
-            const results = await pairAllCandidates();
-            pairing = { updated: true, results };
+        if (candidateUpdated) {
+            pairing = { updated: true, results: [await pairCandidateJobs(candidateId)] };
         }
     } catch (err) {
         pairing = { updated: false, reason: err.message };
     }
 
-    res.status(200).json({ message: 'Update process completed.', pairing });
+    res.status(200).json({ message: 'Update process completed.', candidateUpdated, applicationUpdates, pairing });
 });
 
 const ImportData = asyncHandler(async (req, res) => {
@@ -1997,7 +2120,8 @@ const ImportData = asyncHandler(async (req, res) => {
 
 
 const sendPlanWelcomeEmail = asyncHandler(async (req, res) => {
-    const { email, plan } = req.body || {};
+    const { plan } = req.body || {};
+    const email = String(req.user?.email || '').toLowerCase();
     if (!email || !plan) {
         return res.status(400).json({ message: 'email and plan are required.' });
     }

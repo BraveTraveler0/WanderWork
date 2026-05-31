@@ -79,7 +79,7 @@ router.route('/aoncon2024/update/:id')
 router.route('/aoncon2024/updateTutorial/:id')
     .post(usersController.updateEventTutorial)
     
-router.patch('/:id', usersController.updateUser)
+router.patch('/:id', requireAuth, usersController.updateUser)
 router.delete('/deleteAccount', requireAuth, usersController.deleteUser)
 
 module.exports = router

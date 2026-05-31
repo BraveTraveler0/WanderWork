@@ -40,6 +40,23 @@ async function refillRecruiterContacts(candidateId) {
   return newLeft
 }
 
+async function requireCandidateOwner(req, candidateId) {
+  const candidate = await CandidateModel.findById(candidateId).lean()
+  if (!candidate) {
+    const error = new Error('Candidate not found')
+    error.statusCode = 404
+    throw error
+  }
+
+  if (!req.user?.email || String(candidate.email || '').toLowerCase() !== req.user.email.toLowerCase()) {
+    const error = new Error('Forbidden: candidate does not belong to this account')
+    error.statusCode = 403
+    throw error
+  }
+
+  return candidate
+}
+
 // ── Email transporter (SMTP) ─────────────────────────────────────────────────
 const getTransporter = () => {
   const user = process.env.EMAIL_SMTP_USER
@@ -216,11 +233,9 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
   if (!candidateId) return res.status(400).json({ message: 'candidateId required' })
 
   const [candidate, contacted] = await Promise.all([
-    CandidateModel.findById(candidateId).lean(),
+    requireCandidateOwner(req, candidateId),
     RecruiterContact.find({ candidateId }).select('recruiterId').lean(),
   ])
-
-  if (!candidate) return res.status(404).json({ message: 'Candidate not found' })
 
   const specialties = inferSpecialties(candidate)
   const contactedIds = contacted.map((c) => c.recruiterId)
@@ -289,6 +304,7 @@ const getAllRecruiters = asyncHandler(async (req, res) => {
 const recordContact = asyncHandler(async (req, res) => {
   const { candidateId, recruiterId, status = 'paired', emailBody, tokensUsed = 0 } = req.body
   if (!candidateId || !recruiterId) return res.status(400).json({ message: 'candidateId and recruiterId required' })
+  await requireCandidateOwner(req, candidateId)
 
   const recruiter = await Recruiter.findById(recruiterId).lean()
 
@@ -311,6 +327,7 @@ const recordContact = asyncHandler(async (req, res) => {
 const getContactHistory = asyncHandler(async (req, res) => {
   const { candidateId } = req.query
   if (!candidateId) return res.status(400).json({ message: 'candidateId required' })
+  await requireCandidateOwner(req, candidateId)
 
   const contacts = await RecruiterContact.find({ candidateId })
     .populate({ path: 'recruiterId', model: 'JobSeeker.Recruiter' })
@@ -328,15 +345,7 @@ const RECRUITER_EMAIL_COST = 10
 const sendEmail = asyncHandler(async (req, res) => {
   const { candidateId, recruiterId } = req.body
   if (!candidateId || !recruiterId) return res.status(400).json({ message: 'candidateId and recruiterId required' })
-
-  // If a JWT is present, verify the candidateId belongs to the authenticated user
-  if (req.user?.email) {
-    const claimed = await CandidateModel.findById(candidateId).select('email').lean()
-    if (!claimed) return res.status(404).json({ message: 'Candidate not found' })
-    if (claimed.email.toLowerCase() !== req.user.email.toLowerCase()) {
-      return res.status(403).json({ message: 'Forbidden: candidate does not belong to this account' })
-    }
-  }
+  await requireCandidateOwner(req, candidateId)
 
   // Apply any earned daily-contact refills before checking the limit
   await refillRecruiterContacts(candidateId)
