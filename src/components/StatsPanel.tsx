@@ -513,30 +513,39 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
 
               {/* Match Reason */}
-              {selectedJob.skills && selectedJob.skills.length > 0 && (
-                <div>
-                  <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedJob.skills.slice(0, 3).map((skill: string, i: number) => (
-                      <span
-                        key={i}
-                        style={{
-                          display: 'inline-block',
-                          background: '#f0f7f8',
-                          color: '#306770',
-                          border: '1px solid #c8dfe2',
-                          borderRadius: '999px',
-                          padding: '4px 14px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {skill}
-                      </span>
-                    ))}
+              {(() => {
+                const matchSkills: string[] = selectedJob.skills?.length > 0
+                  ? selectedJob.skills.slice(0, 3)
+                  : [
+                      selectedJob.jobType || selectedJob.job_type || 'Full-time',
+                      selectedJob.location === 'Remote' ? 'Remote' : (selectedJob.location?.split(',')[0] || 'On-site'),
+                      selectedJob.source || 'Job Board',
+                    ].filter(Boolean).slice(0, 3);
+                return (
+                  <div>
+                    <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
+                    <div className="flex flex-wrap gap-2">
+                      {matchSkills.map((skill: string, i: number) => (
+                        <span
+                          key={i}
+                          style={{
+                            display: 'inline-block',
+                            background: '#f0f7f8',
+                            color: '#306770',
+                            border: '1px solid #c8dfe2',
+                            borderRadius: '999px',
+                            padding: '4px 14px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Description */}
               <p className="text-[16px] leading-relaxed whitespace-pre-line" style={{ color: '#787878' }}>
