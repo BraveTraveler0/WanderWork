@@ -36,6 +36,18 @@ function requireSyncSecret(req, res, next) {
   next();
 }
 
+function stripHtml(str) {
+  return String(str || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 async function upsertJobs(records) {
   const col = require('mongoose').connection.collection('jobseeker.jobs');
   let upserted = 0;
@@ -49,16 +61,16 @@ async function upsertJobs(records) {
       const urlNormalized = url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
 
       const doc = {
-        title: String(r.title || '').trim(),
-        company: String(r.company || 'Unknown').trim(),
+        title: stripHtml(r.title).trim(),
+        company: stripHtml(r.company || 'Unknown').trim(),
         url,
         url_normalized: urlNormalized,
         job_code: String(r.jobCode || r.job_code || '').trim(),
         salary: String(r.salary || 'Not Listed').trim(),
-        location: String(r.location || 'Remote').trim(),
+        location: stripHtml(r.location || 'Remote').trim(),
         job_type: String(r.jobType || r.job_type || '').trim(),
         date_posted: r.datePosted || r.date_posted ? new Date(r.datePosted || r.date_posted) : new Date(),
-        description_short: String(r.description || r.description_short || '').slice(0, 500),
+        description_short: stripHtml(r.description || r.description_short || '').slice(0, 500),
         source: String(r.source || 'n8n').trim(),
         score: 0,
         tags: [],
