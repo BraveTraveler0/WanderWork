@@ -26,7 +26,7 @@ function getRequestBaseUrl(req) {
 function getLinkedInCallbackUrl(req) {
   const explicitCallback = normalizeBaseUrl(process.env.LINKEDIN_CALLBACK_URL);
   if (explicitCallback) return explicitCallback;
-  return `${getRequestBaseUrl(req)}/oauth/linkedin/callback`;
+  return `${SERVER_URL}/oauth/linkedin/callback`;
 }
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();

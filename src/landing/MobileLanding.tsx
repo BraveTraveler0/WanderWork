@@ -176,11 +176,9 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
           <span style={{ fontSize: 9, fontWeight: 500, color: '#AAAAAA', background: 'transparent', border: '1px solid #DCDCDC', borderRadius: 5, padding: '1px 6px', letterSpacing: 0.5 }}>BETA</span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {isTablet && (
-            <button onClick={onSignIn} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '10px', color: TEAL, background: 'transparent', border: `2px solid ${TEAL}`, cursor: 'pointer', fontFamily: FONT }}>
-              Sign In
-            </button>
-          )}
+          <button onClick={onSignIn} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '10px', color: TEAL, background: 'transparent', border: `2px solid ${TEAL}`, cursor: 'pointer', fontFamily: FONT }}>
+            Sign In
+          </button>
           <button onClick={onSignUp} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 16px', borderRadius: '10px', color: 'white', background: TEAL, border: 'none', cursor: 'pointer', fontFamily: FONT }}>
             Sign Up
           </button>
