@@ -171,42 +171,29 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     )
 
   const locationInputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<any>(null)
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
+  const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const initPlacesAutocomplete = useCallback(() => {
-    const win = window as any
-    if (!win.google?.maps?.places || !locationInputRef.current || autocompleteRef.current) return
-    autocompleteRef.current = new win.google.maps.places.Autocomplete(locationInputRef.current, {
-      types: ['(cities)'],
-      fields: ['address_components', 'formatted_address'],
-    })
-    autocompleteRef.current.addListener('place_changed', () => {
-      const place = autocompleteRef.current.getPlace()
-      const components: any[] = place.address_components || []
-      const city = components.find((c: any) => c.types.includes('locality'))?.long_name
-        || components.find((c: any) => c.types.includes('postal_town'))?.long_name
-        || components.find((c: any) => c.types.includes('administrative_area_level_3'))?.long_name
-        || ''
-      const state = components.find((c: any) => c.types.includes('administrative_area_level_1'))?.short_name || ''
-      const country = components.find((c: any) => c.types.includes('country'))?.short_name || ''
-      const locationName = state ? `${city}, ${state}` : country ? `${city}, ${country}` : city
-      handleProfileChange('location', locationName)
-    })
+  const fetchLocationSuggestions = useCallback(async (query: string) => {
+    if (query.length < 2) { setLocationSuggestions([]); return }
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&featuretype=city&addressdetails=1&limit=5&format=json`,
+        { headers: { 'Accept-Language': 'en' } }
+      )
+      const data = await res.json()
+      const seen = new Set<string>()
+      const suggestions: string[] = []
+      for (const place of data) {
+        const city = place.address?.city || place.address?.town || place.address?.village || place.address?.municipality || ''
+        const state = place.address?.state_code || place.address?.state || ''
+        const country = place.address?.country_code?.toUpperCase() || ''
+        const label = city && state ? `${city}, ${state}` : city && country ? `${city}, ${country}` : place.display_name?.split(',')[0] || ''
+        if (label && !seen.has(label)) { seen.add(label); suggestions.push(label) }
+      }
+      setLocationSuggestions(suggestions)
+    } catch { setLocationSuggestions([]) }
   }, [])
-
-  useEffect(() => {
-    const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_KEY as string
-    if (!mapsKey) return
-    const win = window as any
-    if (win.google?.maps?.places) { initPlacesAutocomplete(); return }
-    if (document.querySelector('script[data-places]')) return
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places`
-    script.async = true
-    script.dataset.places = '1'
-    script.onload = initPlacesAutocomplete
-    document.head.appendChild(script)
-  }, [initPlacesAutocomplete])
 
   useEffect(() => {
     if (!candidate) return
@@ -517,17 +504,43 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     />
                   </div>
 
-                  <div>
+                  <div style={{ position: 'relative' }}>
                     <label className="block text-[12px] mb-2" style={{ color: '#787878' }}>Location</label>
                     <input
                       ref={locationInputRef}
                       type="text"
                       value={profile.location}
-                      onChange={(e) => handleProfileChange('location', e.target.value)}
+                      onChange={(e) => {
+                        handleProfileChange('location', e.target.value)
+                        if (locationDebounce.current) clearTimeout(locationDebounce.current)
+                        locationDebounce.current = setTimeout(() => fetchLocationSuggestions(e.target.value), 350)
+                      }}
+                      onBlur={() => setTimeout(() => setLocationSuggestions([]), 150)}
                       className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
                       style={{ borderColor: '#DCDCDC', color: '#306770' }}
                       placeholder="Atlanta, GA"
+                      autoComplete="off"
                     />
+                    {locationSuggestions.length > 0 && (
+                      <ul style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                        background: '#fff', border: '1px solid #DCDCDC', borderRadius: 10,
+                        marginTop: 4, padding: '4px 0', boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                        listStyle: 'none',
+                      }}>
+                        {locationSuggestions.map((s, i) => (
+                          <li
+                            key={i}
+                            onMouseDown={() => { handleProfileChange('location', s); setLocationSuggestions([]) }}
+                            style={{ padding: '8px 14px', fontSize: 13, color: '#306770', cursor: 'pointer' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f7f8')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
