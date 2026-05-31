@@ -1,5 +1,5 @@
 const APP_URL = process.env.APP_URL || 'https://wanderwork.io'
-const FROM_EMAIL = { name: 'Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
+const FROM_EMAIL = { name: 'Alice at Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
 
 const base = (content) => `
 <!DOCTYPE html>
