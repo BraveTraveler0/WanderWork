@@ -445,6 +445,7 @@ function App() {
   }, [])
 
   const [oauthError, setOauthError] = useState<string | null>(null)
+  const [tokenClaimNotice, setTokenClaimNotice] = useState<{ text: string; success: boolean } | null>(null)
 
   // Handle OAuth callbacks (LinkedIn redirect, etc.)
   useEffect(() => {
@@ -452,8 +453,31 @@ function App() {
     const oauthToken = params.get('token')
     const oauthUser = params.get('user')
     const oauthErr = params.get('error')
+    const claimToken = params.get('claimToken')
+    const claimEmail = params.get('claimEmail')
 
-    if (oauthToken && oauthUser) {
+    if (claimToken && claimEmail) {
+      window.history.replaceState({}, '', window.location.pathname)
+      fetch(`${API_BASE}/jobseeker/claim-weekly-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: claimEmail, token: claimToken }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success) {
+            const plural = data.tokensAdded > 1
+            setTokenClaimNotice({ text: `+${data.tokensAdded} free token${plural ? 's' : ''} added to your account!`, success: true })
+          } else {
+            setTokenClaimNotice({ text: data.error || 'Token claim failed.', success: false })
+          }
+          setTimeout(() => setTokenClaimNotice(null), 8000)
+        })
+        .catch(() => {
+          setTokenClaimNotice({ text: 'Something went wrong claiming your token. Please try again.', success: false })
+          setTimeout(() => setTokenClaimNotice(null), 6000)
+        })
+    } else if (oauthToken && oauthUser) {
       try {
         const userData = JSON.parse(decodeURIComponent(oauthUser))
         localStorage.setItem('wanderworkToken', oauthToken)
@@ -1049,6 +1073,13 @@ function App() {
           <span style={{ color: '#F87171', flexShrink: 0, marginTop: 1 }}>!</span>
           <span>{oauthError}</span>
           <button onClick={() => setOauthError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: 0, flexShrink: 0, fontSize: 16, lineHeight: 1 }}>x</button>
+        </div>
+      )}
+      {tokenClaimNotice && (
+        <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, maxWidth: 480, width: 'calc(100% - 40px)', background: tokenClaimNotice.success ? '#306770' : '#1A1A2E', color: '#fff', borderRadius: 12, padding: '14px 20px', fontSize: 13, fontFamily: 'Manrope', lineHeight: 1.5, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flexShrink: 0, fontSize: 18 }}>{tokenClaimNotice.success ? '✨' : '!'}</span>
+          <span>{tokenClaimNotice.text}</span>
+          <button onClick={() => setTokenClaimNotice(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, flexShrink: 0, fontSize: 18, lineHeight: 1, opacity: 0.7 }}>x</button>
         </div>
       )}
       {/* Full-width sticky header */}

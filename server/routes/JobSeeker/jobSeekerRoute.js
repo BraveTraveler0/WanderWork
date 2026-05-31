@@ -5,6 +5,7 @@ const multer = require('multer')
 const router = express.Router()
 const jobSeekerController = require('../../controllers/JobSeeker/jobSeekerController')
 const { optionalAuth, requireAuth } = require('../../middleware/requireAuth')
+const { claimWeeklyToken } = require('../../services/weeklyTokenService')
 
 const resumeUploadDir = path.join(__dirname, '../../uploads/resumes')
 const coverLetterUploadDir = path.join(__dirname, '../../uploads/cover-letters')
@@ -92,5 +93,21 @@ router.route('/update')
 
 router.route('/send-welcome-email')
     .post(jobSeekerController.sendPlanWelcomeEmail)
+
+router.route('/claim-weekly-token')
+    .post(async (req, res) => {
+        const { email, token } = req.body || {};
+        if (!email || !token) {
+            return res.status(400).json({ success: false, error: 'email and token are required.' });
+        }
+        try {
+            const result = await claimWeeklyToken(email, token);
+            if (!result.success) return res.status(400).json(result);
+            res.json(result);
+        } catch (err) {
+            console.error('[ClaimToken] Error:', err.message);
+            res.status(500).json({ success: false, error: 'Something went wrong. Please try again.' });
+        }
+    })
 
 module.exports = router

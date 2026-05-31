@@ -36,6 +36,47 @@ function requireSyncSecret(req, res, next) {
   next();
 }
 
+async function upsertJobs(records) {
+  const col = require('mongoose').connection.collection('jobseeker.jobs');
+  let upserted = 0;
+  let errors = 0;
+
+  for (const r of records) {
+    try {
+      const url = String(r.url || r.id || '').trim();
+      if (!url) { errors++; continue; }
+
+      const urlNormalized = url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
+
+      const doc = {
+        title: String(r.title || '').trim(),
+        company: String(r.company || 'Unknown').trim(),
+        url,
+        url_normalized: urlNormalized,
+        job_code: String(r.jobCode || r.job_code || '').trim(),
+        salary: String(r.salary || 'Not Listed').trim(),
+        location: String(r.location || 'Remote').trim(),
+        job_type: String(r.jobType || r.job_type || '').trim(),
+        date_posted: r.datePosted || r.date_posted ? new Date(r.datePosted || r.date_posted) : new Date(),
+        description_short: String(r.description || r.description_short || '').slice(0, 500),
+        source: String(r.source || 'n8n').trim(),
+        score: 0,
+        tags: [],
+        cover_letter: '',
+      };
+
+      await col.updateOne({ url_normalized: urlNormalized }, { $set: doc }, { upsert: true });
+      upserted++;
+    } catch (err) {
+      console.error('[SyncJobs] Error upserting job:', err.message);
+      errors++;
+    }
+  }
+
+  console.log(`[SyncJobs] Done. Upserted: ${upserted}, Errors: ${errors}`);
+  return { upserted, errors };
+}
+
 function recordsFromBody(body) {
   if (Array.isArray(body)) return body;
   if (Array.isArray(body?.records)) return body.records;
@@ -176,6 +217,17 @@ router.post('/import-recruiters', requireSyncSecret, async (req, res) => {
   if (!Array.isArray(records) || !records.length) return res.status(400).json({ error: 'records required' });
   try { res.json({ success: true, ...await upsertRecruiters(records) }); }
   catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+router.post('/jobs', requireSyncSecret, async (req, res) => {
+  const records = recordsFromBody(req.body);
+  if (!records.length) return res.status(400).json({ success: false, error: 'Job record or records array required' });
+  try {
+    const result = await upsertJobs(records);
+    res.json({ success: true, message: 'Jobs upserted into MongoDB', ...result, timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;

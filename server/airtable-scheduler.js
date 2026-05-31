@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
 const { pairAllCandidates } = require('./services/jobPairingService');
 const { syncRecruiters } = require('./services/recruiterSyncService');
+const { sendWeeklyTokenEmails } = require('./services/weeklyTokenService');
 
 let isRunning = false;
 let lastSyncTime = null;
@@ -93,6 +94,13 @@ ${'='.repeat(60)}`);
   }
 }
 
+function isElevenAmEastern() {
+  const etHour = new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+  ).getHours();
+  return etHour === 11;
+}
+
 /**
  * Initialize scheduled sync
  * Runs at the top of every hour (00 minutes)
@@ -107,10 +115,18 @@ function initScheduledSync() {
     runSync();
   });
 
-  
+
   // Run daily dedup at 2:30 AM server time
   const dedupTask = cron.schedule('30 2 * * *', () => {
     runDailyDedup();
+  });
+
+  // Weekly free token emails — every Thursday, fires at 15:00 and 16:00 UTC
+  // to cover both EST (UTC-5) and EDT (UTC-4). Only executes when Eastern time = 11 AM.
+  cron.schedule('0 15,16 * * 4', () => {
+    if (!isElevenAmEastern()) return;
+    console.log('[WeeklyToken] Thursday 11 AM EST triggered — sending free token emails...');
+    sendWeeklyTokenEmails().catch((e) => console.error('[WeeklyToken] Cron failed:', e.message));
   });
 
 console.log('✅ Scheduled sync initialized\n');

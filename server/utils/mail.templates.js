@@ -1,5 +1,5 @@
 const APP_URL = process.env.APP_URL || 'https://wanderwork.io'
-const FROM_EMAIL = process.env.EMAIL_FROM || 'support@wanderwork.io'
+const FROM_EMAIL = { name: 'Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
 
 const base = (content) => `
 <!DOCTYPE html>
@@ -153,4 +153,45 @@ function premiumWelcomeEmail(firstName) {
   }
 }
 
-module.exports = { proWelcomeEmail, premiumWelcomeEmail }
+// ─── Weekly Free Token ────────────────────────────────────────────────────────
+
+function weeklyTokenEmail(firstName, amount, claimUrl) {
+  const name = firstName || 'there'
+  const plural = amount > 1
+  const tokenDisplay = `+${amount}`
+  const content = `
+    <p style="margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:2px;color:#306770;text-transform:uppercase;">This week's gift</p>
+    <h1 style="margin:0 0 20px;font-size:28px;font-weight:800;color:#1f2937;">Hey ${name}, we've got something for you.</h1>
+    <p style="margin:0 0 32px;font-size:15px;color:#6b7280;line-height:1.7;">
+      We know things can be tough out there. Here's a token of our appreciation for letting us help you find your next remote job!
+    </p>
+
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:36px;">
+      <tr>
+        <td align="center" style="padding:32px 24px;background:#f0f7f8;border-radius:20px;">
+          <p style="margin:0 0 6px;font-size:72px;font-weight:900;color:#306770;letter-spacing:-3px;line-height:1;">${tokenDisplay}</p>
+          <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:2.5px;color:#306770;text-transform:uppercase;">Free Token${plural ? 's' : ''}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table cellpadding="0" cellspacing="0" width="100%">
+      ${ctaButton(`Click Here to Claim Your Free Token${plural ? 's' : ''}`, claimUrl)}
+    </table>
+
+    <p style="margin:28px 0 0;font-size:12px;color:#c0c8cc;text-align:center;">
+      This link expires in 7 days. Token${plural ? 's are' : ' is'} added to your account the moment you click claim.
+    </p>
+
+    <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
+      — The Wander/Work Team
+    </p>
+  `
+  return {
+    from: FROM_EMAIL,
+    subject: `You have a free token waiting. Claim it now.`,
+    html: base(content),
+  }
+}
+
+module.exports = { proWelcomeEmail, premiumWelcomeEmail, weeklyTokenEmail }

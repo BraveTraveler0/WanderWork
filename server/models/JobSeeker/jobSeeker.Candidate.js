@@ -152,6 +152,13 @@ const jobSeekerCandidateSchema = new mongoose.Schema({
         type: [String],
         default: [],
         required: false
+    },
+    weeklyTokenGrant: {
+        token: { type: String, default: null },
+        amount: { type: Number, default: 1 },
+        expiresAt: { type: Date, default: null },
+        claimed: { type: Boolean, default: false },
+        claimedAt: { type: Date, default: null }
     }
 })
 
