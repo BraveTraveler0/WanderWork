@@ -1333,6 +1333,60 @@ const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
     res.json({ candidate });
 });
 
+const RESUME_SECTION_HEADERS = new Set([
+    'SUMMARY',
+    'PROFESSIONAL SUMMARY',
+    'PROFILE',
+    'WORK EXPERIENCE',
+    'PROFESSIONAL EXPERIENCE',
+    'RELEVANT EXPERIENCE',
+    'EXPERIENCE',
+    'EDUCATION',
+    'CERTIFICATIONS',
+    'CERTIFICATION',
+    'LICENSES',
+    'PROJECTS',
+    'SELECTED PROJECTS',
+    'CORE COMPETENCIES',
+    'TECHNICAL SKILLS',
+    'SKILLS',
+    'TOOLS',
+    'AWARDS',
+    'VOLUNTEERING',
+    'PUBLICATIONS',
+])
+
+const RESUME_METRIC_RE = /\b(\$[\d,]+(?:\.\d+)?[kKmMbB]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?x|\d[\d,]*(?:\.\d+)?\s*(?:\+|years?|months?|weeks?|days?|users?|clients?|customers?|projects?|campaigns?|teams?|people|stakeholders?|applications?|roles?|interviews?|recruiters?|leads?|hires?|hours?|minutes?|revenue|growth|increase|decrease|faster|costs?|savings?))\b/g
+const RESUME_BULLET_RE = /^[-*\u2022]\s+/
+
+function isResumeSectionHeader(line) {
+    const normalized = line.trim().replace(/\s+/g, ' ').toUpperCase()
+    return RESUME_SECTION_HEADERS.has(normalized)
+        || (/^[A-Z][A-Z0-9\s/&()+.,'-]{2,}$/.test(normalized) && normalized.length <= 40 && !/\d{4}/.test(normalized))
+}
+
+function isKnownResumeSectionHeader(line) {
+    return RESUME_SECTION_HEADERS.has(line.trim().replace(/\s+/g, ' ').toUpperCase())
+}
+
+function isResumeBullet(line) {
+    return RESUME_BULLET_RE.test(line.trim())
+}
+
+function stripResumeBullet(line) {
+    return line.trim().replace(RESUME_BULLET_RE, '')
+}
+
+function isLikelyResumeRoleLine(line) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.length > 140 || /[.!?]$/.test(trimmed)) return false
+    return /\s\|\s/.test(trimmed) || /\b(19|20)\d{2}\b/.test(trimmed) || /\b(Present|Current)\b/i.test(trimmed)
+}
+
+function applyResumeHtmlEmphasis(value) {
+    return value.replace(RESUME_METRIC_RE, '<strong>$1</strong>')
+}
+
 function markdownToEmailHtml(text) {
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const lines = text.split('\n')
@@ -1374,10 +1428,59 @@ function markdownToEmailHtml(text) {
     return out.join('\n')
 }
 
+function styledDocumentTextToEmailHtml(text) {
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const lines = text.split('\n')
+    const out = []
+    let inList = false
+
+    for (const raw of lines) {
+        const line = raw.trimEnd()
+        const trimmed = line.trim()
+
+        if (/^---+$/.test(trimmed)) {
+            if (inList) { out.push('</ul>'); inList = false }
+            out.push('<hr style="border:none;border-top:1px solid #e4e8ee;margin:14px 0;">')
+            continue
+        }
+
+        if (isResumeBullet(line)) {
+            if (!inList) { out.push('<ul style="margin:4px 0 4px 0;padding-left:20px;">'); inList = true }
+            const bulletText = applyResumeHtmlEmphasis(esc(stripResumeBullet(line)))
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+            out.push(`<li style="margin:2px 0;font-size:14px;line-height:1.7;color:#2D2D2D;">${bulletText}</li>`)
+            continue
+        }
+
+        if (inList) { out.push('</ul>'); inList = false }
+        if (!trimmed) { out.push('<div style="height:8px;"></div>'); continue }
+
+        if (isResumeSectionHeader(trimmed)) {
+            out.push(`<div style="font-weight:700;font-size:12px;letter-spacing:0.1em;color:#306770;margin-top:20px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e4e8ee;">${esc(trimmed)}</div>`)
+            continue
+        }
+
+        const formatted = applyResumeHtmlEmphasis(esc(line))
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+
+        if (isLikelyResumeRoleLine(line)) {
+            out.push(`<div style="font-weight:700;font-size:14px;line-height:1.7;color:#1A1A2E;">${formatted}</div>`)
+            continue
+        }
+
+        out.push(`<div style="font-size:14px;line-height:1.7;color:#2D2D2D;">${formatted}</div>`)
+    }
+
+    if (inList) out.push('</ul>')
+    return out.join('\n')
+}
+
 function buildDocumentEmailHtml({ greeting, docLabel, jobTitle, company, content, hasAttachment }) {
     const PRIMARY = '#306770'
     const BG = '#F2F4F8'
-    const htmlContent = markdownToEmailHtml(content || '')
+    const htmlContent = styledDocumentTextToEmailHtml(content || '')
     return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1547,22 +1650,76 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     }
 
     // RTF builder — opens natively in Word, Pages, Google Docs
-    const textToRtf = (text) => {
+    const textToRtf = (text, options = {}) => {
+        const isResume = options.documentType === 'resume'
         const rtfEsc = (s) => s
             .replace(/\\/g, '\\\\')
             .replace(/\{/g, '\\{')
             .replace(/\}/g, '\\}')
             .replace(/[^\x00-\x7F]/g, (c) => `\\u${c.charCodeAt(0)}?`)
-        const lines = text.split('\n').map((line) => {
-            const escaped = rtfEsc(line)
+
+        const rtfWithMarkdownEmphasis = (value) => rtfEsc(value)
                 .replace(/\*\*(.+?)\*\*/g, (_, m) => `{\\b ${m}}`)
                 .replace(/\*(.+?)\*/g, (_, m) => `{\\i ${m}}`)
-            return escaped + '\\par'
-        }).join('\n')
+
+        const rtfWithMetricBold = (value) => {
+            const metricRe = new RegExp(RESUME_METRIC_RE.source, 'g')
+            let output = ''
+            let lastIndex = 0
+            value.replace(metricRe, (match, _metric, offset) => {
+                output += rtfEsc(value.slice(lastIndex, offset))
+                output += `{\\b ${rtfEsc(match)}}`
+                lastIndex = offset + match.length
+                return match
+            })
+            output += rtfEsc(value.slice(lastIndex))
+            return output
+        }
+
+        let lines
+        if (!isResume) {
+            lines = text.split('\n').map((line) => `\\pard\\sa120\\sl276\\slmult1 ${rtfWithMarkdownEmphasis(line)}\\par`).join('\n')
+        } else {
+            let hasStyledName = false
+            let seenSection = false
+            lines = text.split('\n').map((raw) => {
+                const line = raw.trimEnd()
+                const trimmed = line.trim()
+
+                if (!trimmed) return '\\pard\\sa80\\par'
+                if (/^---+$/.test(trimmed)) return '\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa120\\par'
+
+                if (!hasStyledName && !seenSection && !isKnownResumeSectionHeader(trimmed)) {
+                    hasStyledName = true
+                    return `\\pard\\sa80\\sl300\\slmult1\\b\\fs30 ${rtfEsc(trimmed)}\\b0\\fs22\\par`
+                }
+
+                if (isResumeSectionHeader(trimmed)) {
+                    seenSection = true
+                    return `\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa160\\sl276\\slmult1\\cf1\\b\\fs22 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
+                }
+
+                if (!seenSection) {
+                    return `\\pard\\sa80\\sl240\\slmult1\\fs20 ${rtfEsc(trimmed)}\\fs22\\par`
+                }
+
+                if (isResumeBullet(line)) {
+                    return `\\pard\\fi-240\\li360\\sa80\\sl276\\slmult1 - ${rtfWithMetricBold(stripResumeBullet(line))}\\par`
+                }
+
+                const body = rtfWithMetricBold(trimmed)
+                if (isLikelyResumeRoleLine(trimmed)) {
+                    return `\\pard\\sa80\\sl276\\slmult1\\b ${body}\\b0\\par`
+                }
+
+                return `\\pard\\sa80\\sl276\\slmult1 ${body}\\par`
+            }).join('\n')
+        }
+
         return `{\\rtf1\\ansi\\ansicpg1252\\deff0` +
             `{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}}` +
-            `{\\colortbl ;\\red48\\green103\\blue112;}` +
-            `\\f0\\fs22\\sa120\\sl276\\slmult1 ` +
+            `{\\colortbl ;\\red48\\green103\\blue112;\\red45\\green45\\blue45;}` +
+            `\\margl1080\\margr1080\\margt900\\margb900\\f0\\fs22\\cf2 ` +
             lines + `}`
     }
 
@@ -1653,7 +1810,7 @@ Tailor every bullet point to match the target job description — highlight spec
                     subject,
                     html: buildDocumentEmailHtml({ greeting: candidateGreeting, docLabel: 'tailored resume', jobTitle, company, content: resumeContent, hasAttachment: true }),
                     attachments: [{
-                        content: Buffer.from(textToRtf(resumeContent)).toString('base64'),
+                        content: Buffer.from(textToRtf(resumeContent, { documentType: 'resume' })).toString('base64'),
                         type: 'text/rtf',
                         filename: `resume-${safeCompany}.rtf`,
                         disposition: 'attachment',
