@@ -14,6 +14,22 @@ const {
 
 const router = express.Router();
 
+async function aiCompanyDescription(companyName) {
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: `Write a 2-3 sentence professional description of the company "${companyName}". Be factual and concise. Return only the description text, nothing else.` }],
+      temperature: 0.3,
+      max_tokens: 120,
+    });
+    return response.choices[0].message.content.trim();
+  } catch {
+    return '';
+  }
+}
+
 function getSyncSecret() {
   return process.env.N8N_SYNC_SECRET || process.env.SYNC_ADMIN_KEY || process.env.IMPORT_ADMIN_KEY || '';
 }
@@ -70,7 +86,8 @@ async function upsertJobs(records) {
         location: stripHtml(r.location || 'Remote').trim(),
         job_type: String(r.jobType || r.job_type || '').trim(),
         date_posted: r.datePosted || r.date_posted ? new Date(r.datePosted || r.date_posted) : new Date(),
-        description_short: stripHtml(r.description || r.description_short || '').slice(0, 500),
+        description_short: stripHtml(r.description || r.description_short || '').slice(0, 500) ||
+          (process.env.OPENAI_API_KEY ? await aiCompanyDescription(String(r.company || 'Unknown')) : ''),
         source: String(r.source || 'n8n').trim(),
         score: 0,
         tags: [],
