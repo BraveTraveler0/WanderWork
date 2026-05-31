@@ -530,9 +530,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                           key={i}
                           style={{
                             display: 'inline-block',
-                            background: '#f0f7f8',
-                            color: '#306770',
-                            border: '1px solid #c8dfe2',
+                            background: '#ffffff',
+                            color: '#787878',
+                            border: '1px solid #d1d5db',
                             borderRadius: '999px',
                             padding: '4px 14px',
                             fontSize: '12px',
