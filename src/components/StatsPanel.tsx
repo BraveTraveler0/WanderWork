@@ -513,9 +513,30 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
 
               {/* Match Reason */}
-              <p className="text-[16px]" style={{ color: '#787878' }}>
-                Why you were matched : {selectedJob.skills?.join(', ')}
-              </p>
+              {selectedJob.skills && selectedJob.skills.length > 0 && (
+                <div>
+                  <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedJob.skills.slice(0, 3).map((skill: string, i: number) => (
+                      <span
+                        key={i}
+                        style={{
+                          display: 'inline-block',
+                          background: '#f0f7f8',
+                          color: '#306770',
+                          border: '1px solid #c8dfe2',
+                          borderRadius: '999px',
+                          padding: '4px 14px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Description */}
               <p className="text-[16px] leading-relaxed whitespace-pre-line" style={{ color: '#787878' }}>
