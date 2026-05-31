@@ -514,9 +514,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Match Reason */}
               {(() => {
-                const extractFallbackSkills = (title: string, desc: string): string[] => {
+                const extractFallbackSkills = (title: string, desc: string, jobType: string): string[] => {
                   const text = `${title} ${desc}`.toLowerCase();
-                  const tagMap: [RegExp, string][] = [
+                  const titleLower = title.toLowerCase();
+                  const found: string[] = [];
+
+                  const skillMap: [RegExp, string][] = [
                     [/\bux\b|user experience/, 'UX'],
                     [/\bui\b|user interface/, 'UI'],
                     [/product manager|product management/, 'Product Management'],
@@ -529,40 +532,62 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                     [/data analyst/, 'Data Analytics'],
                     [/machine learning|\bml\b|deep learning/, 'Machine Learning'],
                     [/\bai\b|artificial intelligence/, 'AI'],
-                    [/devops|site reliability|\bsre\b/, 'DevOps'],
+                    [/devops|site reliability/, 'DevOps'],
                     [/cloud|aws|azure|gcp/, 'Cloud'],
                     [/security|cybersecurity/, 'Cybersecurity'],
                     [/mobile|ios|android/, 'Mobile'],
-                    [/design|designer/, 'Design'],
+                    [/\bdesign|\bdesigner/, 'Design'],
                     [/marketing/, 'Marketing'],
                     [/finance|financial|accounting/, 'Finance'],
                     [/sales|account executive|account manager/, 'Sales'],
-                    [/operations|ops/, 'Operations'],
-                    [/recruiter|recruiting|talent/, 'Recruiting'],
+                    [/operations|\bops\b/, 'Operations'],
+                    [/recruiter|recruiting|talent acquisition/, 'Recruiting'],
                     [/project manager|program manager/, 'Project Management'],
-                    [/content|copywriter|copy/, 'Content'],
+                    [/\bcontent\b|copywriter/, 'Content'],
                     [/analytics|analyst/, 'Analytics'],
                     [/customer success|customer support/, 'Customer Success'],
                     [/legal|compliance|attorney/, 'Legal'],
                     [/healthcare|medical|clinical/, 'Healthcare'],
-                    [/hr\b|human resources|people ops/, 'HR'],
+                    [/\bhr\b|human resources|people ops/, 'HR'],
                     [/graphic/, 'Graphic Design'],
                     [/video|motion/, 'Video'],
                     [/research|scientist/, 'Research'],
                     [/infrastructure|platform/, 'Infrastructure'],
                     [/blockchain|web3|crypto/, 'Web3'],
+                    [/supply chain|logistics/, 'Supply Chain'],
+                    [/brand/, 'Branding'],
                   ];
-                  const found: string[] = [];
-                  for (const [pattern, label] of tagMap) {
+
+                  for (const [pattern, label] of skillMap) {
                     if (pattern.test(text)) found.push(label);
-                    if (found.length === 3) break;
+                    if (found.length === 3) return found;
                   }
-                  return found;
+
+                  // Seniority fallbacks from title
+                  if (found.length < 3) {
+                    if (/\bintern\b/i.test(titleLower)) found.push('Internship');
+                    else if (/\bstaff\b|\bprincipal\b/i.test(titleLower)) found.push('Staff Level');
+                    else if (/\blead\b/i.test(titleLower)) found.push('Lead');
+                    else if (/\bsenior\b|\bsr\b/i.test(titleLower)) found.push('Senior');
+                    else if (/\bjunior\b|\bjr\b/i.test(titleLower)) found.push('Junior');
+                    else if (/\bdirector\b/i.test(titleLower)) found.push('Director');
+                    else if (/\bmanager\b/i.test(titleLower)) found.push('Manager');
+                  }
+
+                  // Job type fallback
+                  if (found.length < 2) {
+                    const jt = String(jobType || '').toLowerCase();
+                    if (/contract/i.test(jt)) found.push('Contract');
+                    else if (/part.?time/i.test(jt)) found.push('Part-time');
+                    else if (/full.?time/i.test(jt) || !jt) found.push('Full-time');
+                  }
+
+                  return found.slice(0, 3);
                 };
 
                 const matchSkills: string[] = selectedJob.skills?.length > 0
                   ? selectedJob.skills.slice(0, 3)
-                  : extractFallbackSkills(selectedJob.title || '', selectedJob.shortDescription || selectedJob.description_short || '');
+                  : extractFallbackSkills(selectedJob.title || '', selectedJob.shortDescription || selectedJob.description_short || '', selectedJob.jobType || selectedJob.job_type || '');
                 return (
                   <div>
                     <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
