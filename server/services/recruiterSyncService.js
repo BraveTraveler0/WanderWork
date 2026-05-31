@@ -211,11 +211,32 @@ function buildDuplicateLookup(doc) {
 function mergeRecruiterData(primary, duplicate) {
   const merged = { ...primary }
   const stringFields = [
-    'airtableId', 'leadKey', 'firstName', 'lastName', 'name', 'email', 'personalEmail',
-    'mobileNumber', 'linkedinUrl', 'publicIdentifier', 'jobTitle', 'company',
-    'companyWebsite', 'companyDomain', 'companyLinkedin', 'location', 'city', 'state',
-    'country', 'source', 'sourceRunId', 'headline', 'industry', 'contactMethod',
-    'emailTemplate', 'status',
+    'airtableId',
+    'leadKey',
+    'firstName',
+    'lastName',
+    'name',
+    'email',
+    'personalEmail',
+    'mobileNumber',
+    'linkedinUrl',
+    'publicIdentifier',
+    'jobTitle',
+    'company',
+    'companyWebsite',
+    'companyDomain',
+    'companyLinkedin',
+    'location',
+    'city',
+    'state',
+    'country',
+    'source',
+    'sourceRunId',
+    'headline',
+    'industry',
+    'contactMethod',
+    'emailTemplate',
+    'status',
   ]
 
   for (const field of stringFields) {
