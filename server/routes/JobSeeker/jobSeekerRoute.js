@@ -7,10 +7,6 @@ const jobSeekerController = require('../../controllers/JobSeeker/jobSeekerContro
 const { requireAuth } = require('../../middleware/requireAuth')
 const { claimWeeklyToken } = require('../../services/weeklyTokenService')
 
-const resumeUploadDir = path.join(__dirname, '../../uploads/resumes')
-const coverLetterUploadDir = path.join(__dirname, '../../uploads/cover-letters')
-fs.mkdirSync(resumeUploadDir, { recursive: true })
-fs.mkdirSync(coverLetterUploadDir, { recursive: true })
 const ALLOWED_RESUME_MIMETYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -22,7 +18,7 @@ const ALLOWED_DOCUMENT_MIMETYPES = new Set([
   'text/plain',
 ])
 const resumeUpload = multer({
-  dest: resumeUploadDir,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype)) {
@@ -33,7 +29,7 @@ const resumeUpload = multer({
   },
 })
 const coverLetterUpload = multer({
-  dest: coverLetterUploadDir,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_DOCUMENT_MIMETYPES.has(file.mimetype)) {

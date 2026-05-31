@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { uploadToR2, isConfigured: r2Configured } = require('../../utils/r2.js');
 const dbUtils = require('../../utils/dbUtils.js');
 const Candidates = require('../../models/JobSeeker/jobSeeker.Candidate.js');
 const Jobs = require('../../models/JobSeeker/jobSeeker.Job.js');
@@ -1137,14 +1138,18 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
 
     const ext = path.extname(file.originalname || '').toLowerCase();
     const safeName = `${candidate._id}-${Date.now()}${ext || ''}`;
-    const targetPath = path.join(file.destination, safeName);
-    try {
-        fs.renameSync(file.path, targetPath);
-    } catch (err) {
-        console.warn('Failed to rename resume file', err);
+
+    let resumeLink;
+    if (r2Configured()) {
+        resumeLink = await uploadToR2(`resumes/${safeName}`, file.buffer, file.mimetype);
+    } else {
+        const uploadDir = path.join(__dirname, '../../uploads/resumes');
+        fs.mkdirSync(uploadDir, { recursive: true });
+        const targetPath = path.join(uploadDir, safeName);
+        fs.writeFileSync(targetPath, file.buffer);
+        resumeLink = `${PUBLIC_SERVER_URL}/uploads/resumes/${safeName}`;
     }
 
-    const resumeLink = `${PUBLIC_SERVER_URL}/uploads/resumes/${safeName}`;
     const resumeMeta = {
         filename: safeName,
         originalname: file.originalname,
@@ -1163,8 +1168,7 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     // ── Step 1: Extract raw text from the file ───────────────────────────────
     let extractedText = '';
     try {
-        const filePath = targetPath || file.path;
-        const fileBuffer = fs.readFileSync(filePath);
+        const fileBuffer = file.buffer;
         if (ext === '.pdf') {
             extractedText = await extractPdfText(fileBuffer);
         } else if (ext === '.docx' || ext === '.doc') {
@@ -1380,14 +1384,18 @@ const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
 
     const ext = path.extname(file.originalname || '').toLowerCase();
     const safeName = `${candidate._id}-${Date.now()}${ext || ''}`;
-    const targetPath = path.join(file.destination, safeName);
-    try {
-        fs.renameSync(file.path, targetPath);
-    } catch (err) {
-        console.warn('Failed to rename cover letter file', err);
+
+    let coverLetterLink;
+    if (r2Configured()) {
+        coverLetterLink = await uploadToR2(`cover-letters/${safeName}`, file.buffer, file.mimetype);
+    } else {
+        const uploadDir = path.join(__dirname, '../../uploads/cover-letters');
+        fs.mkdirSync(uploadDir, { recursive: true });
+        const targetPath = path.join(uploadDir, safeName);
+        fs.writeFileSync(targetPath, file.buffer);
+        coverLetterLink = `${PUBLIC_SERVER_URL}/uploads/cover-letters/${safeName}`;
     }
 
-    const coverLetterLink = `${PUBLIC_SERVER_URL}/uploads/cover-letters/${safeName}`;
     const coverLetterMeta = {
         filename: safeName,
         originalname: file.originalname,
