@@ -545,10 +545,10 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Actions */}
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <a
                     className="w-full sm:w-auto flex items-center justify-center px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap flex-shrink-0 transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white"
-                    style={{ 
+                    style={{
                       border: '1px solid #306770',
                       color: '#306770',
                       transition: 'all 0.5s',
@@ -563,21 +563,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   >
                     Apply on site
                   </a>
-                  {wellfoundCompanyUrl && (
-                    <p className="w-full text-[11px]" style={{ color: '#AAAAAA' }}>
-                      If that link is expired,{' '}
-                      <a
-                        href={wellfoundCompanyUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: '#306770', textDecoration: 'underline' }}
-                      >
-                        view all open roles at this company
-                      </a>
-                      .
-                    </p>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }} className="sm:w-auto">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} className="w-full sm:flex-1">
                     <button
                       className={`cta-glow w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap flex-shrink-0 transition-all duration-300${canOrder ? ' hover:scale-105' : ''}`}
                       style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
@@ -600,6 +586,22 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                       </p>
                     )}
                   </div>
+                </div>
+                {wellfoundCompanyUrl && (
+                  <p className="text-[11px]" style={{ color: '#AAAAAA' }}>
+                    If that link is expired,{' '}
+                    <a
+                      href={wellfoundCompanyUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#306770', textDecoration: 'underline' }}
+                    >
+                      view all open roles at this company
+                    </a>
+                    .
+                  </p>
+                )}
+                <div className="flex flex-col sm:flex-row gap-3">
                   {hasCompanyRecruiters && (
                     <button
                       className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
