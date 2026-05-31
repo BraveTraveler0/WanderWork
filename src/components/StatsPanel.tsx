@@ -514,13 +514,55 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Match Reason */}
               {(() => {
+                const extractFallbackSkills = (title: string, desc: string): string[] => {
+                  const text = `${title} ${desc}`.toLowerCase();
+                  const tagMap: [RegExp, string][] = [
+                    [/\bux\b|user experience/, 'UX'],
+                    [/\bui\b|user interface/, 'UI'],
+                    [/product manager|product management/, 'Product Management'],
+                    [/software engineer|software dev/, 'Software Engineering'],
+                    [/front.?end/, 'Frontend'],
+                    [/back.?end/, 'Backend'],
+                    [/full.?stack/, 'Full Stack'],
+                    [/data science|data scientist/, 'Data Science'],
+                    [/data engineer/, 'Data Engineering'],
+                    [/data analyst/, 'Data Analytics'],
+                    [/machine learning|\bml\b|deep learning/, 'Machine Learning'],
+                    [/\bai\b|artificial intelligence/, 'AI'],
+                    [/devops|site reliability|\bsre\b/, 'DevOps'],
+                    [/cloud|aws|azure|gcp/, 'Cloud'],
+                    [/security|cybersecurity/, 'Cybersecurity'],
+                    [/mobile|ios|android/, 'Mobile'],
+                    [/design|designer/, 'Design'],
+                    [/marketing/, 'Marketing'],
+                    [/finance|financial|accounting/, 'Finance'],
+                    [/sales|account executive|account manager/, 'Sales'],
+                    [/operations|ops/, 'Operations'],
+                    [/recruiter|recruiting|talent/, 'Recruiting'],
+                    [/project manager|program manager/, 'Project Management'],
+                    [/content|copywriter|copy/, 'Content'],
+                    [/analytics|analyst/, 'Analytics'],
+                    [/customer success|customer support/, 'Customer Success'],
+                    [/legal|compliance|attorney/, 'Legal'],
+                    [/healthcare|medical|clinical/, 'Healthcare'],
+                    [/hr\b|human resources|people ops/, 'HR'],
+                    [/graphic/, 'Graphic Design'],
+                    [/video|motion/, 'Video'],
+                    [/research|scientist/, 'Research'],
+                    [/infrastructure|platform/, 'Infrastructure'],
+                    [/blockchain|web3|crypto/, 'Web3'],
+                  ];
+                  const found: string[] = [];
+                  for (const [pattern, label] of tagMap) {
+                    if (pattern.test(text)) found.push(label);
+                    if (found.length === 3) break;
+                  }
+                  return found;
+                };
+
                 const matchSkills: string[] = selectedJob.skills?.length > 0
                   ? selectedJob.skills.slice(0, 3)
-                  : [
-                      selectedJob.jobType || selectedJob.job_type || 'Full-time',
-                      selectedJob.location === 'Remote' ? 'Remote' : (selectedJob.location?.split(',')[0] || 'On-site'),
-                      selectedJob.source || 'Job Board',
-                    ].filter(Boolean).slice(0, 3);
+                  : extractFallbackSkills(selectedJob.title || '', selectedJob.shortDescription || selectedJob.description_short || '');
                 return (
                   <div>
                     <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
