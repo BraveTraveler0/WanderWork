@@ -7,8 +7,27 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { sendWelcomeEmail } = require('../utils/welcomeEmail');
 
-const APP_URL = process.env.APP_URL || 'https://wanderwork.io';
-const SERVER_URL = process.env.PUBLIC_SERVER_URL || 'https://wanderwork-backend-server.onrender.com';
+const normalizeBaseUrl = (value, fallback = '') => String(value || fallback).trim().replace(/\/+$/, '');
+
+const APP_URL = normalizeBaseUrl(process.env.APP_URL, 'https://wanderwork.io');
+const SERVER_URL = normalizeBaseUrl(process.env.PUBLIC_SERVER_URL, 'https://wanderwork-backend-server.onrender.com');
+
+function getRequestBaseUrl(req) {
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  if (!host) return SERVER_URL;
+
+  const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const isLocalHost = /^localhost(?::|$)|^127\.0\.0\.1(?::|$)/i.test(host);
+  const protocol = forwardedProto || (isLocalHost ? 'http' : 'https');
+
+  return `${protocol}://${host}`.replace(/\/+$/, '');
+}
+
+function getLinkedInCallbackUrl(req) {
+  const explicitCallback = normalizeBaseUrl(process.env.LINKEDIN_CALLBACK_URL);
+  if (explicitCallback) return explicitCallback;
+  return `${getRequestBaseUrl(req)}/oauth/linkedin/callback`;
+}
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -43,27 +62,30 @@ async function resolveGoogleIdentity({ credential, accessToken }) {
 
 // ── LinkedIn OAuth (manual flow, no passport) ────────────────────────────────
 if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
-  const LINKEDIN_CALLBACK = `${SERVER_URL}/oauth/linkedin/callback`;
-
   // Step 1: redirect user to LinkedIn authorization page
   router.get('/linkedin', (req, res) => {
     const state = crypto.randomBytes(16).toString('hex');
-    // Build params without scope so we can append it with %20 encoding.
-    // URLSearchParams encodes spaces as + which LinkedIn rejects.
+    const callbackUrl = getLinkedInCallbackUrl(req);
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.LINKEDIN_CLIENT_ID,
-      redirect_uri: LINKEDIN_CALLBACK,
+      redirect_uri: callbackUrl,
       state,
+      scope: 'openid profile email',
     });
-    res.redirect(
-      `https://www.linkedin.com/oauth/v2/authorization?${params}&scope=openid%20profile%20email`
-    );
+
+    if (req.session) req.session.linkedinOAuthState = state;
+
+    // URLSearchParams encodes spaces as +. LinkedIn's OAuth screen is more reliable
+    // with %20 for scope separators, so normalize it before redirecting.
+    const query = params.toString().replace(/\+/g, '%20');
+    res.set('Cache-Control', 'no-store');
+    res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${query}`);
   });
 
   // Step 2: handle LinkedIn callback, exchange code for token, fetch user info
   router.get('/linkedin/callback', async (req, res) => {
-    const { code, error, error_description } = req.query;
+    const { code, error, error_description, state } = req.query;
 
     if (error) {
       if (error === 'invalid_scope' || (String(error_description || '')).toLowerCase().includes('scope')) {
@@ -73,8 +95,14 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
     }
 
     if (!code) return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+    if (req.session?.linkedinOAuthState && state !== req.session.linkedinOAuthState) {
+      delete req.session.linkedinOAuthState;
+      return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+    }
+    if (req.session?.linkedinOAuthState) delete req.session.linkedinOAuthState;
 
     try {
+      const callbackUrl = getLinkedInCallbackUrl(req);
       // Exchange authorization code for access token
       const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
         method: 'POST',
@@ -82,7 +110,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
         body: new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          redirect_uri: LINKEDIN_CALLBACK,
+          redirect_uri: callbackUrl,
           client_id: process.env.LINKEDIN_CLIENT_ID,
           client_secret: process.env.LINKEDIN_CLIENT_SECRET,
         }),
