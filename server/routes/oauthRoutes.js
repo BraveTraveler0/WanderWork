@@ -13,7 +13,7 @@ const APP_URL = normalizeBaseUrl(process.env.APP_URL, 'https://wanderwork.io');
 const SERVER_URL = normalizeBaseUrl(process.env.PUBLIC_SERVER_URL, 'https://wanderwork-backend-server.onrender.com');
 
 function getRequestBaseUrl(req) {
-  const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  const host = String(req.get('host') || req.get('x-forwarded-host') || '').split(',')[0].trim();
   if (!host) return SERVER_URL;
 
   const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
