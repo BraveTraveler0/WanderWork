@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, CreditCard, Eye, Files, Upload, WalletCards, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
@@ -170,6 +170,44 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       })
     )
 
+  const locationInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteRef = useRef<any>(null)
+
+  const initPlacesAutocomplete = useCallback(() => {
+    const win = window as any
+    if (!win.google?.maps?.places || !locationInputRef.current || autocompleteRef.current) return
+    autocompleteRef.current = new win.google.maps.places.Autocomplete(locationInputRef.current, {
+      types: ['(cities)'],
+      fields: ['address_components', 'formatted_address'],
+    })
+    autocompleteRef.current.addListener('place_changed', () => {
+      const place = autocompleteRef.current.getPlace()
+      const components: any[] = place.address_components || []
+      const city = components.find((c: any) => c.types.includes('locality'))?.long_name
+        || components.find((c: any) => c.types.includes('postal_town'))?.long_name
+        || components.find((c: any) => c.types.includes('administrative_area_level_3'))?.long_name
+        || ''
+      const state = components.find((c: any) => c.types.includes('administrative_area_level_1'))?.short_name || ''
+      const country = components.find((c: any) => c.types.includes('country'))?.short_name || ''
+      const locationName = state ? `${city}, ${state}` : country ? `${city}, ${country}` : city
+      handleProfileChange('location', locationName)
+    })
+  }, [])
+
+  useEffect(() => {
+    const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_KEY as string
+    if (!mapsKey) return
+    const win = window as any
+    if (win.google?.maps?.places) { initPlacesAutocomplete(); return }
+    if (document.querySelector('script[data-places]')) return
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places`
+    script.async = true
+    script.dataset.places = '1'
+    script.onload = initPlacesAutocomplete
+    document.head.appendChild(script)
+  }, [initPlacesAutocomplete])
+
   useEffect(() => {
     if (!candidate) return
     const nextProfile = {
@@ -194,7 +232,10 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       }
     }
     if (field === 'location') {
-      return { location: [{ locationName: value, city: value }] }
+      const parts = value.split(',').map((s: string) => s.trim())
+      const city = parts[0] || value
+      const state = parts[1] || ''
+      return { location: [{ locationName: value, city, state }] }
     }
     if (field === 'email' || field === 'phone') {
       return { [field]: value }
@@ -479,11 +520,13 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   <div>
                     <label className="block text-[12px] mb-2" style={{ color: '#787878' }}>Location</label>
                     <input
+                      ref={locationInputRef}
                       type="text"
                       value={profile.location}
                       onChange={(e) => handleProfileChange('location', e.target.value)}
                       className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
                       style={{ borderColor: '#DCDCDC', color: '#306770' }}
+                      placeholder="Atlanta, GA"
                     />
                   </div>
 
