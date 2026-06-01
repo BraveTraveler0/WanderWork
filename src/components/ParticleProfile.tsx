@@ -197,17 +197,17 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
           onClick={onSignUp}
-          style={{ width: '100%', background: TEAL, color: 'white', border: 'none', borderRadius: 12, padding: '13px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, transition: 'background 0.2s' }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#245460')}
-          onMouseLeave={e => (e.currentTarget.style.background = TEAL)}
+          style={{ width: '100%', background: TEAL, color: 'white', border: 'none', borderRadius: 12, padding: '13px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, transition: 'background 0.2s, transform 0.2s, box-shadow 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#245460'; e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(48,103,112,0.35)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = TEAL; e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
         >
           Sign Up Free
         </button>
         <button
           onClick={onSignIn}
-          style={{ width: '100%', background: 'transparent', color: TEAL, border: `2px solid ${TEAL}`, borderRadius: 12, padding: '11px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}
-          onMouseEnter={e => { e.currentTarget.style.background = TEAL; e.currentTarget.style.color = 'white' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = TEAL }}
+          style={{ width: '100%', background: 'transparent', color: TEAL, border: `2px solid ${TEAL}`, borderRadius: 12, padding: '11px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, transition: 'background 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = TEAL; e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(48,103,112,0.25)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = TEAL; e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}
         >
           Sign In
         </button>

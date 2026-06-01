@@ -1260,6 +1260,7 @@ function App() {
                       onNewJobsClick={() => setShowNewOnly(true)}
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                       isAuthenticated={!!_token}
+                      onSignUp={() => setShowSignup(true)}
                     />
                   </div>
                 </div>
@@ -1277,6 +1278,7 @@ function App() {
                   onNewJobsClick={() => setShowNewOnly(true)}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                   isAuthenticated={!!_token}
+                      onSignUp={() => setShowSignup(true)}
                 />
               )}
             </div>

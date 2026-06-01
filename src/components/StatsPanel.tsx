@@ -18,9 +18,10 @@ interface StatsPanelProps {
   onNewJobsClick?: () => void
   onRecruiterContactsClick?: () => void
   isAuthenticated?: boolean
+  onSignUp?: () => void
 }
 
-const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
   const newJobsCount = allJobs.filter((j: any) => j.hasNewBadge === true).length
@@ -238,7 +239,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Stats - Desktop only */}
       <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
-        <TokenCoinIcon onClick={openTokens} />
+        <TokenCoinIcon onClick={isAuthenticated ? openTokens : onSignUp} />
         {isAuthenticated && <>
           <div className="relative overflow-visible group/tokens">
             <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
