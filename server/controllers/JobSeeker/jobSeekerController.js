@@ -2006,6 +2006,7 @@ Tailor every bullet point to match the target job description — highlight spec
 
     const resumeContent = ensureSectionSpacing(stripLinkedInContact(fillPlaceholders(resumeRaw)))
     const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
+        ?.split('\n').filter(line => !/^---+$/.test(line.trim())).join('\n')
 
     let application = null
     if (jobDoc?._id && (resumeContent || coverLetterContent)) {
