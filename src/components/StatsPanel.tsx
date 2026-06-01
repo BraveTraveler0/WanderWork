@@ -939,12 +939,12 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     const off = document.createElement('canvas')
     off.width = S; off.height = S
     const oc = off.getContext('2d')!
+    // Draw ring: filled circle then punch out center
     oc.fillStyle = '#306770'
     oc.beginPath(); oc.arc(cx, cy, r, 0, Math.PI * 2); oc.fill()
-    // Open circle ring in lighter teal
-    oc.strokeStyle = '#b2dde8'
-    oc.lineWidth = S * 0.11
-    oc.beginPath(); oc.arc(cx, cy, S * 0.26, 0, Math.PI * 2); oc.stroke()
+    oc.globalCompositeOperation = 'destination-out'
+    oc.beginPath(); oc.arc(cx, cy, S * 0.24, 0, Math.PI * 2); oc.fill()
+    oc.globalCompositeOperation = 'source-over'
 
     const px = oc.getImageData(0, 0, S, S).data
     const gap = 3
@@ -953,11 +953,8 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
       for (let x = 0; x < S; x += gap) {
         const i = (y * S + x) * 4
         if (px[i + 3] < 64) continue
-        const isLight = px[i] > 140
-        const b = 0.7 + Math.random() * 0.3
-        const color = isLight
-          ? `rgb(${Math.floor(178*b)},${Math.floor(221*b)},${Math.floor(232*b)})`
-          : `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`
+        const b = 0.65 + Math.random() * 0.35
+        const color = `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`
         ps.push({ ox: x, oy: y, x, y, vx: 0, vy: 0, size: Math.floor(Math.random() * 2) + 1, color })
       }
     }
