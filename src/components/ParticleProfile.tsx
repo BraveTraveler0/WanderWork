@@ -93,65 +93,43 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
       canvas!.width = W
       canvas!.height = H
 
-    // Draw silhouette to offscreen canvas then extract pixel positions
-    const off = document.createElement('canvas')
-    off.width = W; off.height = H
-    const oc = off.getContext('2d')!
-    oc.fillStyle = TEAL
+    // Build SVG silhouette scaled to canvas size, load as image, extract pixels
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
+      <!-- Head -->
+      <circle cx="50" cy="22" r="18" fill="black"/>
+      <!-- Neck -->
+      <rect x="44" y="38" width="12" height="12" fill="black"/>
+      <!-- Shoulders and body -->
+      <path d="M 50 48
+        C 38 48, 8 56, 4 70
+        L 4 130 L 96 130
+        L 96 70
+        C 92 56, 62 48, 50 48 Z" fill="black"/>
+    </svg>`
 
-    const cx = W / 2
-    const headR = W * 0.21
-    const headY = H * 0.20
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const img = new Image()
+    img.onload = () => {
+      const off = document.createElement('canvas')
+      off.width = W; off.height = H
+      const oc = off.getContext('2d')!
+      oc.drawImage(img, 0, 0, W, H)
+      URL.revokeObjectURL(url)
 
-    // Head (slightly oval - taller than wide)
-    oc.beginPath()
-    oc.ellipse(cx, headY, headR * 0.88, headR, 0, 0, Math.PI * 2)
-    oc.fill()
+      const pixels = oc.getImageData(0, 0, W, H).data
+      const gap = 5
+      const ps: Particle[] = []
 
-    // Left ear
-    oc.beginPath()
-    oc.ellipse(cx - headR * 0.84, headY + headR * 0.05, headR * 0.13, headR * 0.2, 0, 0, Math.PI * 2)
-    oc.fill()
-
-    // Right ear
-    oc.beginPath()
-    oc.ellipse(cx + headR * 0.84, headY + headR * 0.05, headR * 0.13, headR * 0.2, 0, 0, Math.PI * 2)
-    oc.fill()
-
-    // Neck
-    const neckW = headR * 0.38
-    const neckTop = headY + headR * 0.82
-    const neckBot = headY + headR * 1.45
-    oc.beginPath()
-    oc.rect(cx - neckW, neckTop, neckW * 2, neckBot - neckTop)
-    oc.fill()
-
-    // Shoulders / upper torso
-    const bw = W * 0.46
-    const bTop = neckBot - headR * 0.1
-    oc.beginPath()
-    oc.moveTo(cx - bw * 0.3, bTop)
-    oc.bezierCurveTo(cx - bw * 0.3, bTop, cx - bw * 0.55, bTop + H * 0.04, cx - bw, bTop + H * 0.12)
-    oc.bezierCurveTo(cx - bw * 1.02, bTop + H * 0.15, cx - bw * 0.98, H * 0.82, cx - bw * 0.85, H * 0.82)
-    oc.lineTo(cx + bw * 0.85, H * 0.82)
-    oc.bezierCurveTo(cx + bw * 0.98, H * 0.82, cx + bw * 1.02, bTop + H * 0.15, cx + bw, bTop + H * 0.12)
-    oc.bezierCurveTo(cx + bw * 0.55, bTop + H * 0.04, cx + bw * 0.3, bTop, cx + bw * 0.3, bTop)
-    oc.closePath()
-    oc.fill()
-
-    const pixels = oc.getImageData(0, 0, W, H).data
-    const gap = 5
-    const ps: Particle[] = []
-
-    for (let y = 0; y < H; y += gap) {
-      for (let x = 0; x < W; x += gap) {
-        if (pixels[(y * W + x) * 4 + 3] > 128) {
-          const b = 0.65 + Math.random() * 0.35
-          ps.push(new Particle(x, y, `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`, ctx))
+      for (let y = 0; y < H; y += gap) {
+        for (let x = 0; x < W; x += gap) {
+          if (pixels[(y * W + x) * 4 + 3] > 128) {
+            const b = 0.65 + Math.random() * 0.35
+            ps.push(new Particle(x, y, `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`, ctx))
+          }
         }
       }
-    }
-    particlesRef.current = ps
+      particlesRef.current = ps
 
       const onMove = (e: MouseEvent) => {
         const r = canvas!.getBoundingClientRect()
@@ -162,12 +140,15 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
       canvas!.addEventListener('mousemove', onMove)
       canvas!.addEventListener('mouseleave', onLeave)
 
+      if (animRef.current) cancelAnimationFrame(animRef.current)
       const animate = () => {
         ctx.clearRect(0, 0, W, H)
         for (const p of particlesRef.current) p.update(mouseRef.current)
         animRef.current = requestAnimationFrame(animate)
       }
       animate()
+    }
+    img.src = url
     }
 
     const ro = new ResizeObserver(() => init())
