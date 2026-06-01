@@ -1,9 +1,10 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { Users } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
 import JobFeed from './components/JobFeed'
 import StatsPanel from './components/StatsPanel'
+import ParticleProfile from './components/ParticleProfile'
 import SettingsPage from './components/SettingsPage'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
@@ -17,7 +18,6 @@ import ReportBugPage from './components/ReportBugPage'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wanderwork-backend-server.onrender.com'
 
-const LandingPage = lazy(() => import('./landing/LandingPage'))
 import {
   getAllJobSeekerData,
   getJobs,
@@ -963,25 +963,14 @@ function App() {
     </div>
   )
 
-  // Show landing page when unauthenticated and not explicitly navigating to login
-  if (!_token && !showLogin && !showSignup) {
-    if (showPlans) {
-      return (
-        <PlansPage
-          onBack={() => setShowPlans(false)}
-          onSignUp={() => { setShowPlans(false); setShowSignup(true) }}
-          onSignIn={() => { setShowPlans(false); setShowLogin(true) }}
-        />
-      )
-    }
+  // Plans page accessible to unauthenticated users
+  if (!_token && showPlans && !showLogin && !showSignup) {
     return (
-      <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f4f4f4' }} />}>
-        <LandingPage
-          onSignIn={() => setShowLogin(true)}
-          onSignUp={() => setShowSignup(true)}
-          onGoPremium={() => setShowPlans(true)}
-        />
-      </Suspense>
+      <PlansPage
+        onBack={() => setShowPlans(false)}
+        onSignUp={() => { setShowPlans(false); setShowSignup(true) }}
+        onSignIn={() => { setShowPlans(false); setShowLogin(true) }}
+      />
     )
   }
 
@@ -1091,51 +1080,70 @@ function App() {
             {logoText.length > 7 ? logoText.slice(7) : ''}
           </h1>
           <div className="flex items-center gap-3 sm:gap-4">
-            <button
-              onClick={() => setShowRecruiterNavModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-all duration-200"
-              style={{ border: '1px solid #C8DEDE', color: '#306770' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#EEF6F7' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              title="Contact Recruiters"
-            >
-              <Users size={13} />
-              <span className="hidden sm:inline">Contact Recruiters</span>
-            </button>
-            <button
-              className="relative"
-              onClick={() => { setCurrentPage('messages'); setUnseenAppCount(0) }}
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-              title="Messages"
-            >
-              <div className="w-[31px] h-[31px] rounded-full overflow-hidden flex items-center justify-center text-[11px] font-semibold" style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}>
-                {profileImage ? (
-                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  getInitials(`${safeData.Candidates[0]?.firstName || ''} ${safeData.Candidates[0]?.lastName || ''}`.trim() || _user?.displayName || _user?.email || 'User')
-                )}
-              </div>
-              {unseenAppCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-[15px] h-[15px] rounded-full flex items-center justify-center text-[8px] font-bold text-white pointer-events-none" style={{ background: '#36BF8F', fontFamily: 'Manrope' }}>
-                  {unseenAppCount > 9 ? '9+' : unseenAppCount}
-                </span>
-              )}
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                onMouseEnter={() => setHamburgerHovered(true)}
-                onMouseLeave={() => setHamburgerHovered(false)}
-                className="p-2 rounded-full transition-all duration-300 hover:bg-[#306770]/10"
-              >
-                <svg width="16" height="13" viewBox="0 0 50 42" fill="none">
-                  <rect width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
-                  <rect y="18" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
-                  <rect y="36" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
-                </svg>
-              </button>
-              {showMenu && <MenuDropdown />}
-            </div>
+            {!_token ? (
+              <>
+                <button
+                  onClick={() => setShowLogin(true)}
+                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 10, color: '#306770', background: 'transparent', border: '2px solid #306770', cursor: 'pointer', fontFamily: 'Manrope' }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setShowSignup(true)}
+                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 10, color: 'white', background: '#306770', border: 'none', cursor: 'pointer', fontFamily: 'Manrope' }}
+                >
+                  Sign Up
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowRecruiterNavModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-all duration-200"
+                  style={{ border: '1px solid #C8DEDE', color: '#306770' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#EEF6F7' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  title="Contact Recruiters"
+                >
+                  <Users size={13} />
+                  <span className="hidden sm:inline">Contact Recruiters</span>
+                </button>
+                <button
+                  className="relative"
+                  onClick={() => { setCurrentPage('messages'); setUnseenAppCount(0) }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  title="Messages"
+                >
+                  <div className="w-[31px] h-[31px] rounded-full overflow-hidden flex items-center justify-center text-[11px] font-semibold" style={{ background: '#EEF6F7', color: '#306770', fontFamily: 'Manrope' }}>
+                    {profileImage ? (
+                      <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      getInitials(`${safeData.Candidates[0]?.firstName || ''} ${safeData.Candidates[0]?.lastName || ''}`.trim() || _user?.displayName || _user?.email || 'User')
+                    )}
+                  </div>
+                  {unseenAppCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-[15px] h-[15px] rounded-full flex items-center justify-center text-[8px] font-bold text-white pointer-events-none" style={{ background: '#36BF8F', fontFamily: 'Manrope' }}>
+                      {unseenAppCount > 9 ? '9+' : unseenAppCount}
+                    </span>
+                  )}
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    onMouseEnter={() => setHamburgerHovered(true)}
+                    onMouseLeave={() => setHamburgerHovered(false)}
+                    className="p-2 rounded-full transition-all duration-300 hover:bg-[#306770]/10"
+                  >
+                    <svg width="16" height="13" viewBox="0 0 50 42" fill="none">
+                      <rect width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
+                      <rect y="18" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
+                      <rect y="36" width="50" height="6" rx="3" fill={hamburgerHovered || showMenu ? '#306770' : '#AAAAAA'} style={{ transition: 'fill 0.3s ease' }}/>
+                    </svg>
+                  </button>
+                  {showMenu && <MenuDropdown />}
+                </div>
+              </>
+            )}
           </div>
         </header>
       </div>
@@ -1229,7 +1237,12 @@ function App() {
 
             {/* Tablet + Desktop: Stats Panel sidebar */}
             <div id="stats-panel" className="hidden md:flex md:flex-col md:w-[320px] lg:w-[480px] xl:w-[520px] 2xl:w-[600px] md:shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar md:pl-2 xl:pl-3">
-              {displayedJobId !== null && (
+              {!_token ? (
+                <ParticleProfile
+                  onSignIn={() => setShowLogin(true)}
+                  onSignUp={() => setShowSignup(true)}
+                />
+              ) : displayedJobId !== null && (
                 <StatsPanel
                   jobId={displayedJobId}
                   onClose={() => setSelectedJobId(null)}
