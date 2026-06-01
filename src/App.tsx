@@ -931,7 +931,7 @@ function App() {
     return () => controller.abort()
   }, [_user])
 
-  const displayedJobId = selectedJobId ?? (transformedJobs[0]?.id ?? null)
+  const displayedJobId = selectedJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
 
   // Menu dropdown component
   const menuItems = [

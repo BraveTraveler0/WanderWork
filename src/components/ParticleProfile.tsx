@@ -26,7 +26,7 @@ class Particle {
     this.dy = mouse.y - this.y
     this.distance = this.dx * this.dx + this.dy * this.dy
     if (this.distance < mouse.radius) {
-      this.force = -mouse.radius / this.distance * 8
+      this.force = -mouse.radius / this.distance * 6
       this.angle = Math.atan2(this.dy, this.dx)
       this.vx += this.force * Math.cos(this.angle)
       this.vy += this.force * Math.sin(this.angle)
@@ -160,25 +160,25 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
   }, [])
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '32px 24px', background: 'linear-gradient(145deg,#f9fafb,#eef4f5)', fontFamily: FONT }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px', background: 'linear-gradient(145deg,#f9fafb,#eef4f5)', fontFamily: FONT }}>
       <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: '#b0bec5', textTransform: 'uppercase', margin: 0 }}>
         This Could Be You
       </p>
 
-      <div ref={wrapRef} style={{ width: '100%', maxWidth: 200, height: 240, cursor: 'crosshair', flexShrink: 0 }}>
+      <div ref={wrapRef} style={{ width: '100%', flex: '1 1 0', minHeight: 0, maxHeight: 'calc(100% - 200px)', cursor: 'crosshair' }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
       </div>
 
-      <div style={{ textAlign: 'center', maxWidth: 240 }}>
-        <p style={{ fontSize: 15, fontWeight: 700, color: '#1f2937', margin: '0 0 12px', lineHeight: 1.4 }}>
+      <div style={{ textAlign: 'center', width: '100%' }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', margin: '0 0 8px', lineHeight: 1.4 }}>
           Sign up to find fresh remote jobs from all over the world.
         </p>
-        <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, minHeight: 22, letterSpacing: 0.2 }}>
+        <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 16px', minHeight: 22, letterSpacing: 0.2 }}>
           {tagline}<span style={{ opacity: typing ? 1 : 0.3, transition: 'opacity 0.1s' }}>|</span>
         </p>
       </div>
 
-      <div style={{ width: '100%', maxWidth: 240, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
           onClick={onSignUp}
           style={{ width: '100%', background: TEAL, color: 'white', border: 'none', borderRadius: 12, padding: '13px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, transition: 'background 0.2s' }}
