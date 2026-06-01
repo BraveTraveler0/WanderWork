@@ -239,7 +239,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Stats - Desktop only */}
       <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
-        <TokenCoinIcon onClick={isAuthenticated ? openTokens : onSignUp} />
+        {!isAuthenticated && <TokenCoinIcon onClick={onSignUp} />}
         {isAuthenticated && <>
           <div className="relative overflow-visible group/tokens">
             <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
