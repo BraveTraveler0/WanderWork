@@ -423,6 +423,7 @@ function App() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [data, setData] = useState<JobSeekerData | null>(null)
   const [transformedJobs, setTransformedJobs] = useState<any[]>([])
+  const [publicJobs, setPublicJobs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
@@ -582,6 +583,33 @@ function App() {
       window.history.pushState({ wanderAuth: true }, '')
     }
   }, [showLogin, showSignup])
+
+  useEffect(() => {
+    if (_token) return
+    fetch(`${API_BASE}/jobseeker/job?limit=200`)
+      .then(r => r.json())
+      .then(data => {
+        const jobs = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
+        setPublicJobs(jobs.map((j: any, i: number) => ({
+          id: i + 1,
+          backendId: j._id,
+          title: j.title || j.positionName || 'Untitled',
+          company: j.company || 'Unknown',
+          description: j.description_short || j.shortDescription || '',
+          location: typeof j.location === 'string' ? j.location : 'Remote',
+          salary: j.salary || 'Not Listed',
+          url: j.url || '',
+          jobType: j.job_type || j.jobType || '',
+          source: j.source || '',
+          skills: [],
+          hasNewBadge: false,
+          interested: false,
+          showCoverLetter: false,
+          postedAt: j.date_posted || j.datePosted || new Date().toISOString(),
+        })))
+      })
+      .catch(() => {})
+  }, [_token])
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1189,19 +1217,26 @@ function App() {
           </div>
         ) : (
           <div className="flex flex-col md:flex-row gap-4 md:gap-3 xl:gap-5 md:flex-1 md:min-h-0">
-            <Sidebar data={safeData} onProfileImageChange={setProfileImage} onCandidateUpdate={handleCandidateUpdate} />
-            
-            {/* Job Feed (always visible on md+, hidden on mobile when viewing details) */}
+
+            {/* Left panel: profile sidebar (auth) or particle sign-up panel (guest) */}
+            {_token
+              ? <Sidebar data={safeData} onProfileImageChange={setProfileImage} onCandidateUpdate={handleCandidateUpdate} />
+              : <div className="hidden md:flex md:flex-col md:w-[280px] lg:w-[300px] xl:w-[320px] shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar">
+                  <ParticleProfile onSignIn={() => setShowLogin(true)} onSignUp={() => setShowSignup(true)} />
+                </div>
+            }
+
+            {/* Job Feed */}
             <div className="flex-1 md:flex-[1.65] xl:flex-[1.8] min-h-[60vh] md:min-h-0 md:overflow-hidden">
               <div className={selectedJobId !== null ? 'hidden md:block h-full' : 'block h-full'}>
                 <JobFeed
                   onSelectJob={setSelectedJobId}
                   selectedJobId={selectedJobId}
                   data={safeData}
-                  jobs={transformedJobs}
+                  jobs={_token ? transformedJobs : publicJobs}
                   showNewOnly={showNewOnly}
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
-                  loading={loading}
+                  loading={_token ? loading : publicJobs.length === 0}
                 />
               </div>
 
@@ -1209,24 +1244,19 @@ function App() {
               {selectedJobId !== null && (
                 <div className="md:hidden flex flex-col" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)' }}>
                   <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: '#DCDCDC' }}>
-                    <button
-                      onClick={() => setSelectedJobId(null)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
+                    <button onClick={() => setSelectedJobId(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#306770" strokeWidth="2">
                         <path d="M19 12H5M12 19l-7-7 7-7" />
                       </svg>
                     </button>
-                    <h2 className="text-[18px] font-bold" style={{ color: '#306770', fontFamily: 'Manrope' }}>
-                      Job Details
-                    </h2>
+                    <h2 className="text-[18px] font-bold" style={{ color: '#306770', fontFamily: 'Manrope' }}>Job Details</h2>
                   </div>
                   <div className="p-4 pb-24">
                     <StatsPanel
                       jobId={selectedJobId}
                       onClose={() => setSelectedJobId(null)}
                       data={safeData}
-                      jobs={transformedJobs}
+                      jobs={_token ? transformedJobs : publicJobs}
                       onNewJobsClick={() => setShowNewOnly(true)}
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                     />
@@ -1235,24 +1265,20 @@ function App() {
               )}
             </div>
 
-            {/* Tablet + Desktop: Stats Panel sidebar */}
+            {/* Right: Stats Panel */}
             <div id="stats-panel" className="hidden md:flex md:flex-col md:w-[320px] lg:w-[480px] xl:w-[520px] 2xl:w-[600px] md:shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar md:pl-2 xl:pl-3">
-              {!_token ? (
-                <ParticleProfile
-                  onSignIn={() => setShowLogin(true)}
-                  onSignUp={() => setShowSignup(true)}
-                />
-              ) : displayedJobId !== null && (
+              {displayedJobId !== null && (
                 <StatsPanel
                   jobId={displayedJobId}
                   onClose={() => setSelectedJobId(null)}
                   data={safeData}
-                  jobs={transformedJobs}
+                  jobs={_token ? transformedJobs : publicJobs}
                   onNewJobsClick={() => setShowNewOnly(true)}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                 />
               )}
             </div>
+
           </div>
         )}
         {/* Footer */}
