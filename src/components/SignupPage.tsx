@@ -392,10 +392,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   ]
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4" style={{ fontFamily: "'Manrope', sans-serif" }}>
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[#306770] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#63B08D] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
+    <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", background: 'linear-gradient(135deg, #a8cece 0%, #c4dede 30%, #e0eeee 60%, #f2f8f8 100%)' }}>
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+        <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-[#306770] rounded-full filter blur-[120px] opacity-25" />
+        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] bg-[#63B08D] rounded-full filter blur-[100px] opacity-20" />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-5xl py-8">
