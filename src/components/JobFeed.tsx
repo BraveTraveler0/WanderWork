@@ -657,20 +657,20 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           <button
             onClick={() => setShowMatchedOnly((v) => !v)}
             className="flex items-center gap-3 px-2 py-1 rounded-[12px] transition-colors"
-            style={{ border: '1px solid #306770', background: 'white' }}
+            style={{ border: '1px solid #DCDCDC', background: '#f9fafb' }}
           >
-            <span className="text-[12px]" style={{ color: '#306770' }}>Matched</span>
+            <span className="text-[12px]" style={{ color: '#9ca3af' }}>Matched</span>
             <div className="relative w-[32px] h-[22px]">
               <div
                 className="absolute inset-0 rounded-[12px]"
-                style={{ background: '#DCDCDC', border: '0.5px solid #8A8A8A' }}
+                style={{ background: '#E5E7EB', border: '0.5px solid #D1D5DB' }}
               />
               <div
                 className="absolute top-[1px] w-[20px] h-[20px] rounded-full transition-all"
                 style={{
                   left: showMatchedOnly ? '10px' : '0px',
-                  background: '#306770',
-                  border: '0.5px solid #306770'
+                  background: showMatchedOnly ? '#9ca3af' : '#D1D5DB',
+                  border: '0.5px solid #9ca3af'
                 }}
               />
             </div>
@@ -678,20 +678,20 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           <button
             onClick={() => setShowInterestedOnly((v) => !v)}
             className="flex items-center gap-3 px-2 py-1 rounded-[12px] transition-colors"
-            style={{ border: '1px solid #306770', background: 'white' }}
+            style={{ border: '1px solid #DCDCDC', background: '#f9fafb' }}
           >
-            <span className="text-[12px]" style={{ color: '#306770' }}>Interested</span>
+            <span className="text-[12px]" style={{ color: '#9ca3af' }}>Interested</span>
             <div className="relative w-[32px] h-[22px]">
-              <div 
-                className="absolute inset-0 rounded-[12px]" 
-                style={{ background: '#DCDCDC', border: '0.5px solid #8A8A8A' }}
+              <div
+                className="absolute inset-0 rounded-[12px]"
+                style={{ background: '#E5E7EB', border: '0.5px solid #D1D5DB' }}
               />
-              <div 
+              <div
                 className="absolute top-[1px] w-[20px] h-[20px] rounded-full transition-all"
-                style={{ 
+                style={{
                   left: showInterestedOnly ? '10px' : '0px',
-                  background: '#306770',
-                  border: '0.5px solid #306770'
+                  background: showInterestedOnly ? '#9ca3af' : '#D1D5DB',
+                  border: '0.5px solid #9ca3af'
                 }}
               />
             </div>

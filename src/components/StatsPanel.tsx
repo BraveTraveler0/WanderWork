@@ -238,6 +238,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Stats - Desktop only */}
       <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
+        <TokenCoinIcon onClick={openTokens} />
         {isAuthenticated && <>
           <div className="relative overflow-visible group/tokens">
             <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
@@ -915,6 +916,24 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 }
 
 export default StatsPanel
+
+const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group flex flex-col gap-2 items-center text-center"
+    style={{ fontFamily: 'Manrope', cursor: onClick ? 'pointer' : 'default', background: 'transparent' }}
+  >
+    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F5C842', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(245,200,66,0.35)', transition: 'transform 0.2s', flexShrink: 0 }}
+      className="group-hover:scale-105"
+    >
+      <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#E0A820', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#EDF2F4', opacity: 0.92 }} />
+      </div>
+    </div>
+    <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
+  </button>
+)
 
 const StatCard = ({ number, label, onClick, clickable }: { number: string, label: string, onClick?: () => void, clickable?: boolean }) => (
   <button
