@@ -1237,6 +1237,7 @@ function App() {
                   showNewOnly={showNewOnly}
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
                   loading={_token ? loading : publicJobs.length === 0}
+                  isAuthenticated={!!_token}
                 />
               </div>
 

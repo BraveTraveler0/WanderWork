@@ -150,6 +150,7 @@ interface JobFeedProps {
   showNewOnly: boolean
   onToggleNewFilter: () => void
   loading?: boolean
+  isAuthenticated?: boolean
 }
 
 const BATCH = 15
@@ -210,7 +211,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -247,7 +248,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     }
   })
   const [showInterestedOnly, setShowInterestedOnly] = useState(false)
-  const [showMatchedOnly, setShowMatchedOnly] = useState(true)
+  const [showMatchedOnly, setShowMatchedOnly] = useState(isAuthenticated)
   const [showFilters, setShowFilters] = useState(false)
   const [locationQuery, setLocationQuery] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
