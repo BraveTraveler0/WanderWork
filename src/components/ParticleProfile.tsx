@@ -100,21 +100,42 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
     oc.fillStyle = TEAL
 
     const cx = W / 2
-    const headR = W * 0.19
-    const headY = H * 0.22
+    const headR = W * 0.21
+    const headY = H * 0.20
 
-    // Head
+    // Head (slightly oval - taller than wide)
     oc.beginPath()
-    oc.arc(cx, headY, headR, 0, Math.PI * 2)
+    oc.ellipse(cx, headY, headR * 0.88, headR, 0, 0, Math.PI * 2)
     oc.fill()
 
-    // Shoulders / torso
-    const bw = W * 0.40
-    const bTop = headY + headR * 0.75
+    // Left ear
     oc.beginPath()
-    oc.moveTo(cx - bw, H * 0.78)
-    oc.bezierCurveTo(cx - bw, bTop + H * 0.12, cx - bw * 0.45, bTop, cx, bTop)
-    oc.bezierCurveTo(cx + bw * 0.45, bTop, cx + bw, bTop + H * 0.12, cx + bw, H * 0.78)
+    oc.ellipse(cx - headR * 0.84, headY + headR * 0.05, headR * 0.13, headR * 0.2, 0, 0, Math.PI * 2)
+    oc.fill()
+
+    // Right ear
+    oc.beginPath()
+    oc.ellipse(cx + headR * 0.84, headY + headR * 0.05, headR * 0.13, headR * 0.2, 0, 0, Math.PI * 2)
+    oc.fill()
+
+    // Neck
+    const neckW = headR * 0.38
+    const neckTop = headY + headR * 0.82
+    const neckBot = headY + headR * 1.45
+    oc.beginPath()
+    oc.rect(cx - neckW, neckTop, neckW * 2, neckBot - neckTop)
+    oc.fill()
+
+    // Shoulders / upper torso
+    const bw = W * 0.46
+    const bTop = neckBot - headR * 0.1
+    oc.beginPath()
+    oc.moveTo(cx - bw * 0.3, bTop)
+    oc.bezierCurveTo(cx - bw * 0.3, bTop, cx - bw * 0.55, bTop + H * 0.04, cx - bw, bTop + H * 0.12)
+    oc.bezierCurveTo(cx - bw * 1.02, bTop + H * 0.15, cx - bw * 0.98, H * 0.82, cx - bw * 0.85, H * 0.82)
+    oc.lineTo(cx + bw * 0.85, H * 0.82)
+    oc.bezierCurveTo(cx + bw * 0.98, H * 0.82, cx + bw * 1.02, bTop + H * 0.15, cx + bw, bTop + H * 0.12)
+    oc.bezierCurveTo(cx + bw * 0.55, bTop + H * 0.04, cx + bw * 0.3, bTop, cx + bw * 0.3, bTop)
     oc.closePath()
     oc.fill()
 
@@ -174,7 +195,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
           Sign up to find fresh remote jobs from all over the world.
         </p>
         <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 16px', minHeight: 22, letterSpacing: 0.2 }}>
-          {tagline}<span style={{ opacity: typing ? 1 : 0.3, transition: 'opacity 0.1s' }}>|</span>
+          {tagline}
         </p>
       </div>
 
