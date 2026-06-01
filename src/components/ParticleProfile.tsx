@@ -95,8 +95,8 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
 
     // Load SVG silhouette as image for precise shape
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
-      <circle cx="50" cy="36" r="22" fill="black"/>
-      <path d="M4 130 C4 72, 96 72, 96 130 Z" fill="black"/>
+      <circle cx="50" cy="34" r="22" fill="black"/>
+      <path d="M2 130 C2 60, 98 60, 98 130 Z" fill="black"/>
     </svg>`
     const blob = new Blob([svgStr], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
