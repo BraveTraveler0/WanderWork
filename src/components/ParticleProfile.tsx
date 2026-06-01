@@ -95,14 +95,26 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
 
     // Load SVG silhouette as image for precise shape
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
-      <ellipse cx="50" cy="22" rx="16" ry="19" fill="black"/>
-      <ellipse cx="34" cy="25" rx="3.2" ry="5.5" fill="black"/>
-      <ellipse cx="66" cy="25" rx="3.2" ry="5.5" fill="black"/>
-      <path d="M44 39 Q44 43 44 47 L56 47 Q56 43 56 39 Z" fill="black"/>
-      <path d="M50 47
-        C 46 47, 26 52, 8 67
-        L 4 130 L 96 130 L 92 67
-        C 74 52, 54 47, 50 47 Z" fill="black"/>
+      <!-- Head: wide at cranium, tapers to defined chin -->
+      <path d="M50 2
+        C 66 2, 76 10, 76 22
+        C 76 32, 70 38, 65 41
+        C 62 44, 58 47, 56 50
+        C 54 53, 52 55, 50 55
+        C 48 55, 46 53, 44 50
+        C 42 47, 38 44, 35 41
+        C 30 38, 24 32, 24 22
+        C 24 10, 34 2, 50 2 Z" fill="black"/>
+      <!-- Ears -->
+      <ellipse cx="76" cy="24" rx="3.5" ry="5.5" fill="black"/>
+      <ellipse cx="24" cy="24" rx="3.5" ry="5.5" fill="black"/>
+      <!-- Broad neck -->
+      <path d="M41 49 L41 58 L59 58 L59 49 Z" fill="black"/>
+      <!-- Shoulders slightly narrower -->
+      <path d="M50 57
+        C 47 57, 31 62, 15 76
+        L 12 130 L 88 130 L 85 76
+        C 69 62, 53 57, 50 57 Z" fill="black"/>
     </svg>`
     const blob = new Blob([svgStr], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
