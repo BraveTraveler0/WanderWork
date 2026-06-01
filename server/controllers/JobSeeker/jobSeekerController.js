@@ -1556,6 +1556,10 @@ function styledDocumentTextToEmailHtml(text) {
     return out.join('\n')
 }
 
+function styledDocumentTextToAttachmentHtml(text) {
+    return styledDocumentTextToEmailHtml(text).replace(/color:#306770/g, 'color:#111111')
+}
+
 function buildDocumentEmailHtml({ greeting, docLabel, jobTitle, company, content, hasAttachment }) {
     const PRIMARY = '#306770'
     const BG = '#F2F4F8'
@@ -1627,7 +1631,7 @@ function buildWordDocBuffer(content, title) {
   </style>
 </head>
 <body>
-${styledDocumentTextToEmailHtml(content || '')}
+${styledDocumentTextToAttachmentHtml(content || '')}
 </body>
 </html>`
     return Buffer.from(html, 'utf8')
@@ -1790,7 +1794,6 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
         prevCandidate.location?.[0]?.state,
         prevCandidate.location?.[0]?.locationName,
     ].filter(Boolean).join(', ')
-    const candidateLinkedIn = prevCandidate.urls?.find((u) => u.urlName === 'LinkedIn')?.urlAddress || ''
     const candidatePortfolio = prevCandidate.urls?.find((u) => u.urlName === 'Portfolio')?.urlAddress || ''
     const candidateGitHub = prevCandidate.urls?.find((u) => u.urlName === 'GitHub')?.urlAddress || ''
     const contactBlock = [
@@ -1798,7 +1801,6 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
         candidateLocation,
         email,
         candidatePhone,
-        candidateLinkedIn,
         candidatePortfolio,
         candidateGitHub,
     ].filter(Boolean).join('\n')
@@ -1835,12 +1837,22 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
             .replace(/\[Your Phone( Number)?\]/gi, candidatePhone || '')
             .replace(/\[City,?\s*State,?\s*(Zip)?\]/gi, candidateLocation || '')
             .replace(/\[Your Address\]/gi, candidateLocation || '')
-            .replace(/\[LinkedIn( Profile| URL)?\]/gi, candidateLinkedIn || '')
+            .replace(/\[LinkedIn( Profile| URL)?\]/gi, '')
             .replace(/\[Portfolio( URL)?\]/gi, candidatePortfolio || '')
             .replace(/\[GitHub( URL)?\]/gi, candidateGitHub || '')
             // Remove any remaining [bracket placeholder] lines entirely
             .replace(/^\s*\[.*?\]\s*$/gm, '')
             // Collapse 3+ blank lines to 2
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+    }
+
+    const stripLinkedInContact = (text) => {
+        if (!text) return text
+        return text
+            .split('\n')
+            .filter((line) => !/(linkedin\.com|^\s*linkedin\s*(profile|url)?\s*:?\s*$)/i.test(line.trim()))
+            .join('\n')
             .replace(/\n{3,}/g, '\n\n')
             .trim()
     }
@@ -1892,7 +1904,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
                 if (isResumeSectionHeader(trimmed)) {
                     seenSection = true
-                    return `\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa160\\sl276\\slmult1\\cf1\\b\\fs22 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
+                    return `\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa160\\sl276\\slmult1\\cf2\\b\\fs22 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
                 }
 
                 if (!seenSection) {
@@ -1957,8 +1969,8 @@ Tailor every bullet point to match the target job description — highlight spec
         })() : Promise.resolve(null),
     ])
 
-    const resumeContent = fillPlaceholders(resumeRaw)
-    const coverLetterContent = fillPlaceholders(coverLetterRaw)
+    const resumeContent = stripLinkedInContact(fillPlaceholders(resumeRaw))
+    const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
 
     let application = null
     if (jobDoc?._id && (resumeContent || coverLetterContent)) {
