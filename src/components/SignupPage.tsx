@@ -390,10 +390,16 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   ]
 
   return (
-    <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", background: 'linear-gradient(135deg, #a8cece 0%, #c4dede 30%, #e0eeee 60%, #f2f8f8 100%)' }}>
+    <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
+      <style>{`
+        @keyframes bgBreathe {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.12); }
+        }
+      `}</style>
       <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
-        <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-[#306770] rounded-full filter blur-[120px] opacity-25" />
-        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] bg-[#63B08D] rounded-full filter blur-[100px] opacity-20" />
+        <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-[#306770] rounded-full filter blur-[120px] opacity-25" style={{ animation: 'bgBreathe 8s ease-in-out infinite' }} />
+        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] bg-[#63B08D] rounded-full filter blur-[100px] opacity-20" style={{ animation: 'bgBreathe 8s ease-in-out infinite reverse' }} />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-5xl py-8">
