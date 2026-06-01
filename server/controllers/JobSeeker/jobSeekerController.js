@@ -1669,32 +1669,48 @@ function pdfEscape(value) {
 }
 
 function buildPdfBuffer(content) {
-    const lines = wrapPdfLines(content)
+    const allLines = wrapPdfLines(content)
     const maxLinesPerPage = 48
     const pages = []
-    for (let i = 0; i < Math.max(lines.length, 1); i += maxLinesPerPage) {
-        pages.push(lines.slice(i, i + maxLinesPerPage))
+    for (let i = 0; i < Math.max(allLines.length, 1); i += maxLinesPerPage) {
+        pages.push(allLines.slice(i, i + maxLinesPerPage))
     }
 
     const objects = [null]
-    const addObject = (body) => {
-        objects.push(body)
-        return objects.length - 1
-    }
+    const addObject = (body) => { objects.push(body); return objects.length - 1 }
 
-    const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    const fontRegId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    const fontBoldId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
     const pageIds = []
+    let isFirstPage = true
 
     for (const pageLines of pages) {
         const streamLines = ['BT', '/F1 10 Tf', '72 742 Td', '14 TL']
+        let nameWritten = !isFirstPage
+
         for (const line of pageLines) {
-            streamLines.push(line ? `(${pdfEscape(line)}) Tj` : '')
-            streamLines.push('T*')
+            if (!line.trim()) { streamLines.push('T*'); continue }
+
+            if (!nameWritten) {
+                // First non-empty line = name: bold, 16pt, space below
+                streamLines.push('/F2 16 Tf', `(${pdfEscape(line)}) Tj`, 'T*', 'T*', '/F1 10 Tf')
+                nameWritten = true
+                continue
+            }
+
+            if (isResumeSectionHeader(line)) {
+                streamLines.push('T*', `/F2 10 Tf`, `(${pdfEscape(line)}) Tj`, 'T*', '/F1 10 Tf')
+                continue
+            }
+
+            streamLines.push(`(${pdfEscape(line)}) Tj`, 'T*')
         }
         streamLines.push('ET')
+        isFirstPage = false
+
         const stream = streamLines.join('\n')
         const contentId = addObject(`<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`)
-        const pageId = addObject(`<< /Type /Page /Parent __PAGES_ID__ 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`)
+        const pageId = addObject(`<< /Type /Page /Parent __PAGES_ID__ 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontRegId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`)
         pageIds.push(pageId)
     }
 
@@ -1851,10 +1867,29 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
         if (!text) return text
         return text
             .split('\n')
-            .filter((line) => !/(linkedin\.com|^\s*linkedin\s*(profile|url)?\s*:?\s*$)/i.test(line.trim()))
+            .filter((line) => {
+                const t = line.trim()
+                return !/(linkedin\.com|^\s*linkedin\s*(profile|url)?\s*:?\s*$)/i.test(t)
+                    && !/^https?:\/\/(www\.)?linkedin\.com/i.test(t)
+            })
             .join('\n')
             .replace(/\n{3,}/g, '\n\n')
             .trim()
+    }
+
+    const ensureSectionSpacing = (text) => {
+        if (!text) return text
+        return text
+            .split('\n')
+            .reduce((acc, line, i, arr) => {
+                acc.push(line)
+                // Add blank line after section headers if next line is not blank
+                if (isResumeSectionHeader(line.trim()) && i + 1 < arr.length && arr[i + 1].trim()) {
+                    acc.push('')
+                }
+                return acc
+            }, [])
+            .join('\n')
     }
 
     // RTF builder — opens natively in Word, Pages, Google Docs
@@ -1899,12 +1934,12 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
                 if (!hasStyledName && !seenSection && !isKnownResumeSectionHeader(trimmed)) {
                     hasStyledName = true
-                    return `\\pard\\sa80\\sl300\\slmult1\\b\\fs30 ${rtfEsc(trimmed)}\\b0\\fs22\\par`
+                    return `\\pard\\sa200\\sl300\\slmult1\\cf3\\b\\fs40 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
                 }
 
                 if (isResumeSectionHeader(trimmed)) {
                     seenSection = true
-                    return `\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa160\\sl276\\slmult1\\cf2\\b\\fs22 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
+                    return `\\pard\\brdrb\\brdrs\\brdrw10\\brsp40\\sa160\\sl276\\slmult1\\cf3\\b\\fs22 ${rtfEsc(trimmed)}\\b0\\cf2\\fs22\\par`
                 }
 
                 if (!seenSection) {
@@ -1926,7 +1961,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
         return `{\\rtf1\\ansi\\ansicpg1252\\deff0` +
             `{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}}` +
-            `{\\colortbl ;\\red48\\green103\\blue112;\\red45\\green45\\blue45;}` +
+            `{\\colortbl ;\\red48\\green103\\blue112;\\red45\\green45\\blue45;\\red0\\green0\\blue0;}` +
             `\\margl1080\\margr1080\\margt900\\margb900\\f0\\fs22\\cf2 ` +
             lines + `}`
     }
@@ -1969,7 +2004,7 @@ Tailor every bullet point to match the target job description — highlight spec
         })() : Promise.resolve(null),
     ])
 
-    const resumeContent = stripLinkedInContact(fillPlaceholders(resumeRaw))
+    const resumeContent = ensureSectionSpacing(stripLinkedInContact(fillPlaceholders(resumeRaw)))
     const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
 
     let application = null
