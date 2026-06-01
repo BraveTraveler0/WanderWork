@@ -422,7 +422,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     const verificationLink = `https://wanderwork-backend-server.onrender.com/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
     const emailMessage = {
       to: normalizedEmail,
-      from: process.env.EMAIL_FROM || 'support@wanderwork.io',
+      from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
       subject: 'Verify your email',
       html: `<p>Click <a href="${verificationLink}">here</a> to verify your email and complete the signup process.</p>`,
     };
@@ -511,7 +511,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
             const displayName = user.displayName || user.email.split('@')[0];
             const emailMessage = {
                 to: user.email,
-                from: process.env.EMAIL_FROM || 'support@wanderwork.io',
+                from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
                 subject: "Reset your Wander/Work password",
                 html: `
 <!DOCTYPE html>

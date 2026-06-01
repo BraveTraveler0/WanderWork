@@ -2004,7 +2004,7 @@ Tailor every bullet point to match the target job description — highlight spec
         const sgMail = require('@sendgrid/mail')
         sgMail.setApiKey(sgApiKey)
 
-        const FROM_EMAIL = 'support@wanderwork.io'
+        const FROM_EMAIL = { name: 'Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
         const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'sephrim07@gmail.com'
         const safeCompany = safeDocumentFilename(company, 'company')
         const buildAttachments = ({ content, filenameBase, documentType, title }) => {

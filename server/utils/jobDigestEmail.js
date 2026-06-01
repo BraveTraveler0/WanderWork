@@ -1,4 +1,4 @@
-const FROM_EMAIL = process.env.EMAIL_FROM || 'support@wanderwork.io'
+const FROM_EMAIL = { name: 'Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
 const APP_URL = 'https://wanderwork.io'
 
 function jobDigestEmail({ firstName, jobs = [] }) {
