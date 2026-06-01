@@ -191,8 +191,8 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
       </div>
 
       <div style={{ textAlign: 'center', width: '100%' }}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', margin: '0 0 8px', lineHeight: 1.4 }}>
-          Sign up to find fresh remote jobs from all over the world.
+        <p style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', margin: '0 0 8px', lineHeight: 1.5 }}>
+          Sign up to find fresh remote jobs,<br />from all over the world.
         </p>
         <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 16px', minHeight: 22, letterSpacing: 0.2 }}>
           {tagline}
