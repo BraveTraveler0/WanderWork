@@ -917,6 +917,11 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
 export default StatsPanel
 
+const DOT_POSITIONS = [
+  [18,10],[42,8],[56,18],[62,34],[54,50],[40,58],[20,56],[8,44],[6,26],[14,14],
+  [30,6],[48,12],[60,28],[58,46],[46,56],[28,60],[10,50],[4,32],[12,18],[36,4],
+]
+
 const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => (
   <button
     type="button"
@@ -924,11 +929,20 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => (
     className="group flex flex-col gap-2 items-center text-center"
     style={{ fontFamily: 'Manrope', cursor: onClick ? 'pointer' : 'default', background: 'transparent' }}
   >
-    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F5C842', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(245,200,66,0.35)', transition: 'transform 0.2s', flexShrink: 0 }}
-      className="group-hover:scale-105"
+    <div
+      className="group-hover:scale-110 group-hover:shadow-[0_0_18px_rgba(48,103,112,0.45)]"
+      style={{ width: 64, height: 64, borderRadius: '50%', background: '#306770', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'transform 0.25s, box-shadow 0.25s', overflow: 'hidden', flexShrink: 0 }}
     >
-      <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#E0A820', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#EDF2F4', opacity: 0.92 }} />
+      {/* dot pattern */}
+      <svg width="64" height="64" style={{ position: 'absolute', inset: 0 }} viewBox="0 0 64 64">
+        {DOT_POSITIONS.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="1.8" fill="#5a9aaa" opacity="0.55" />
+        ))}
+      </svg>
+      {/* inner ring */}
+      <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#245460', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+        {/* center circle logo mark */}
+        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#EEF6F7', opacity: 0.9 }} />
       </div>
     </div>
     <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
