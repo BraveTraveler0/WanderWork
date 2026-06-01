@@ -940,21 +940,21 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     const off = document.createElement('canvas')
     off.width = S; off.height = S
     const oc = off.getContext('2d')!
-    // Draw ring: filled circle then punch out center
-    // Enso-style open circle: thick arc with gap at top-right (~45°)
-    const gapAngle = 0.45
+    // Zen enso: large gap (~80°) at top-right, thick rounded stroke
+    const gapStart = -0.1          // gap opens near 12 o'clock, tilts right
+    const gapSize = 1.35           // ~77° opening like the reference enso
     oc.strokeStyle = '#306770'
-    oc.lineWidth = S * 0.18
+    oc.lineWidth = S * 0.20
     oc.lineCap = 'round'
     oc.beginPath()
-    oc.arc(cx, cy, S * 0.30, gapAngle, gapAngle + Math.PI * 2 - 0.55)
+    oc.arc(cx, cy, S * 0.29, gapStart + gapSize, gapStart + Math.PI * 2)
     oc.stroke()
-    // Slightly vary inner edge for organic feel
-    oc.strokeStyle = '#245460'
-    oc.lineWidth = S * 0.06
-    oc.globalAlpha = 0.4
+    // Subtle inner shadow for depth
+    oc.strokeStyle = '#1e4e57'
+    oc.lineWidth = S * 0.05
+    oc.globalAlpha = 0.35
     oc.beginPath()
-    oc.arc(cx, cy, S * 0.23, gapAngle + 0.1, gapAngle + Math.PI * 2 - 0.65)
+    oc.arc(cx, cy, S * 0.22, gapStart + gapSize + 0.1, gapStart + Math.PI * 2 - 0.1)
     oc.stroke()
     oc.globalAlpha = 1
 
