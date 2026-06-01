@@ -941,10 +941,10 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     const oc = off.getContext('2d')!
     oc.fillStyle = '#306770'
     oc.beginPath(); oc.arc(cx, cy, r, 0, Math.PI * 2); oc.fill()
-    oc.fillStyle = '#b2dde8'
-    oc.font = `bold ${S * 0.44}px Manrope, Arial, sans-serif`
-    oc.textAlign = 'center'; oc.textBaseline = 'middle'
-    oc.fillText('1', cx, cy + 1)
+    // Open circle ring in lighter teal
+    oc.strokeStyle = '#b2dde8'
+    oc.lineWidth = S * 0.11
+    oc.beginPath(); oc.arc(cx, cy, S * 0.26, 0, Math.PI * 2); oc.stroke()
 
     const px = oc.getImageData(0, 0, S, S).data
     const gap = 3
