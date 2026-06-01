@@ -934,7 +934,7 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     if (!ctx) return
     const S = 64
     canvas.width = S; canvas.height = S
-    const cx = S / 2, cy = S / 2, r = S / 2 - 1
+    const cx = S / 2, cy = S / 2
 
     // Offscreen: draw coin circle + "1" in lighter color
     const off = document.createElement('canvas')
