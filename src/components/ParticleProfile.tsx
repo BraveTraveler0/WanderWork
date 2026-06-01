@@ -78,13 +78,20 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
     const canvas = canvasRef.current
     const wrap = wrapRef.current
     if (!canvas || !wrap) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
 
-    const W = wrap.offsetWidth
-    const H = wrap.offsetHeight
-    canvas.width = W
-    canvas.height = H
+    function init() {
+      const W = wrap!.offsetWidth
+      const H = wrap!.offsetHeight
+      if (W === 0 || H === 0) return
+
+      const ctx = canvas!.getContext('2d')
+      if (!ctx) return
+
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+      particlesRef.current = []
+
+      canvas!.width = W
+      canvas!.height = H
 
     // Draw silhouette to offscreen canvas then extract pixel positions
     const off = document.createElement('canvas')
@@ -125,25 +132,29 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
     }
     particlesRef.current = ps
 
-    const onMove = (e: MouseEvent) => {
-      const r = canvas.getBoundingClientRect()
-      mouseRef.current.x = e.clientX - r.left
-      mouseRef.current.y = e.clientY - r.top
-    }
-    const onLeave = () => { mouseRef.current.x = -9999; mouseRef.current.y = -9999 }
-    canvas.addEventListener('mousemove', onMove)
-    canvas.addEventListener('mouseleave', onLeave)
+      const onMove = (e: MouseEvent) => {
+        const r = canvas!.getBoundingClientRect()
+        mouseRef.current.x = e.clientX - r.left
+        mouseRef.current.y = e.clientY - r.top
+      }
+      const onLeave = () => { mouseRef.current.x = -9999; mouseRef.current.y = -9999 }
+      canvas!.addEventListener('mousemove', onMove)
+      canvas!.addEventListener('mouseleave', onLeave)
 
-    const animate = () => {
-      ctx.clearRect(0, 0, W, H)
-      for (const p of particlesRef.current) p.update(mouseRef.current)
-      animRef.current = requestAnimationFrame(animate)
+      const animate = () => {
+        ctx.clearRect(0, 0, W, H)
+        for (const p of particlesRef.current) p.update(mouseRef.current)
+        animRef.current = requestAnimationFrame(animate)
+      }
+      animate()
     }
-    animate()
+
+    const ro = new ResizeObserver(() => init())
+    ro.observe(wrap)
+    init()
 
     return () => {
-      canvas.removeEventListener('mousemove', onMove)
-      canvas.removeEventListener('mouseleave', onLeave)
+      ro.disconnect()
       if (animRef.current) cancelAnimationFrame(animRef.current)
     }
   }, [])
