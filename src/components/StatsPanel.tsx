@@ -917,37 +917,47 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
 export default StatsPanel
 
-const DOT_POSITIONS = [
-  [18,10],[42,8],[56,18],[62,34],[54,50],[40,58],[20,56],[8,44],[6,26],[14,14],
-  [30,6],[48,12],[60,28],[58,46],[46,56],[28,60],[10,50],[4,32],[12,18],[36,4],
-]
+const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const animRef = React.useRef<number>()
 
-const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="group flex flex-col gap-2 items-center text-center"
-    style={{ fontFamily: 'Manrope', cursor: onClick ? 'pointer' : 'default', background: 'transparent' }}
-  >
-    <div
-      className="group-hover:scale-110 group-hover:shadow-[0_0_18px_rgba(48,103,112,0.45)]"
-      style={{ width: 64, height: 64, borderRadius: '50%', background: '#306770', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'transform 0.25s, box-shadow 0.25s', overflow: 'hidden', flexShrink: 0 }}
-    >
-      {/* dot pattern */}
-      <svg width="64" height="64" style={{ position: 'absolute', inset: 0 }} viewBox="0 0 64 64">
-        {DOT_POSITIONS.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r="1.8" fill="#5a9aaa" opacity="0.55" />
-        ))}
-      </svg>
-      {/* inner ring */}
-      <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#245460', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        {/* center circle logo mark */}
-        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#EEF6F7', opacity: 0.9 }} />
-      </div>
-    </div>
-    <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
-  </button>
-)
+  React.useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const S = 64
+    canvas.width = S; canvas.height = S
+    const cx = S / 2, cy = S / 2, r = S / 2 - 1
+    const gap = 4
+    const dots: { ox: number; oy: number; x: number; y: number; size: number; color: string }[] = []
+    for (let y = 0; y < S; y += gap) {
+      for (let x = 0; x < S; x += gap) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= r ** 2) {
+          const b = 0.6 + Math.random() * 0.4
+          dots.push({ ox: x, oy: y, x, y, size: Math.floor(Math.random() * 2) + 1, color: `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})` })
+        }
+      }
+    }
+    const draw = () => {
+      ctx.clearRect(0, 0, S, S)
+      for (const d of dots) { ctx.fillStyle = d.color; ctx.fillRect(d.x, d.y, d.size, d.size) }
+      animRef.current = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
+  }, [])
+
+  return (
+    <button type="button" onClick={onClick} className="group flex flex-col gap-2 items-center text-center"
+      style={{ fontFamily: 'Manrope', cursor: onClick ? 'pointer' : 'default', background: 'transparent' }}>
+      <canvas ref={canvasRef}
+        className="group-hover:scale-110 group-hover:shadow-[0_0_14px_rgba(48,103,112,0.4)]"
+        style={{ width: 64, height: 64, borderRadius: '50%', transition: 'transform 0.25s, box-shadow 0.25s', flexShrink: 0 }} />
+      <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
+    </button>
+  )
+}
 
 const StatCard = ({ number, label, onClick, clickable }: { number: string, label: string, onClick?: () => void, clickable?: boolean }) => (
   <button
