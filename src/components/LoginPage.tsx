@@ -6,7 +6,7 @@ const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
   || (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined)
   || 'http://localhost:8000'
 
-const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || ''
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '406462367912-qsnckspm7sepdi011ubrvo80q49l1ovf.apps.googleusercontent.com'
 
 interface LoginPageProps {
   onLogin: (user: any, token: string) => void
@@ -78,11 +78,9 @@ function SocialButtons({ onLogin, onError }: { onLogin: (user: any, token: strin
 
   return (
     <div className="flex flex-col gap-3 mt-2">
-      {GOOGLE_CLIENT_ID && (
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-          <GoogleLoginButton onLogin={onLogin} onError={onError} />
-        </GoogleOAuthProvider>
-      )}
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <GoogleLoginButton onLogin={onLogin} onError={onError} />
+      </GoogleOAuthProvider>
 
       <button
         type="button"
@@ -145,10 +143,16 @@ export default function LoginPage({ onLogin, onForgotPassword, onBackToLanding, 
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Manrope', sans-serif" }}>
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[#306770] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#306770] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" />
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
+      <style>{`
+        @keyframes bgBreathe {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.12); }
+        }
+      `}</style>
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-20 -left-20 w-[600px] h-[600px] bg-[#306770] rounded-full filter blur-[120px] opacity-25" style={{ animation: 'bgBreathe 8s ease-in-out infinite' }} />
+        <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] bg-[#63B08D] rounded-full filter blur-[100px] opacity-20" style={{ animation: 'bgBreathe 8s ease-in-out infinite reverse' }} />
       </div>
 
       <div
