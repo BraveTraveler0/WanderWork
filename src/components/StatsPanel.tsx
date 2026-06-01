@@ -920,6 +920,11 @@ export default StatsPanel
 const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const animRef = React.useRef<number>()
+  const mouseRef = React.useRef({ x: -999, y: -999, radius: 800 })
+  const particlesRef = React.useRef<Array<{
+    ox: number; oy: number; x: number; y: number
+    vx: number; vy: number; size: number; color: string
+  }>>([])
 
   React.useEffect(() => {
     const canvas = canvasRef.current
@@ -929,31 +934,76 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     const S = 64
     canvas.width = S; canvas.height = S
     const cx = S / 2, cy = S / 2, r = S / 2 - 1
-    const gap = 4
-    const dots: { ox: number; oy: number; x: number; y: number; size: number; color: string }[] = []
+
+    // Offscreen: draw coin circle + "1" in lighter color
+    const off = document.createElement('canvas')
+    off.width = S; off.height = S
+    const oc = off.getContext('2d')!
+    oc.fillStyle = '#306770'
+    oc.beginPath(); oc.arc(cx, cy, r, 0, Math.PI * 2); oc.fill()
+    oc.fillStyle = '#b2dde8'
+    oc.font = `bold ${S * 0.44}px Manrope, Arial, sans-serif`
+    oc.textAlign = 'center'; oc.textBaseline = 'middle'
+    oc.fillText('1', cx, cy + 1)
+
+    const px = oc.getImageData(0, 0, S, S).data
+    const gap = 3
+    const ps: typeof particlesRef.current = []
     for (let y = 0; y < S; y += gap) {
       for (let x = 0; x < S; x += gap) {
-        if ((x - cx) ** 2 + (y - cy) ** 2 <= r ** 2) {
-          const b = 0.6 + Math.random() * 0.4
-          dots.push({ ox: x, oy: y, x, y, size: Math.floor(Math.random() * 2) + 1, color: `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})` })
-        }
+        const i = (y * S + x) * 4
+        if (px[i + 3] < 64) continue
+        const isLight = px[i] > 140
+        const b = 0.7 + Math.random() * 0.3
+        const color = isLight
+          ? `rgb(${Math.floor(178*b)},${Math.floor(221*b)},${Math.floor(232*b)})`
+          : `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`
+        ps.push({ ox: x, oy: y, x, y, vx: 0, vy: 0, size: Math.floor(Math.random() * 2) + 1, color })
       }
     }
-    const draw = () => {
-      ctx.clearRect(0, 0, S, S)
-      for (const d of dots) { ctx.fillStyle = d.color; ctx.fillRect(d.x, d.y, d.size, d.size) }
-      animRef.current = requestAnimationFrame(draw)
+    particlesRef.current = ps
+
+    const onMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      mouseRef.current.x = (e.clientX - rect.left) * (S / rect.width)
+      mouseRef.current.y = (e.clientY - rect.top) * (S / rect.height)
     }
-    draw()
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
+    const onLeave = () => { mouseRef.current.x = -999; mouseRef.current.y = -999 }
+    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('mouseleave', onLeave)
+
+    const animate = () => {
+      ctx.clearRect(0, 0, S, S)
+      const mouse = mouseRef.current
+      for (const p of particlesRef.current) {
+        const dx = mouse.x - p.x, dy = mouse.y - p.y
+        const dist2 = dx * dx + dy * dy
+        if (dist2 < mouse.radius) {
+          const force = -mouse.radius / dist2 * 5
+          const angle = Math.atan2(dy, dx)
+          p.vx += force * Math.cos(angle)
+          p.vy += force * Math.sin(angle)
+        }
+        p.x += (p.vx *= 0.9) + (p.ox - p.x) * 0.18
+        p.y += (p.vy *= 0.9) + (p.oy - p.y) * 0.18
+        ctx.fillStyle = p.color
+        ctx.fillRect(p.x, p.y, p.size, p.size)
+      }
+      animRef.current = requestAnimationFrame(animate)
+    }
+    animate()
+    return () => {
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('mouseleave', onLeave)
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+    }
   }, [])
 
   return (
     <button type="button" onClick={onClick} className="group flex flex-col gap-2 items-center text-center"
       style={{ fontFamily: 'Manrope', cursor: onClick ? 'pointer' : 'default', background: 'transparent' }}>
       <canvas ref={canvasRef}
-        className="group-hover:scale-110 group-hover:shadow-[0_0_14px_rgba(48,103,112,0.4)]"
-        style={{ width: 64, height: 64, borderRadius: '50%', transition: 'transform 0.25s, box-shadow 0.25s', flexShrink: 0 }} />
+        style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0, cursor: 'crosshair' }} />
       <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
     </button>
   )
