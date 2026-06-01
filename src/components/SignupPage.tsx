@@ -17,7 +17,7 @@ const BASE_URL =
   (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
   'http://localhost:8000'
 
-const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || ''
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '406462367912-qsnckspm7sepdi011ubrvo80q49l1ovf.apps.googleusercontent.com'
 
 const SIGNUP_STEPS = [
   {
@@ -129,11 +129,9 @@ function SocialSignupBox({
     <div>
       <p className="mb-3 text-center text-sm font-semibold text-[#306770]">Create your account faster</p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {GOOGLE_CLIENT_ID ? (
-          <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-            <GoogleSignupButton onSignup={onSignup} onError={onError} termsAccepted={termsAccepted} onRequireTerms={onRequireTerms} />
-          </GoogleOAuthProvider>
-        ) : null}
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+          <GoogleSignupButton onSignup={onSignup} onError={onError} termsAccepted={termsAccepted} onRequireTerms={onRequireTerms} />
+        </GoogleOAuthProvider>
         <button
           type="button"
           onClick={handleLinkedIn}
