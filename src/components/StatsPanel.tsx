@@ -941,11 +941,22 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     off.width = S; off.height = S
     const oc = off.getContext('2d')!
     // Draw ring: filled circle then punch out center
-    oc.fillStyle = '#306770'
-    oc.beginPath(); oc.arc(cx, cy, r, 0, Math.PI * 2); oc.fill()
-    oc.globalCompositeOperation = 'destination-out'
-    oc.beginPath(); oc.arc(cx, cy, S * 0.24, 0, Math.PI * 2); oc.fill()
-    oc.globalCompositeOperation = 'source-over'
+    // Enso-style open circle: thick arc with gap at top-right (~45°)
+    const gapAngle = 0.45
+    oc.strokeStyle = '#306770'
+    oc.lineWidth = S * 0.18
+    oc.lineCap = 'round'
+    oc.beginPath()
+    oc.arc(cx, cy, S * 0.30, gapAngle, gapAngle + Math.PI * 2 - 0.55)
+    oc.stroke()
+    // Slightly vary inner edge for organic feel
+    oc.strokeStyle = '#245460'
+    oc.lineWidth = S * 0.06
+    oc.globalAlpha = 0.4
+    oc.beginPath()
+    oc.arc(cx, cy, S * 0.23, gapAngle + 0.1, gapAngle + Math.PI * 2 - 0.65)
+    oc.stroke()
+    oc.globalAlpha = 1
 
     const px = oc.getImageData(0, 0, S, S).data
     const gap = 3
