@@ -97,7 +97,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
     // Load SVG silhouette as image for precise shape
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
       <circle cx="50" cy="28" r="22" fill="black"/>
-      <path d="M0 130 C0 23, 100 23, 100 130 Z" fill="black"/>
+      <path d="M0 130 C0 34, 100 34, 100 130 Z" fill="black"/>
     </svg>`
     const blob = new Blob([svgStr], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
@@ -167,7 +167,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
         <p style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', margin: '0 0 8px', lineHeight: 1.5 }}>
           Sign up to find fresh remote jobs,<br />from all over the world.
         </p>
-        <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 16px', minHeight: 22, letterSpacing: 0.2 }}>
+        <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 24px', minHeight: 22, letterSpacing: 0.2 }}>
           {tagline}
         </p>
       </div>
