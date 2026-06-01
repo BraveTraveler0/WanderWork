@@ -95,26 +95,24 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
 
     // Load SVG silhouette as image for precise shape
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
-      <!-- Head: wide at cranium, tapers to defined chin -->
-      <path d="M50 2
-        C 66 2, 76 10, 76 22
-        C 76 32, 70 38, 65 41
-        C 62 44, 58 47, 56 50
-        C 54 53, 52 55, 50 55
-        C 48 55, 46 53, 44 50
-        C 42 47, 38 44, 35 41
-        C 30 38, 24 32, 24 22
-        C 24 10, 34 2, 50 2 Z" fill="black"/>
-      <!-- Ears -->
-      <ellipse cx="76" cy="24" rx="3.5" ry="5.5" fill="black"/>
-      <ellipse cx="24" cy="24" rx="3.5" ry="5.5" fill="black"/>
-      <!-- Broad neck -->
-      <path d="M41 49 L41 58 L59 58 L59 49 Z" fill="black"/>
-      <!-- Shoulders slightly narrower -->
-      <path d="M50 57
-        C 47 57, 31 62, 15 76
-        L 12 130 L 88 130 L 85 76
-        C 69 62, 53 57, 50 57 Z" fill="black"/>
+      <!-- Head: wide at cranium/forehead, rounded chin, no sharp points -->
+      <path d="M50 3
+        C 70 3, 76 13, 74 25
+        C 72 36, 65 43, 59 49
+        C 56 52, 53 54, 50 54
+        C 47 54, 44 52, 41 49
+        C 35 43, 28 36, 26 25
+        C 24 13, 30 3, 50 3 Z" fill="black"/>
+      <!-- Ears: small, at cheekbone level -->
+      <ellipse cx="74.5" cy="27" rx="3" ry="5" fill="black"/>
+      <ellipse cx="25.5" cy="27" rx="3" ry="5" fill="black"/>
+      <!-- Neck: broad and flows naturally from chin -->
+      <path d="M42 51 Q42 62 42 65 L58 65 Q58 62 58 51 Z" fill="black"/>
+      <!-- Shoulders: smooth S-curve, moderate width -->
+      <path d="M50 64
+        C 46 64, 29 69, 14 83
+        L 11 130 L 89 130 L 86 83
+        C 71 69, 54 64, 50 64 Z" fill="black"/>
     </svg>`
     const blob = new Blob([svgStr], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
