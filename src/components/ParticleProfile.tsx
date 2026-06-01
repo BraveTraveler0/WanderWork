@@ -95,26 +95,8 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
 
     // Load SVG silhouette as image for precise shape
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 100 130">
-      <!-- Head: wide cranium, clear jaw taper, pronounced rounded chin -->
-      <path d="M50 2
-        C 68 2, 76 11, 75 23
-        C 74 33, 69 40, 64 46
-        C 60 50, 56 56, 53 60
-        C 52 62, 51 63, 50 63
-        C 49 63, 48 62, 47 60
-        C 44 56, 40 50, 36 46
-        C 31 40, 26 33, 25 23
-        C 24 11, 32 2, 50 2 Z" fill="black"/>
-      <!-- Ears at cheekbone level -->
-      <ellipse cx="75" cy="26" rx="3" ry="5" fill="black"/>
-      <ellipse cx="25" cy="26" rx="3" ry="5" fill="black"/>
-      <!-- Neck: broad, starts below chin -->
-      <path d="M41 60 L41 74 L59 74 L59 60 Z" fill="black"/>
-      <!-- Shoulders -->
-      <path d="M50 73
-        C 46 73, 29 78, 13 92
-        L 10 130 L 90 130 L 87 92
-        C 71 78, 54 73, 50 73 Z" fill="black"/>
+      <circle cx="50" cy="36" r="22" fill="black"/>
+      <path d="M4 130 C4 72, 96 72, 96 130 Z" fill="black"/>
     </svg>`
     const blob = new Blob([svgStr], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
