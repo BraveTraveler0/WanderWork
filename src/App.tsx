@@ -424,6 +424,7 @@ function App() {
   const [data, setData] = useState<JobSeekerData | null>(null)
   const [transformedJobs, setTransformedJobs] = useState<any[]>([])
   const [publicJobs, setPublicJobs] = useState<any[]>([])
+  const [publicJobsLoading, setPublicJobsLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
@@ -609,6 +610,7 @@ function App() {
         })))
       })
       .catch(() => {})
+      .finally(() => setPublicJobsLoading(false))
   }, [_token])
 
   useEffect(() => {
@@ -1236,7 +1238,7 @@ function App() {
                   jobs={_token ? transformedJobs : publicJobs}
                   showNewOnly={showNewOnly}
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
-                  loading={_token ? loading : publicJobs.length === 0}
+                  loading={_token ? loading : publicJobsLoading}
                   isAuthenticated={!!_token}
                 />
               </div>
