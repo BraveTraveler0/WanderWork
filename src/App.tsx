@@ -602,7 +602,7 @@ function App() {
           jobType: j.job_type || j.jobType || '',
           source: j.source || '',
           skills: [],
-          hasNewBadge: false,
+          hasNewBadge: true,
           interested: false,
           showCoverLetter: false,
           postedAt: j.date_posted || j.datePosted || new Date().toISOString(),
@@ -1259,6 +1259,7 @@ function App() {
                       jobs={_token ? transformedJobs : publicJobs}
                       onNewJobsClick={() => setShowNewOnly(true)}
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
+                      isAuthenticated={!!_token}
                     />
                   </div>
                 </div>
@@ -1275,6 +1276,7 @@ function App() {
                   jobs={_token ? transformedJobs : publicJobs}
                   onNewJobsClick={() => setShowNewOnly(true)}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
+                  isAuthenticated={!!_token}
                 />
               )}
             </div>

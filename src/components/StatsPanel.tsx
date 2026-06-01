@@ -17,9 +17,10 @@ interface StatsPanelProps {
   jobs?: any[]
   onNewJobsClick?: () => void
   onRecruiterContactsClick?: () => void
+  isAuthenticated?: boolean
 }
 
-const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
   const newJobsCount = allJobs.filter((j: any) => j.hasNewBadge === true).length
@@ -237,42 +238,44 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Stats - Desktop only */}
       <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
-        <div className="relative overflow-visible group/tokens">
-          <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
-          <button
-            type="button"
-            onClick={openTokens}
-            className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/tokens:opacity-100 transition-opacity duration-200"
-            style={{ background: '#BFE3D2', color: '#306770' }}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
-          </button>
-          {floatDelta !== null && (
-            <span
-              key={floatKey}
-              className="absolute left-1/2 top-4 text-[22px] font-bold select-none"
-              style={{ color: '#36BF8F', animation: 'tokenFloat 2.5s ease-out forwards', transform: 'translate(-50%, 0)', zIndex: 20 }}
+        {isAuthenticated && <>
+          <div className="relative overflow-visible group/tokens">
+            <StatCard number={displayTokens.toString()} label="Tokens" onClick={openTokens} clickable />
+            <button
+              type="button"
+              onClick={openTokens}
+              className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/tokens:opacity-100 transition-opacity duration-200"
+              style={{ background: '#BFE3D2', color: '#306770' }}
             >
-              +{floatDelta}
-            </span>
-          )}
-        </div>
-        <div className="relative overflow-visible group/recruiters">
-          <StatCard
-            number={recruiterContactsLeft.toString()}
-            label="Recruiters Left"
-            onClick={onRecruiterContactsClick}
-            clickable
-          />
-          <button
-            type="button"
-            onClick={onRecruiterContactsClick}
-            className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/recruiters:opacity-100 transition-opacity duration-200"
-            style={{ background: '#BFE3D2', color: '#306770' }}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
-          </button>
-        </div>
+              <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
+            </button>
+            {floatDelta !== null && (
+              <span
+                key={floatKey}
+                className="absolute left-1/2 top-4 text-[22px] font-bold select-none"
+                style={{ color: '#36BF8F', animation: 'tokenFloat 2.5s ease-out forwards', transform: 'translate(-50%, 0)', zIndex: 20 }}
+              >
+                +{floatDelta}
+              </span>
+            )}
+          </div>
+          <div className="relative overflow-visible group/recruiters">
+            <StatCard
+              number={recruiterContactsLeft.toString()}
+              label="Recruiters Left"
+              onClick={onRecruiterContactsClick}
+              clickable
+            />
+            <button
+              type="button"
+              onClick={onRecruiterContactsClick}
+              className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/recruiters:opacity-100 transition-opacity duration-200"
+              style={{ background: '#BFE3D2', color: '#306770' }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 400 }}>+</span>
+            </button>
+          </div>
+        </>}
       </div>
       {/* Job Detail Card */}
       {(() => {
@@ -679,7 +682,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   </p>
                 )}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {hasCompanyRecruiters && (
+                  {isAuthenticated && hasCompanyRecruiters && (
                     <button
                       className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
                       style={{ border: '1px solid #306770', color: '#306770' }}
