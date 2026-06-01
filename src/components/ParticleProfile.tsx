@@ -154,7 +154,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
   }, [])
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 20, padding: '24px 20px', background: 'linear-gradient(145deg,#f9fafb,#eef4f5)', fontFamily: FONT }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px', background: 'linear-gradient(145deg,#f9fafb,#eef4f5)', fontFamily: FONT }}>
       <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: '#b0bec5', textTransform: 'uppercase', margin: 0 }}>
         This Could Be You
       </p>
@@ -167,12 +167,10 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
         <p style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', margin: '0 0 18px', lineHeight: 1.5 }}>
           Sign up to find fresh remote jobs,<br />from all over the world.
         </p>
-        <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, minHeight: 22, letterSpacing: 0.2 }}>
+        <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 20px', minHeight: 22, letterSpacing: 0.2 }}>
           {tagline}
         </p>
-      </div>
-
-      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
           onClick={() => { window.location.href = `${API_BASE}/oauth/linkedin` }}
           style={{ width: '100%', background: 'white', color: '#333', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'transform 0.2s, box-shadow 0.2s' }}
@@ -198,6 +196,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
         >
           Sign In
         </button>
+        </div>
       </div>
     </div>
   )
