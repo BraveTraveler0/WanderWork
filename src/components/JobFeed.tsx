@@ -728,34 +728,6 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
             <div className="flex gap-2 sm:gap-3 items-center flex-wrap lg:flex-nowrap">
               <div className="flex items-center gap-2 flex-shrink-0">
                 <input
-                  list="location-options"
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  placeholder="Location"
-                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[160px] sm:w-[190px] lg:w-[180px]"
-                  style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
-                />
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[150px] sm:w-[170px] lg:w-[160px] outline-none"
-                  style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
-                >
-                  <option value="today">Today</option>
-                  <option value="yesterday">Yesterday</option>
-                  <option value="this_week">This week</option>
-                  <option value="this_month">This month</option>
-                  <option value="all">All</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-2 sm:gap-3 items-center flex-wrap lg:flex-nowrap">
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <input
                   value={keywordInput}
                   onChange={(e) => setKeywordInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -798,9 +770,9 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
                 onClick={() => setShowDiscarded(!showDiscarded)}
                 disabled={discardedJobsList.length === 0}
                 className="flex items-center gap-2 px-3 py-2 rounded-[10px] transition-colors relative flex-shrink-0"
-                style={{ 
-                  border: `1px solid ${discardedJobsList.length === 0 ? '#CCCCCC' : '#306770'}`, 
-                  color: discardedJobsList.length === 0 ? '#CCCCCC' : '#306770', 
+                style={{
+                  border: `1px solid ${discardedJobsList.length === 0 ? '#CCCCCC' : '#306770'}`,
+                  color: discardedJobsList.length === 0 ? '#CCCCCC' : '#306770',
                   background: 'white',
                   cursor: discardedJobsList.length === 0 ? 'not-allowed' : 'pointer'
                 }}
@@ -814,6 +786,34 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
                   </div>
                 )}
               </button>
+            </div>
+
+            <div className="flex gap-2 sm:gap-3 items-center flex-wrap lg:flex-nowrap">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <input
+                  list="location-options"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  placeholder="Location"
+                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[160px] sm:w-[190px] lg:w-[180px]"
+                  style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[150px] sm:w-[170px] lg:w-[160px] outline-none"
+                  style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
+                >
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="this_week">This week</option>
+                  <option value="this_month">This month</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
