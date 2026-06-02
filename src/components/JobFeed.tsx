@@ -255,6 +255,10 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const [keywordInput, setKeywordInput] = useState('')
   const [dateRange, setDateRange] = useState('all')
 
+  useEffect(() => {
+    if (showNewOnly) setShowMatchedOnly(false)
+  }, [showNewOnly])
+
   // Reset visible count whenever filters change
   useEffect(() => {
     setVisibleCount(BATCH)

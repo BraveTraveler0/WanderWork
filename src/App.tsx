@@ -413,7 +413,7 @@ function transformJob(job: Job, index: number) {
     postedAt: dateStr,
     salary: (job as any).salary,
     url: normalizeJobUrl((job as any).url),
-    jobType: (job as any).jobType || (job as any).type,
+    jobType: (job as any).jobType || (job as any).job_type || (job as any).type,
     job_code: (job as any).job_code || (job as any).code,
     rawDate: dateStr, // Use the parsed dateStr instead of original rawDate
   }

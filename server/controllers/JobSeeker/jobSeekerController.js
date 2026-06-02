@@ -861,6 +861,10 @@ async function getAllJobsPure() {
         const ts = parseJobDate(job);
         if (!ts) return true;
         return ts >= cutoff;
+    }).sort((a, b) => {
+        const aTime = parseJobDate(a) || 0;
+        const bTime = parseJobDate(b) || 0;
+        return bTime - aTime;
     });
 
     for (const job of filtered) {
