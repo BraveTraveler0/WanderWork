@@ -51,6 +51,26 @@ function normalizeLocation(loc) {
   return l.replace(/\s+\d{5}(-\d{4})?$/, '').trim();
 }
 
+function inferSource(record, url) {
+  const explicit = firstText(record.source);
+  if (explicit) return explicit;
+  if (/indeed\.com/i.test(url)) return 'Indeed';
+  if (/remotive\.com/i.test(url)) return 'remotive';
+  return 'n8n';
+}
+
+function parseDate(record) {
+  const raw = firstText(record.datePosted, record.date_posted, record.postedAt, record.postedDate, record.rawDate);
+  if (!raw) return new Date();
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  if (typeof raw === 'string') {
+    const withZ = new Date(`${raw}Z`);
+    if (!Number.isNaN(withZ.getTime())) return withZ;
+  }
+  return new Date();
+}
+
 async function main() {
   await mongoose.connect(process.env.DATABASE_URI);
   console.log('Connected to MongoDB');
@@ -79,7 +99,7 @@ async function main() {
 
     for (const r of records) {
       try {
-        const url = String(r.url || '').trim();
+        const url = firstText(r.url, r.id, r.applyUrl, r.apply_url);
         if (!url) { skipped++; continue; }
 
         const urlNormalized = url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
@@ -105,9 +125,9 @@ async function main() {
           salary: r.salary ? String(r.salary).trim() : 'Not Listed',
           location: normalizeLocation(r.location),
           job_type: normalizeJobType(r.jobType || r.job_type || r.type),
-          date_posted: new Date(),
+          date_posted: parseDate(r),
           description_short,
-          source: 'Indeed',
+          source: inferSource(r, url),
           score: 0,
           tags: [],
           cover_letter: '',
