@@ -13,6 +13,20 @@ const CandidateJobPairings = require('../../models/JobSeeker/jobSeeker.Candidate
 const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPairing.js');
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
 
+function textValue(value) {
+    if (value == null) return '';
+    if (Array.isArray(value)) return value.map(textValue).filter(Boolean).join(' ');
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object') {
+        return Object.values(value).map(textValue).filter(Boolean).join(' ');
+    }
+    return String(value);
+}
+
+function cleanTextValue(value) {
+    return textValue(value).trim();
+}
+
 async function extractPdfText(fileBuffer) {
     const pdfParse = require('pdf-parse');
 
@@ -37,7 +51,7 @@ async function extractPdfText(fileBuffer) {
 // ── Junk job detection (shared between read-time filter and DB purge) ─────────
 function isJunkJobRecord(job) {
     // Check all possible title field names used by scrapers
-    const title = (job.title || job.job_title || job.name || '').trim()
+    const title = cleanTextValue(job.title || job.job_title || job.name || '')
     // "7,000+ Digital Designer jobs in United States" / "13,000+ Marketing Designer jobs"
     if (/^\d[\d,]*\+?\s+.+\bjobs?\b/i.test(title)) return true
     // "Best Remote UX Designer Jobs in NYC, NY 2026"
@@ -48,7 +62,7 @@ function isJunkJobRecord(job) {
     if (/\bjobs?\s+in\b/i.test(title) && /^\d/.test(title)) return true
     // "Job Application for [role]" — fake aggregator titles
     if (/^job\s+application\s+for\b/i.test(title)) return true
-    const desc = [job.description_short, job.shortDescription, job.summary, job.description, job.why_matched].filter(Boolean).join(' ')
+    const desc = [job.description_short, job.shortDescription, job.summary, job.description, job.why_matched].map(textValue).filter(Boolean).join(' ')
     if (/skip\s+to\s+main\s+content/i.test(desc)) return true
     if (/why\s+you\s+were\s+matched/i.test(desc)) return true
     // "Reposted/Posted 16 Days AgoSave/AgoSaved" — metadata bleeding into description
@@ -360,11 +374,11 @@ const ATS_PLATFORMS = new Set([
 
 const isRomanNumeral = (value) => /^[IVXLCDM]+$/i.test(value);
 
-const stripHtml = (value) => String(value || '').replace(/<[^>]*>/g, ' ');
+const stripHtml = (value) => textValue(value).replace(/<[^>]*>/g, ' ');
 
 const normalizeText = (value) => stripHtml(value).replace(/\s+/g, ' ').trim();
 
-const splitWords = (value) => value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+const splitWords = (value) => textValue(value).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
 const hasEnoughLetters = (value) => {
     const letters = (value.match(/[A-Za-z]/g) || []).length;
@@ -429,7 +443,7 @@ const getJobDescription = (job) => {
 
 const looksLikeCompany = (value, titleWords) => {
     if (!value) return false;
-    const trimmed = value.trim();
+    const trimmed = cleanTextValue(value);
     if (!trimmed) return false;
     if (trimmed.length < 3 && !/^[A-Z]{2,3}$/.test(trimmed)) return false;
     if (isRomanNumeral(trimmed)) return false;
@@ -447,7 +461,7 @@ const looksLikeCompany = (value, titleWords) => {
 
 const normalizeCompanyValue = (value, titleWords) => {
     if (!value) return '';
-    const trimmed = value.trim();
+    const trimmed = cleanTextValue(value);
     if (!trimmed) return '';
     let cleaned = trimmed.replace(/^[\"'“”‘’]+|[\"'“”‘’,.;:]+$/g, '').trim();
     cleaned = stripCompanyLabels(cleaned);
@@ -468,7 +482,7 @@ const normalizeCompanyValue = (value, titleWords) => {
 
 const isUnknownCompany = (value, title) => {
     if (!value) return true;
-    const trimmed = value.trim();
+    const trimmed = cleanTextValue(value);
     if (!trimmed) return true;
     const lowered = trimmed.toLowerCase();
     if (/^company\s*name\b/.test(lowered) || /^company\b/.test(lowered)) return true;
@@ -556,17 +570,18 @@ const inferCompanyFromDescription = (description, title) => {
 };
 
 const inferCompanyName = (job) => {
-    const title = job?.title || '';
+    const title = cleanTextValue(job?.title || '');
     const titleWords = new Set(splitWords(title));
     const normalizedCompany = normalizeCompanyValue(job?.company || '', titleWords);
-    if (normalizedCompany && normalizedCompany !== job?.company?.trim()) return normalizedCompany;
-    if (!isUnknownCompany(job?.company, title)) return job?.company?.trim() || '';
+    const currentCompany = cleanTextValue(job?.company || '');
+    if (normalizedCompany && normalizedCompany !== currentCompany) return normalizedCompany;
+    if (!isUnknownCompany(job?.company, title)) return currentCompany || '';
     const description = getJobDescription(job);
     const fromDescription = inferCompanyFromDescription(description, title);
     if (fromDescription) return fromDescription;
     const fromUrl = inferCompanyFromUrl(job?.url || '');
     if (fromUrl) return fromUrl;
-    return job?.company?.trim() || 'Unknown';
+    return currentCompany || 'Unknown';
 };
 
 const escapeAirtableValue = (value) => String(value || '').replace(/'/g, "\\'");
@@ -1258,16 +1273,17 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     const finalEdu = aiParsed?.education || regexEdu;
     const aiSkills = Array.isArray(aiParsed?.skills) ? aiParsed.skills : [];
     const aiInferredKeywords = Array.isArray(aiParsed?.inferredKeywords) ? aiParsed.inferredKeywords : [];
-    const finalRole = (aiParsed?.targetRole || regexRole || '').trim();
-    const finalPhone = (aiParsed?.phone || regexPhone || '').trim();
-    const finalFirstName = (aiParsed?.firstName || regexFirstName || '').trim();
-    const finalLastName = (aiParsed?.lastName || regexLastName || '').trim();
-    const finalSummary = (aiParsed?.summary || '').trim();
+    const finalRole = cleanTextValue(aiParsed?.targetRole || regexRole || '');
+    const finalPhone = cleanTextValue(aiParsed?.phone || regexPhone || '');
+    const finalFirstName = cleanTextValue(aiParsed?.firstName || regexFirstName || '');
+    const finalLastName = cleanTextValue(aiParsed?.lastName || regexLastName || '');
+    const finalSummary = cleanTextValue(aiParsed?.summary || '');
     const finalEmail = regexEmail;
     const finalLocation = (() => {
         if (aiParsed?.location) {
-            const parts = aiParsed.location.split(',').map(s => s.trim());
-            return parts[0] ? { locationName: aiParsed.location, city: parts[0], state: parts[1] || '' } : null;
+            const locationText = cleanTextValue(aiParsed.location);
+            const parts = locationText.split(',').map(s => s.trim());
+            return parts[0] ? { locationName: locationText, city: parts[0], state: parts[1] || '' } : null;
         }
         return regexLocation;
     })();
@@ -1763,7 +1779,7 @@ async function callOpenAI(systemPrompt, userPrompt, maxTokens = 1500) {
 const submitCustomRequest = asyncHandler(async (req, res) => {
     const payload = req.body || {};
     // JWT email takes precedence — client-supplied email is only a fallback for dev/testing
-    const email = req.user?.email || payload.email
+    const email = cleanTextValue(req.user?.email || payload.email)
     if (!email) return res.status(400).json({ message: 'Email is required.' });
 
     const { firstName, lastName, jobId, jobTitle, company, jobUrl, resume, coverLetter } = payload;
@@ -1774,7 +1790,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     // Atomic token check + deduction — same pattern as recruiter sendEmail
     const prevCandidate = await Candidates.findOneAndUpdate(
         {
-            email: { $regex: new RegExp(`^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
             tokenBalance: { $gte: totalCost },
         },
         { $inc: { tokenBalance: -totalCost, tokensUsed: totalCost } },
@@ -1782,7 +1798,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     )
 
     if (!prevCandidate) {
-        const exists = await Candidates.exists({ email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } })
+        const exists = await Candidates.exists({ email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } })
         return res.status(exists ? 402 : 404).json({
             message: exists ? 'Insufficient tokens' : 'Candidate not found',
         })
@@ -1988,8 +2004,8 @@ Tailor every bullet point to match the target job description — highlight spec
             2000
         ) : Promise.resolve(null),
         coverLetter ? (() => {
-            const safeCompany = company || 'the company'
-            const safeTitle = jobTitle || 'this role'
+            const safeCompany = cleanTextValue(company) || 'the company'
+            const safeTitle = cleanTextValue(jobTitle) || 'this role'
             const openings = [
                 `I'm interested in the ${safeTitle} position at ${safeCompany} because`,
                 `${safeCompany} seems like a really great match for my background because`,

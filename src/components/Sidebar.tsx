@@ -11,6 +11,15 @@ const getInitials = (name: string) => {
     .join('')
 }
 
+const profileText = (value: any): string => {
+  if (value == null) return ''
+  if (Array.isArray(value)) return value.map(profileText).filter(Boolean).join(' ')
+  if (typeof value === 'object') return Object.values(value).map(profileText).filter(Boolean).join(' ')
+  return String(value)
+}
+
+const isBlankProfileValue = (value: any) => profileText(value).trim().length === 0
+
 const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any, onProfileImageChange?: (image: string | null) => void, onCandidateUpdate?: (patch: any) => void }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -213,18 +222,18 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       const updates: any = { resume: uploadedResume }
       if (returnedCandidate?.skills?.length) updates.skills = returnedCandidate.skills.join(', ')
       if (returnedCandidate?.targetRoles?.length) updates.title = returnedCandidate.targetRoles[0]
-      if (returnedCandidate?.location?.[0] && !profile.location?.trim()) {
+      if (returnedCandidate?.location?.[0] && isBlankProfileValue(profile.location)) {
         const loc = returnedCandidate.location[0]
         updates.location = loc.city
           ? (loc.state ? `${loc.city}, ${loc.state}` : loc.city)
           : (loc.locationName || profile.location)
       }
-      if (returnedCandidate?.phone && !profile.phone?.trim()) updates.phone = returnedCandidate.phone
+      if (returnedCandidate?.phone && isBlankProfileValue(profile.phone)) updates.phone = returnedCandidate.phone
       if (returnedCandidate?.urls?.length) {
         const findUrl = (name: string) => returnedCandidate.urls.find((u: any) => u.urlName === name)?.urlAddress
-        if (findUrl('LinkedIn') && !profile.linkedin?.trim()) updates.linkedin = findUrl('LinkedIn')
-        if (findUrl('GitHub') && !profile.github?.trim()) updates.github = findUrl('GitHub')
-        if (findUrl('Portfolio') && !profile.portfolio?.trim()) updates.portfolio = findUrl('Portfolio')
+        if (findUrl('LinkedIn') && isBlankProfileValue(profile.linkedin)) updates.linkedin = findUrl('LinkedIn')
+        if (findUrl('GitHub') && isBlankProfileValue(profile.github)) updates.github = findUrl('GitHub')
+        if (findUrl('Portfolio') && isBlankProfileValue(profile.portfolio)) updates.portfolio = findUrl('Portfolio')
       }
 
       const newProfile = { ...profile, ...updates }

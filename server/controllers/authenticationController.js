@@ -22,6 +22,28 @@ function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
 }
 
+function textValue(value) {
+    if (value == null) return '';
+    if (Array.isArray(value)) return value.map(textValue).filter(Boolean).join(' ');
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object') {
+        return Object.values(value).map(textValue).filter(Boolean).join(' ');
+    }
+    return String(value);
+}
+
+function cleanText(value) {
+    return textValue(value).trim();
+}
+
+function cleanList(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+        return value.flatMap(cleanList).filter(Boolean);
+    }
+    return textValue(value).split(',').map((item) => item.trim()).filter(Boolean);
+}
+
 function getClientIp(req) {
     return String(req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || 'unknown')
         .split(',')[0]
@@ -348,25 +370,22 @@ const createNewUser = asyncHandler(async (req, res) => {
         "Nature & Science"
         ]
 
-    const safeFirstName = String(firstName || displayName || normalizedEmail.split('@')[0] || 'User').trim();
-    const safeLastName = String(lastName || 'Candidate').trim();
-    const roleList = Array.isArray(targetRoles)
-      ? targetRoles
-      : String(targetRole || '').split(',').map((item) => item.trim()).filter(Boolean);
-    const seniorityList = Array.isArray(seniority)
-      ? seniority
-      : String(seniority || '').split(',').map((item) => item.trim()).filter(Boolean);
-    const skillList = Array.isArray(skills)
-      ? skills
-      : String(skills || '').split(',').map((item) => item.trim()).filter(Boolean);
+    const safeFirstName = cleanText(firstName || displayName || normalizedEmail.split('@')[0] || 'User');
+    const safeLastName = cleanText(lastName || 'Candidate');
+    const safeDisplayName = cleanText(displayName || `${safeFirstName} ${safeLastName}`) || `${safeFirstName} ${safeLastName}`.trim();
+    const safePhone = cleanText(phone) || 'Not provided';
+    const safeLocation = cleanText(location) || 'New York, NY';
+    const roleList = cleanList(targetRoles || targetRole);
+    const seniorityList = cleanList(seniority);
+    const skillList = cleanList(skills);
     const urls = [
-      linkedinUrl ? { urlName: 'LinkedIn', urlAddress: linkedinUrl } : null,
-      portfolioUrl ? { urlName: 'Portfolio', urlAddress: portfolioUrl } : null,
-      githubUrl ? { urlName: 'GitHub', urlAddress: githubUrl } : null,
-      calendlyUrl ? { urlName: 'Calendly', urlAddress: calendlyUrl } : null,
+      cleanText(linkedinUrl) ? { urlName: 'LinkedIn', urlAddress: cleanText(linkedinUrl) } : null,
+      cleanText(portfolioUrl) ? { urlName: 'Portfolio', urlAddress: cleanText(portfolioUrl) } : null,
+      cleanText(githubUrl) ? { urlName: 'GitHub', urlAddress: cleanText(githubUrl) } : null,
+      cleanText(calendlyUrl) ? { urlName: 'Calendly', urlAddress: cleanText(calendlyUrl) } : null,
     ].filter(Boolean);
 
-    const userObject = { email: normalizedEmail, password: hashedPwd, stars: 5, achievements: userAchievements, tags, displayName: displayName || `${safeFirstName} ${safeLastName}`.trim(), profimage, backimage, ageVerified, event };
+    const userObject = { email: normalizedEmail, password: hashedPwd, stars: 5, achievements: userAchievements, tags, displayName: safeDisplayName, profimage, backimage, ageVerified, event };
 
     // Create and store new user
     const user = await User.create(userObject);
@@ -383,8 +402,8 @@ const createNewUser = asyncHandler(async (req, res) => {
       firstName: safeFirstName,
       lastName: safeLastName,
       email: normalizedEmail,
-      phone: phone || 'Not provided',
-      location: [{ locationName: location || 'New York, NY', city: location || 'New York', state: location ? '' : 'NY' }],
+      phone: safePhone,
+      location: [{ locationName: safeLocation, city: safeLocation, state: safeLocation === 'New York, NY' ? 'NY' : '' }],
       targetRoles: roleList,
       seniority: seniorityList,
       skills: skillList,
