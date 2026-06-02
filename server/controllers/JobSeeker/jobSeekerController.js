@@ -1439,9 +1439,11 @@ const RESUME_METRIC_RE = /\b(\$[\d,]+(?:\.\d+)?[kKmMbB]?|\d+(?:\.\d+)?%|\d+(?:\.
 const RESUME_BULLET_RE = /^[-*\u2022]\s+/
 
 function isResumeSectionHeader(line) {
-    const normalized = line.trim().replace(/\s+/g, ' ').toUpperCase()
+    const trimmed = line.trim().replace(/\s+/g, ' ')
+    const normalized = trimmed.toUpperCase()
+    // Test original case in regex — only truly ALL-CAPS lines qualify as headers
     return RESUME_SECTION_HEADERS.has(normalized)
-        || (/^[A-Z][A-Z0-9\s/&()+.,'-]{2,}$/.test(normalized) && normalized.length <= 40 && !/\d{4}/.test(normalized))
+        || (/^[A-Z][A-Z0-9\s/&()+.,'-]{2,}$/.test(trimmed) && trimmed.length <= 40 && !/\d{4}/.test(trimmed))
 }
 
 function isKnownResumeSectionHeader(line) {
@@ -1668,7 +1670,8 @@ function pdfEscape(value) {
     return String(value || '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
 }
 
-function buildPdfBuffer(content) {
+function buildPdfBuffer(content, documentType = 'resume') {
+    const isResume = documentType === 'resume'
     const allLines = wrapPdfLines(content)
     const maxLinesPerPage = 48
     const pages = []
@@ -1691,14 +1694,15 @@ function buildPdfBuffer(content) {
         for (const line of pageLines) {
             if (!line.trim()) { streamLines.push('T*'); continue }
 
-            if (!nameWritten) {
+            if (isResume && !nameWritten) {
                 // First non-empty line = name: bold, 16pt, space below
                 streamLines.push('/F2 16 Tf', `(${pdfEscape(line)}) Tj`, 'T*', 'T*', '/F1 10 Tf')
                 nameWritten = true
                 continue
             }
+            if (!isResume) nameWritten = true
 
-            if (isResumeSectionHeader(line)) {
+            if (isResume && isResumeSectionHeader(line)) {
                 streamLines.push('T*', `/F2 10 Tf`, `(${pdfEscape(line)}) Tj`, 'T*', '/F1 10 Tf')
                 continue
             }
@@ -2060,7 +2064,7 @@ Tailor every bullet point to match the target job description — highlight spec
                 })
             } else {
                 attachments.push({
-                    content: buildPdfBuffer(content).toString('base64'),
+                    content: buildPdfBuffer(content, documentType).toString('base64'),
                     type: 'application/pdf',
                     filename: `${filenameBase}.pdf`,
                     disposition: 'attachment',
