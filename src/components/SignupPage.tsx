@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type React from 'react'
 import { ArrowLeft, Briefcase, Eye, EyeOff, Link2, Lock, Mail, MapPin, Phone, Upload, User } from 'lucide-react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
@@ -21,16 +21,16 @@ const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | unde
 
 const SIGNUP_STEPS = [
   {
-    title: 'Account',
-    description: 'Start with the basics we need to create your secure login.',
-  },
-  {
-    title: 'Job Goals',
-    description: 'Tell us what kind of remote role you want so matches start with context.',
-  },
-  {
     title: 'Resume',
-    description: 'Add links or a resume so your profile has proof behind the match.',
+    description: 'Upload a resume first to auto-fill your profile and skip manual job details.',
+  },
+  {
+    title: 'Account',
+    description: 'Add the basics we need to create your secure login.',
+  },
+  {
+    title: 'Profile',
+    description: 'Only fill this out if you are not uploading a resume.',
   },
 ]
 
@@ -182,6 +182,8 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   const [form, setForm] = useState(getInitialSignupForm)
   const [showPassword, setShowPassword] = useState(false)
   const [resume, setResume] = useState<File | null>(null)
+  const [resumeError, setResumeError] = useState<string | null>(null)
+  const [isDraggingResume, setIsDraggingResume] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupField, string>>>({})
@@ -189,6 +191,49 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsError, setTermsError] = useState<string | null>(null)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  const resumeInputRef = useRef<HTMLInputElement>(null)
+
+  const setResumeFile = (file: File | null) => {
+    setResumeError(null)
+    if (!file) {
+      setResume(null)
+      return
+    }
+
+    const allowedByName = /\.(pdf|docx)$/i.test(file.name)
+    const allowedByType = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ].includes(file.type)
+
+    if (!allowedByName && !allowedByType) {
+      setResume(null)
+      setResumeError('Upload a PDF or DOCX resume.')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setResume(null)
+      setResumeError('Resume must be 10 MB or smaller.')
+      return
+    }
+
+    setResume(file)
+    setError(null)
+    setFieldErrors((current) => {
+      const next = { ...current }
+      delete next.phone
+      delete next.location
+      delete next.targetRole
+      return next
+    })
+  }
+
+  const handleResumeDrop = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setIsDraggingResume(false)
+    setResumeFile(event.dataTransfer.files?.[0] || null)
+  }
 
   const requireTerms = () => {
     const message = 'Please accept the Terms of Service before creating an account.'
@@ -218,7 +263,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     const requireValue = (value: string) => value.trim().length > 0
     const nextFieldErrors: Partial<Record<SignupField, string>> = {}
 
-    if (targetStep === 0) {
+    if (targetStep === 1) {
       if (!requireValue(form.firstName)) nextFieldErrors.firstName = 'First name is required.'
       if (!requireValue(form.lastName)) nextFieldErrors.lastName = 'Last name is required.'
       if (!requireValue(form.email)) nextFieldErrors.email = 'Email is required.'
@@ -232,7 +277,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       }
     }
 
-    if (targetStep === 1) {
+    if (targetStep === 2 && !resume) {
       if (!requireValue(form.phone)) nextFieldErrors.phone = 'Phone number is required.'
       if (!requireValue(form.location)) nextFieldErrors.location = 'Location is required.'
       if (!requireValue(form.targetRole)) nextFieldErrors.targetRole = 'Target role is required.'
@@ -262,12 +307,12 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validateStep(0)) {
-      setStep(0)
-      return
-    }
     if (!validateStep(1)) {
       setStep(1)
+      return
+    }
+    if (!resume && !validateStep(2)) {
+      setStep(2)
       return
     }
     if (!termsAccepted) {
@@ -294,7 +339,11 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       localStorage.setItem('wanderworkUser', JSON.stringify(data.user))
 
       if (resume && form.email) {
-        try { await uploadCandidateResume(form.email, resume) } catch { /* non-fatal */ }
+        try {
+          await uploadCandidateResume(form.email, resume)
+        } catch (uploadError) {
+          console.warn('Resume upload failed after signup', uploadError)
+        }
       }
 
       onSignup(data.user, token)
@@ -313,6 +362,68 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
         : ''
     }`
   const stepContent = [
+    (
+      <div>
+        <label
+          onDragEnter={(event) => {
+            event.preventDefault()
+            setIsDraggingResume(true)
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setIsDraggingResume(true)
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            setIsDraggingResume(false)
+          }}
+          onDrop={handleResumeDrop}
+          className={`flex min-h-[210px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition ${
+            isDraggingResume
+              ? 'border-[#306770] bg-[#EEF6F7]'
+              : resume
+                ? 'border-[#306770] bg-[#F7FBFB]'
+                : 'border-gray-300 bg-gray-50/70 hover:border-[#306770] hover:bg-white'
+          }`}
+        >
+          <Upload size={32} className="mb-3 text-[#306770]" />
+          <span className="text-base font-bold text-gray-800">
+            {resume ? resume.name : 'Upload your resume to skip manual profile entry'}
+          </span>
+          <span className="mt-2 max-w-xl text-sm font-medium text-gray-500">
+            Drag and drop a PDF or DOCX here, or click to choose a file. We will parse it after your account is created and fill in your role, skills, location, and profile details.
+          </span>
+          <input
+            ref={resumeInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
+          />
+        </label>
+
+        {resumeError && <p className="mt-3 text-sm font-semibold text-red-700">{resumeError}</p>}
+        {resume && (
+          <div className="mt-4 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4 text-sm font-semibold text-[#306770]">
+            Resume added. After account setup, you can bypass the manual profile step and we will auto-fill it from this file.
+          </div>
+        )}
+
+        {resume && (
+          <button
+            type="button"
+            onClick={() => {
+              setResume(null)
+              setResumeError(null)
+              if (resumeInputRef.current) resumeInputRef.current.value = ''
+            }}
+            className="mt-4 text-sm font-semibold text-[#306770] underline-offset-2 hover:underline"
+          >
+            Remove resume
+          </button>
+        )}
+      </div>
+    ),
     (
       <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
         <Field icon={<User size={18} />} label="First Name" required error={fieldErrors.firstName}>
@@ -342,14 +453,19 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     ),
     (
       <>
+        {resume && (
+          <div className="mb-6 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4 text-sm font-semibold text-[#306770]">
+            This step is optional because your resume will auto-fill the core profile fields. Add anything extra here only if you want to.
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
-          <Field icon={<Phone size={18} />} label="Phone Number" required error={fieldErrors.phone}>
+          <Field icon={<Phone size={18} />} label="Phone Number" required={!resume} error={fieldErrors.phone}>
             <input className={getInputClass('phone')} value={form.phone} onChange={(e) => setField('phone', e.target.value)} autoComplete="tel" aria-invalid={Boolean(fieldErrors.phone)} />
           </Field>
-          <Field icon={<MapPin size={18} />} label="Location" required error={fieldErrors.location}>
+          <Field icon={<MapPin size={18} />} label="Location" required={!resume} error={fieldErrors.location}>
             <input className={getInputClass('location')} value={form.location} onChange={(e) => setField('location', e.target.value)} placeholder="New York, NY" aria-invalid={Boolean(fieldErrors.location)} />
           </Field>
-          <Field icon={<Briefcase size={18} />} label="Target Role" required error={fieldErrors.targetRole}>
+          <Field icon={<Briefcase size={18} />} label="Target Role" required={!resume} error={fieldErrors.targetRole}>
             <input className={getInputClass('targetRole')} value={form.targetRole} onChange={(e) => setField('targetRole', e.target.value)} placeholder="Senior Product Designer" aria-invalid={Boolean(fieldErrors.targetRole)} />
           </Field>
           <Field label="Seniority">
@@ -358,13 +474,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
         </div>
 
         <Field label="Skills" className="mt-8">
-          <textarea className={`${inputClass} min-h-[170px] resize-y`} value={form.skills} onChange={(e) => setField('skills', e.target.value)} placeholder="React, TypeScript, MongoDB" />
+          <textarea className={`${inputClass} min-h-[130px] resize-y`} value={form.skills} onChange={(e) => setField('skills', e.target.value)} placeholder="React, TypeScript, MongoDB" />
         </Field>
-      </>
-    ),
-    (
-      <>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+
+        <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
           <Field icon={<Link2 size={18} />} label="LinkedIn URL">
             <input className={inputClass} value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} />
           </Field>
@@ -375,19 +488,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             <input className={inputClass} value={form.calendlyUrl} onChange={(e) => setField('calendlyUrl', e.target.value)} />
           </Field>
         </div>
-
-        <div className="mt-6">
-          <label className="mb-2 block text-sm font-semibold text-gray-700">Upload your resume</label>
-          <label className="flex min-h-[130px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/70 px-4 text-center transition hover:border-[#306770] hover:bg-white">
-            <Upload size={24} className="mb-2 text-[#306770]" />
-            <span className="text-sm font-semibold text-gray-700">{resume ? resume.name : 'Click to choose a file or drag here'}</span>
-            <span className="mt-1 text-xs text-gray-500">PDF or DOCX. 10 MB max.</span>
-            <input type="file" className="hidden" accept=".pdf,.docx" onChange={(e) => setResume(e.target.files?.[0] || null)} />
-          </label>
-        </div>
       </>
     ),
   ]
+  const canSubmitFromCurrentStep = step === SIGNUP_STEPS.length - 1 || (Boolean(resume) && step === 1)
 
   return (
     <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
@@ -499,13 +603,13 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
                 Back
               </button>
             )}
-            {step < SIGNUP_STEPS.length - 1 ? (
+            {!canSubmitFromCurrentStep ? (
               <button
                 type="button"
                 onClick={goNext}
                 className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl"
               >
-                Next
+                {step === 0 && resume ? 'Continue to account' : 'Next'}
               </button>
             ) : (
               <button
