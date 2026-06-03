@@ -21,16 +21,16 @@ const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | unde
 
 const SIGNUP_STEPS = [
   {
-    title: 'Resume',
-    description: 'Upload a resume first to auto-fill your profile and skip manual job details.',
-  },
-  {
     title: 'Account',
-    description: 'Add the basics we need to create your secure login.',
+    description: 'Add your name and login details, then upload a resume to auto-fill your profile.',
   },
   {
     title: 'Profile',
     description: 'Only fill this out if you are not uploading a resume.',
+  },
+  {
+    title: 'Links',
+    description: 'Add optional links recruiters can use to learn more about you.',
   },
 ]
 
@@ -354,7 +354,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     const requireValue = (value: string) => value.trim().length > 0
     const nextFieldErrors: Partial<Record<SignupField, string>> = {}
 
-    if (targetStep === 1) {
+    if (targetStep === 0) {
       if (!requireValue(form.firstName)) nextFieldErrors.firstName = 'First name is required.'
       if (!requireValue(form.lastName)) nextFieldErrors.lastName = 'Last name is required.'
       if (!requireValue(form.email)) nextFieldErrors.email = 'Email is required.'
@@ -368,7 +368,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       }
     }
 
-    if (targetStep === 2 && !resume) {
+    if (targetStep === 1 && !resume) {
       if (!requireValue(form.phone)) nextFieldErrors.phone = 'Phone number is required.'
       if (!requireValue(form.location)) nextFieldErrors.location = 'Location is required.'
       if (!requireValue(form.targetRole)) nextFieldErrors.targetRole = 'Target role is required.'
@@ -398,12 +398,12 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validateStep(1)) {
-      setStep(1)
+    if (!validateStep(0)) {
+      setStep(0)
       return
     }
-    if (!resume && !validateStep(2)) {
-      setStep(2)
+    if (!resume && !validateStep(1)) {
+      setStep(1)
       return
     }
     if (!termsAccepted) {
@@ -454,99 +454,100 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     }`
   const stepContent = [
     (
-      <div>
-        <label
-          onDragEnter={(event) => {
-            event.preventDefault()
-            setIsDraggingResume(true)
-          }}
-          onDragOver={(event) => {
-            event.preventDefault()
-            setIsDraggingResume(true)
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault()
-            setIsDraggingResume(false)
-          }}
-          onDrop={handleResumeDrop}
-          className={`flex min-h-[210px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition ${
-            isDraggingResume
-              ? 'border-[#306770] bg-[#EEF6F7]'
-              : resume
-                ? 'border-[#306770] bg-[#F7FBFB]'
-                : 'border-gray-300 bg-gray-50/70 hover:border-[#306770] hover:bg-white'
-          }`}
-        >
-          <Upload size={32} className="mb-3 text-[#306770]" />
-          <span className="text-base font-bold text-gray-800">
-            {resume ? resume.name : 'Upload your resume to skip manual profile entry'}
-          </span>
-          <span className="mt-2 max-w-xl text-sm font-medium text-gray-500">
-            Drag and drop a PDF or DOCX here, or click to choose a file. We will read it now and fill in your role, skills, location, and profile details.
-          </span>
-          <input
-            ref={resumeInputRef}
-            type="file"
-            className="hidden"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(e) => void setResumeFile(e.target.files?.[0] || null)}
-          />
-        </label>
+      <div className="space-y-8">
+        <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
+          <Field icon={<User size={18} />} label="First Name" required error={fieldErrors.firstName}>
+            <input className={getInputClass('firstName')} value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} autoComplete="given-name" aria-invalid={Boolean(fieldErrors.firstName)} />
+          </Field>
+          <Field label="Last Name" required error={fieldErrors.lastName}>
+            <input className={getInputClass('lastName')} value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} autoComplete="family-name" aria-invalid={Boolean(fieldErrors.lastName)} />
+          </Field>
+          <Field icon={<Mail size={18} />} label="Email" required error={fieldErrors.email}>
+            <input className={getInputClass('email')} type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} autoComplete="email" aria-invalid={Boolean(fieldErrors.email)} />
+          </Field>
+          <Field icon={<Lock size={18} />} label="Password" required error={fieldErrors.password}>
+            <div className="relative">
+              <input className={getInputClass('password')} type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setField('password', e.target.value)} minLength={8} autoComplete="new-password" aria-invalid={Boolean(fieldErrors.password)} style={{ paddingRight: '2.75rem' }} />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-[#306770] transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </Field>
+        </div>
 
-        {resumeError && <p className="mt-3 text-sm font-semibold text-red-700">{resumeError}</p>}
-        {resume && (
-          <div className="mt-4 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4 text-sm font-semibold text-[#306770]">
-            {resumeParsing
-              ? 'Resume added. Reading it now to auto-fill your profile fields...'
-              : resumeParsed
-                ? 'Resume read. We filled the details we found, and you can bypass the manual profile step.'
-                : 'Resume added. You can bypass the manual profile step after creating your account.'}
-          </div>
-        )}
-
-        {resume && (
-          <button
-            type="button"
-            onClick={() => {
-              resumeParseRunRef.current += 1
-              setResume(null)
-              setResumeError(null)
-              setResumeParsing(false)
-              setResumeParsed(false)
-              if (resumeInputRef.current) resumeInputRef.current.value = ''
+        <div>
+          <label
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setIsDraggingResume(true)
             }}
-            className="mt-4 text-sm font-semibold text-[#306770] underline-offset-2 hover:underline"
+            onDragOver={(event) => {
+              event.preventDefault()
+              setIsDraggingResume(true)
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault()
+              setIsDraggingResume(false)
+            }}
+            onDrop={handleResumeDrop}
+            className={`flex min-h-[210px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center transition ${
+              isDraggingResume
+                ? 'border-[#306770] bg-[#EEF6F7]'
+                : resume
+                  ? 'border-[#306770] bg-[#F7FBFB]'
+                  : 'border-gray-300 bg-gray-50/70 hover:border-[#306770] hover:bg-white'
+            }`}
           >
-            Remove resume
-          </button>
-        )}
-      </div>
-    ),
-    (
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
-        <Field icon={<User size={18} />} label="First Name" required error={fieldErrors.firstName}>
-          <input className={getInputClass('firstName')} value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} autoComplete="given-name" aria-invalid={Boolean(fieldErrors.firstName)} />
-        </Field>
-        <Field label="Last Name" required error={fieldErrors.lastName}>
-          <input className={getInputClass('lastName')} value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} autoComplete="family-name" aria-invalid={Boolean(fieldErrors.lastName)} />
-        </Field>
-        <Field icon={<Mail size={18} />} label="Email" required error={fieldErrors.email}>
-          <input className={getInputClass('email')} type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} autoComplete="email" aria-invalid={Boolean(fieldErrors.email)} />
-        </Field>
-        <Field icon={<Lock size={18} />} label="Password" required error={fieldErrors.password}>
-          <div className="relative">
-            <input className={getInputClass('password')} type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setField('password', e.target.value)} minLength={8} autoComplete="new-password" aria-invalid={Boolean(fieldErrors.password)} style={{ paddingRight: '2.75rem' }} />
+            <Upload size={32} className="mb-3 text-[#306770]" />
+            <span className="text-base font-bold text-gray-800">
+              {resume ? resume.name : 'Upload your resume to skip manual profile entry'}
+            </span>
+            <span className="mt-2 max-w-xl text-sm font-medium text-gray-500">
+              Drag and drop a PDF or DOCX here, or click to choose a file. We will read it now and fill in your role, skills, location, and profile details.
+            </span>
+            <input
+              ref={resumeInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(e) => void setResumeFile(e.target.files?.[0] || null)}
+            />
+          </label>
+
+          {resumeError && <p className="mt-3 text-sm font-semibold text-red-700">{resumeError}</p>}
+          {resume && (
+            <div className="mt-4 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4 text-sm font-semibold text-[#306770]">
+              {resumeParsing
+                ? 'Resume added. Reading it now to auto-fill your profile fields...'
+                : resumeParsed
+                  ? 'Resume read. We filled the details we found, and you can bypass the manual profile step.'
+                  : 'Resume added. You can bypass the manual profile step after creating your account.'}
+            </div>
+          )}
+
+          {resume && (
             <button
               type="button"
-              onClick={() => setShowPassword(v => !v)}
-              className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-[#306770] transition-colors"
-              tabIndex={-1}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => {
+                resumeParseRunRef.current += 1
+                setResume(null)
+                setResumeError(null)
+                setResumeParsing(false)
+                setResumeParsed(false)
+                if (resumeInputRef.current) resumeInputRef.current.value = ''
+              }}
+              className="mt-4 text-sm font-semibold text-[#306770] underline-offset-2 hover:underline"
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              Remove resume
             </button>
-          </div>
-        </Field>
+          )}
+        </div>
       </div>
     ),
     (
@@ -574,22 +575,23 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
         <Field label="Skills" className="mt-8">
           <textarea className={`${inputClass} min-h-[130px] resize-y`} value={form.skills} onChange={(e) => setField('skills', e.target.value)} placeholder="React, TypeScript, MongoDB" />
         </Field>
-
-        <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-          <Field icon={<Link2 size={18} />} label="LinkedIn URL">
-            <input className={inputClass} value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} />
-          </Field>
-          <Field label="Portfolio URL">
-            <input className={inputClass} value={form.portfolioUrl} onChange={(e) => setField('portfolioUrl', e.target.value)} />
-          </Field>
-          <Field label="Calendly URL">
-            <input className={inputClass} value={form.calendlyUrl} onChange={(e) => setField('calendlyUrl', e.target.value)} />
-          </Field>
-        </div>
       </>
     ),
+    (
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <Field icon={<Link2 size={18} />} label="LinkedIn URL">
+          <input className={inputClass} value={form.linkedinUrl} onChange={(e) => setField('linkedinUrl', e.target.value)} />
+        </Field>
+        <Field label="Portfolio URL">
+          <input className={inputClass} value={form.portfolioUrl} onChange={(e) => setField('portfolioUrl', e.target.value)} />
+        </Field>
+        <Field label="Calendly URL">
+          <input className={inputClass} value={form.calendlyUrl} onChange={(e) => setField('calendlyUrl', e.target.value)} />
+        </Field>
+      </div>
+    ),
   ]
-  const canSubmitFromCurrentStep = step === SIGNUP_STEPS.length - 1 || (Boolean(resume) && step === 1)
+  const canSubmitFromCurrentStep = step === SIGNUP_STEPS.length - 1 || (Boolean(resume) && step === 0)
 
   return (
     <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
