@@ -36,6 +36,15 @@ function cleanText(value) {
     return textValue(value).trim();
 }
 
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function cleanList(value) {
     if (!value) return [];
     if (Array.isArray(value)) {
@@ -438,12 +447,45 @@ const createNewUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(user._id, { verificationToken });
 
     // Send verification email
-    const verificationLink = `https://wanderwork-backend-server.onrender.com/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
+    const publicServerUrl = (process.env.PUBLIC_SERVER_URL || process.env.SERVER_URL || 'https://wanderwork-backend-server.onrender.com').replace(/\/$/, '');
+    const appUrl = process.env.APP_URL || 'https://wanderwork.io';
+    const verificationLink = `${publicServerUrl}/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
+    const plainDisplayName = safeFirstName || normalizedEmail.split('@')[0] || 'there';
+    const displayName = escapeHtml(plainDisplayName);
     const emailMessage = {
       to: normalizedEmail,
       from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
-      subject: 'Verify your email',
-      html: `<p>Click <a href="${verificationLink}">here</a> to verify your email and complete the signup process.</p>`,
+      subject: 'Verify your Wander/Work email',
+      text: `Hi ${plainDisplayName},\n\nVerify your email to finish creating your Wander/Work account:\n${verificationLink}\n\nIf you did not sign up for Wander/Work, you can ignore this email.\n\nWander/Work Team`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F4F4F4;font-family:Manrope,Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F4F4;padding:40px 0">
+    <tr><td align="center" style="padding:0 16px">
+      <table width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+        <tr><td style="background:#306770;padding:32px 40px;text-align:center">
+          <p style="margin:0;color:#FFFFFF;font-size:22px;font-weight:700;letter-spacing:4px">WANDER<span style="opacity:0.6">/</span>WORK</p>
+        </td></tr>
+        <tr><td style="padding:40px">
+          <p style="color:#1a1a1a;font-size:18px;font-weight:700;margin:0 0 12px">Hi ${displayName},</p>
+          <h1 style="color:#111827;font-size:28px;line-height:1.25;font-weight:800;margin:0 0 16px">Verify your email to finish signup.</h1>
+          <p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 28px">Confirm this email address so we can finish creating your Wander/Work account and start matching you with remote roles.</p>
+          <div style="text-align:center;margin:0 0 28px">
+            <a href="${verificationLink}" style="display:inline-block;background:#306770;color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:10px">Verify My Email</a>
+          </div>
+          <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:0">If the button above doesn't work, copy this link into your browser:<br><a href="${verificationLink}" style="color:#306770;word-break:break-all">${verificationLink}</a></p>
+          <p style="color:#9CA3AF;font-size:13px;line-height:1.6;margin:24px 0 0">If you didn't sign up for Wander/Work, you can safely ignore this email.</p>
+        </td></tr>
+        <tr><td style="background:#F9FAFB;padding:20px 40px;text-align:center">
+          <p style="margin:0;color:#9CA3AF;font-size:12px">© 2026 Wander/Work, Inc. · <a href="${appUrl}/privacy" style="color:#9CA3AF">Privacy</a> · <a href="${appUrl}/terms" style="color:#9CA3AF">Terms</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
     };
 
     try {
