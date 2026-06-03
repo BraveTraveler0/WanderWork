@@ -144,6 +144,7 @@ function SocialSignupBox({
         </button>
       </div>
       <TermsAgreement
+        id="signup-terms-social"
         checked={termsAccepted}
         onChange={onTermsAcceptedChange}
         onShowTerms={onShowTerms}
@@ -693,6 +694,15 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             </AnimatePresence>
           </div>
 
+          <TermsAgreement
+            id="signup-terms-manual"
+            checked={termsAccepted}
+            onChange={setTermsAgreement}
+            onShowTerms={() => setShowTermsModal(true)}
+            error={termsError}
+            className="mt-5"
+          />
+
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             {step > 0 && (
               <button
@@ -743,12 +753,14 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
 }
 
 function TermsAgreement({
+  id = 'signup-terms',
   checked,
   onChange,
   onShowTerms,
   error,
   className = '',
 }: {
+  id?: string
   checked: boolean
   onChange: (checked: boolean) => void
   onShowTerms: () => void
@@ -759,7 +771,7 @@ function TermsAgreement({
     <div className={`rounded-xl border p-3 text-left ${error ? 'border-red-300 bg-red-50/95' : 'border-[#C8DEDE] bg-[#F7FBFB]'} ${className}`}>
       <div className="flex items-start gap-3">
         <input
-          id="signup-terms"
+          id={id}
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
@@ -767,7 +779,7 @@ function TermsAgreement({
           aria-invalid={Boolean(error)}
         />
         <div className="text-sm font-medium text-gray-700">
-          <label htmlFor="signup-terms">I agree to the </label>
+          <label htmlFor={id}>I agree to the </label>
           <button type="button" onClick={onShowTerms} className="font-semibold text-[#306770] underline-offset-2 hover:underline">
             Terms of Service
           </button>
