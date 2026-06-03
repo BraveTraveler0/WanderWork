@@ -471,15 +471,15 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         })()
 
         return (
-          <div 
-            key={(selectedJob as any).id ?? jobId}
-            className="stats-panel-enter bg-white rounded-[16px] lg:rounded-[20px] p-5 lg:p-6 xl:p-10"
-            style={{
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.05)'
-            }}
-          >
+          <React.Fragment key={(selectedJob as any).id ?? jobId}>
+            <div
+              className="stats-panel-enter bg-white rounded-[16px] lg:rounded-[20px] p-5 lg:p-6 xl:p-10"
+              style={{
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.05)'
+              }}
+            >
 
-            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-6">
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0 pr-3 lg:pr-4">
@@ -698,8 +698,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   )}
                 </div>
               </div>
+              </div>
             </div>
-          </div>
+            <div className="mt-8 flex justify-end pr-1 sm:pr-3 xl:pr-5">
+              <ParticleWaveIcon />
+            </div>
+          </React.Fragment>
         )
       })()}
 
@@ -1015,6 +1019,123 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
         style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0, cursor: 'crosshair' }} />
       <p className="text-[12px]" style={{ color: '#787878' }}>Start Earning Tokens</p>
     </button>
+  )
+}
+
+const ParticleWaveIcon = () => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const animRef = React.useRef<number>()
+  const mouseRef = React.useRef({ x: -999, y: -999, radius: 1000 })
+  const particlesRef = React.useRef<Array<{
+    ox: number; oy: number; x: number; y: number
+    vx: number; vy: number; size: number; color: string
+  }>>([])
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const W = 132
+    const H = 78
+    canvas.width = W
+    canvas.height = H
+
+    const off = document.createElement('canvas')
+    off.width = W
+    off.height = H
+    const oc = off.getContext('2d')!
+    oc.strokeStyle = '#306770'
+    oc.lineCap = 'round'
+    oc.lineJoin = 'round'
+
+    oc.lineWidth = 14
+    oc.beginPath()
+    oc.moveTo(10, 46)
+    oc.bezierCurveTo(25, 18, 47, 18, 62, 44)
+    oc.bezierCurveTo(78, 70, 104, 69, 122, 35)
+    oc.stroke()
+
+    oc.lineWidth = 8
+    oc.globalAlpha = 0.85
+    oc.beginPath()
+    oc.moveTo(20, 56)
+    oc.bezierCurveTo(38, 37, 54, 38, 70, 56)
+    oc.bezierCurveTo(84, 71, 101, 68, 115, 51)
+    oc.stroke()
+    oc.globalAlpha = 1
+
+    const px = oc.getImageData(0, 0, W, H).data
+    const gap = 4
+    const ps: typeof particlesRef.current = []
+    for (let y = 0; y < H; y += gap) {
+      for (let x = 0; x < W; x += gap) {
+        const i = (y * W + x) * 4
+        if (px[i + 3] < 64) continue
+        const b = 0.62 + Math.random() * 0.38
+        ps.push({
+          ox: x,
+          oy: y,
+          x,
+          y,
+          vx: 0,
+          vy: 0,
+          size: Math.floor(Math.random() * 2) + 1,
+          color: `rgb(${Math.floor(48*b)},${Math.floor(103*b)},${Math.floor(112*b)})`,
+        })
+      }
+    }
+    particlesRef.current = ps
+
+    const onMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      mouseRef.current.x = (e.clientX - rect.left) * (W / rect.width)
+      mouseRef.current.y = (e.clientY - rect.top) * (H / rect.height)
+    }
+    const onLeave = () => { mouseRef.current.x = -999; mouseRef.current.y = -999 }
+    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('mouseleave', onLeave)
+
+    const animate = () => {
+      ctx.clearRect(0, 0, W, H)
+      const mouse = mouseRef.current
+      for (const p of particlesRef.current) {
+        const dx = mouse.x - p.x
+        const dy = mouse.y - p.y
+        const dist2 = dx * dx + dy * dy
+        if (dist2 < mouse.radius) {
+          const force = -mouse.radius / dist2 * 5.5
+          const angle = Math.atan2(dy, dx)
+          p.vx += force * Math.cos(angle)
+          p.vy += force * Math.sin(angle)
+        }
+        p.x += (p.vx *= 0.9) + (p.ox - p.x) * 0.17
+        p.y += (p.vy *= 0.9) + (p.oy - p.y) * 0.17
+        ctx.fillStyle = p.color
+        ctx.fillRect(p.x, p.y, p.size, p.size)
+      }
+      animRef.current = requestAnimationFrame(animate)
+    }
+    animate()
+
+    return () => {
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('mouseleave', onLeave)
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+    }
+  }, [])
+
+  return (
+    <div
+      aria-hidden="true"
+      className="group flex h-[78px] w-[132px] items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03]"
+      style={{ cursor: 'crosshair' }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ width: 132, height: 78, flexShrink: 0 }}
+      />
+    </div>
   )
 }
 
