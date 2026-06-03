@@ -1052,8 +1052,8 @@ const ParticleWaveIcon = () => {
     oc.bezierCurveTo(152, 62, 240, 54, 330, 38)
     oc.bezierCurveTo(458, 14, 558, 12, 660, 34)
     oc.bezierCurveTo(742, 52, 786, 65, 826, 46)
-    oc.bezierCurveTo(861, 30, 884, 29, 895, 43)
-    oc.bezierCurveTo(866, 38, 849, 45, 835, 56)
+    oc.bezierCurveTo(858, 31, 882, 30, 902, 38)
+    oc.bezierCurveTo(872, 40, 850, 46, 835, 56)
     oc.bezierCurveTo(791, 78, 706, 73, 598, 60)
     oc.bezierCurveTo(476, 45, 373, 45, 268, 56)
     oc.bezierCurveTo(172, 65, 94, 68, 28, 63)
@@ -1079,12 +1079,14 @@ const ParticleWaveIcon = () => {
     oc.stroke()
 
     oc.globalCompositeOperation = 'source-over'
-    oc.strokeStyle = '#306770'
-    oc.lineWidth = 11
+    oc.fillStyle = '#306770'
     oc.beginPath()
-    oc.moveTo(820, 52)
-    oc.bezierCurveTo(844, 58, 875, 51, 896, 39)
-    oc.stroke()
+    oc.moveTo(814, 53)
+    oc.bezierCurveTo(842, 58, 875, 50, 902, 38)
+    oc.bezierCurveTo(878, 36, 852, 39, 830, 48)
+    oc.bezierCurveTo(821, 51, 816, 53, 814, 53)
+    oc.closePath()
+    oc.fill()
 
     const px = oc.getImageData(0, 0, W, H).data
     const gap = 4
