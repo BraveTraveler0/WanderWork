@@ -1049,22 +1049,30 @@ const ParticleWaveIcon = () => {
     oc.lineCap = 'round'
     oc.lineJoin = 'round'
 
-    oc.lineWidth = 14
+    oc.lineWidth = 15
     oc.beginPath()
-    oc.moveTo(16, 45)
-    oc.bezierCurveTo(102, 14, 191, 15, 279, 45)
-    oc.bezierCurveTo(383, 80, 486, 77, 573, 42)
-    oc.bezierCurveTo(667, 4, 766, 12, 842, 42)
-    oc.bezierCurveTo(873, 54, 889, 46, 894, 34)
+    oc.moveTo(18, 54)
+    oc.bezierCurveTo(134, 55, 204, 38, 282, 28)
+    oc.bezierCurveTo(405, 12, 500, 17, 602, 42)
+    oc.bezierCurveTo(710, 69, 770, 69, 820, 43)
+    oc.bezierCurveTo(857, 24, 883, 22, 894, 38)
     oc.stroke()
 
-    oc.lineWidth = 8
-    oc.globalAlpha = 0.85
+    oc.lineWidth = 9
+    oc.globalAlpha = 0.9
     oc.beginPath()
-    oc.moveTo(44, 56)
-    oc.bezierCurveTo(148, 35, 244, 38, 341, 56)
-    oc.bezierCurveTo(454, 77, 560, 69, 660, 47)
-    oc.bezierCurveTo(760, 26, 827, 30, 871, 45)
+    oc.moveTo(80, 58)
+    oc.bezierCurveTo(214, 59, 315, 50, 420, 42)
+    oc.bezierCurveTo(548, 32, 626, 41, 706, 57)
+    oc.bezierCurveTo(765, 68, 815, 59, 846, 40)
+    oc.stroke()
+
+    oc.lineWidth = 7
+    oc.globalAlpha = 0.82
+    oc.beginPath()
+    oc.moveTo(805, 48)
+    oc.bezierCurveTo(834, 56, 859, 52, 872, 36)
+    oc.bezierCurveTo(881, 25, 875, 18, 861, 22)
     oc.stroke()
     oc.globalAlpha = 1
 
