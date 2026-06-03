@@ -1045,36 +1045,40 @@ const ParticleWaveIcon = () => {
     off.width = W
     off.height = H
     const oc = off.getContext('2d')!
-    oc.strokeStyle = '#306770'
+
+    oc.fillStyle = '#306770'
+    oc.beginPath()
+    oc.moveTo(28, 58)
+    oc.bezierCurveTo(152, 62, 240, 54, 330, 38)
+    oc.bezierCurveTo(458, 14, 558, 12, 660, 34)
+    oc.bezierCurveTo(742, 52, 786, 65, 826, 46)
+    oc.bezierCurveTo(861, 30, 884, 29, 895, 43)
+    oc.bezierCurveTo(866, 38, 849, 45, 835, 56)
+    oc.bezierCurveTo(791, 78, 706, 73, 598, 60)
+    oc.bezierCurveTo(476, 45, 373, 45, 268, 56)
+    oc.bezierCurveTo(172, 65, 94, 68, 28, 63)
+    oc.closePath()
+    oc.fill()
+
+    oc.globalCompositeOperation = 'destination-out'
+    oc.strokeStyle = '#000'
     oc.lineCap = 'round'
     oc.lineJoin = 'round'
 
-    oc.lineWidth = 15
+    oc.lineWidth = 14
     oc.beginPath()
-    oc.moveTo(18, 54)
-    oc.bezierCurveTo(134, 55, 204, 38, 282, 28)
-    oc.bezierCurveTo(405, 12, 500, 17, 602, 42)
-    oc.bezierCurveTo(710, 69, 770, 69, 820, 43)
-    oc.bezierCurveTo(857, 24, 883, 22, 894, 38)
+    oc.moveTo(744, 48)
+    oc.bezierCurveTo(785, 64, 837, 57, 861, 34)
+    oc.bezierCurveTo(878, 18, 863, 12, 836, 24)
     oc.stroke()
 
     oc.lineWidth = 9
-    oc.globalAlpha = 0.9
     oc.beginPath()
-    oc.moveTo(80, 58)
-    oc.bezierCurveTo(214, 59, 315, 50, 420, 42)
-    oc.bezierCurveTo(548, 32, 626, 41, 706, 57)
-    oc.bezierCurveTo(765, 68, 815, 59, 846, 40)
+    oc.moveTo(350, 51)
+    oc.bezierCurveTo(464, 38, 560, 40, 661, 55)
     oc.stroke()
 
-    oc.lineWidth = 7
-    oc.globalAlpha = 0.82
-    oc.beginPath()
-    oc.moveTo(805, 48)
-    oc.bezierCurveTo(834, 56, 859, 52, 872, 36)
-    oc.bezierCurveTo(881, 25, 875, 18, 861, 22)
-    oc.stroke()
-    oc.globalAlpha = 1
+    oc.globalCompositeOperation = 'source-over'
 
     const px = oc.getImageData(0, 0, W, H).data
     const gap = 4
