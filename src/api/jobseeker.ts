@@ -172,6 +172,24 @@ export function updateCandidateSkills(id: string, skills: string[] | string, ini
   });
 }
 
+export async function parseSignupResume(file: File): Promise<any> {
+  const form = new FormData();
+  form.append('resume', file);
+  const res = await fetch(`${BASE_URL}/auth/signup/parse-resume`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+    body: form
+  });
+  if (!res.ok) {
+    let msg = `Resume parse failed (${res.status})`;
+    try { const j = await res.json(); if (j?.message) msg = j.message; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function uploadCandidateResume(email: string, file: File): Promise<any> {
   const form = new FormData();
   form.append('email', email);

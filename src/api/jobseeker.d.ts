@@ -106,6 +106,7 @@ export interface JobSeekerData {
 export function getAllJobSeekerData(init?: RequestInit & { signal?: AbortSignal }): Promise<JobSeekerData>;
 export function getApplications(init?: RequestInit & { signal?: AbortSignal }): Promise<Application[]>;
 export function updateJobSeeker(data: any, init?: RequestInit & { signal?: AbortSignal }): Promise<any>;
+export function parseSignupResume(file: File): Promise<any>;
 export function uploadCandidateResume(email: string, file: File): Promise<any>;
 export function uploadCandidateCoverLetter(email: string, file: File): Promise<any>;
 export function submitCustomRequest(payload: Record<string, any>): Promise<any>;

@@ -198,6 +198,160 @@ function deriveResumeFields(resumeText) {
     }
 }
 
+function inferNameFromFilename(filename) {
+    const base = path.basename(String(filename || ''), path.extname(String(filename || '')));
+    const cleaned = base
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b(?:resume|cv|curriculum|vitae|copy|final|updated|new)\b/gi, ' ')
+        .replace(/\b\d{1,4}(?:[.\-/]\d{1,2}){0,2}\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const parts = cleaned.split(/\s+/).filter((part) => /^[A-Za-z][A-Za-z'.-]*$/.test(part));
+    if (parts.length < 2) return { firstName: '', lastName: '' };
+    const format = (value) => value
+        .split(/(\s+|-)/)
+        .map((part) => /^[A-Za-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part)
+        .join('');
+    return {
+        firstName: format(parts[0]),
+        lastName: format(parts.slice(1, 3).join(' ')),
+    };
+}
+
+async function extractResumeTextFromFile(file) {
+    const ext = path.extname(file?.originalname || '').toLowerCase();
+    let extractedText = '';
+    try {
+        const fileBuffer = file.buffer;
+        if (ext === '.pdf') {
+            extractedText = await extractPdfText(fileBuffer);
+        } else if (ext === '.docx' || ext === '.doc') {
+            const mammoth = require('mammoth');
+            const result = await mammoth.extractRawText({ buffer: fileBuffer });
+            extractedText = result.value || '';
+        } else if (ext === '.rtf') {
+            const raw = fileBuffer.toString('latin1');
+            extractedText = raw
+                .replace(/\\pard[^\\]*/gi, '\n')
+                .replace(/\\'[0-9a-f]{2}/gi, '')
+                .replace(/\\[a-z]+\-?\d*\s?/gi, '')
+                .replace(/[{}\\]/g, '')
+                .replace(/\r?\n\s*\r?\n/g, '\n\n')
+                .replace(/[ \t]+/g, ' ')
+                .trim();
+        } else if (ext === '.txt') {
+            extractedText = fileBuffer.toString('utf-8');
+        }
+    } catch (extractErr) {
+        console.warn('Resume text extraction failed (non-fatal):', extractErr.message);
+    }
+    return extractedText;
+}
+
+async function parseResumeTextFields(extractedText, filename = '') {
+    let aiParsed = null;
+    if (extractedText && process.env.OPENAI_API_KEY) {
+        try {
+            const aiResponse = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are a resume parser. Extract structured data from the resume text and return ONLY valid JSON with these exact keys:
+- firstName: string (first name only)
+- lastName: string (last name only, may be empty)
+- phone: string (phone number, empty if not found)
+- targetRole: string (most recent job title or stated career goal)
+- skills: array of strings (technical and professional skills)
+- workExperience: string (all work history, each job separated by a blank line, include company, title, dates, and responsibilities)
+- education: string (all education entries, each separated by a blank line, include school, degree, dates)
+- summary: string (professional summary or objective if present, otherwise empty string)
+- location: string (city and state/country if found, otherwise empty)
+- inferredKeywords: array of up to 20 strings - the most important professional keywords from this resume (job titles held, industries, key technologies, domain terms). These are used for job matching so be specific and diverse.`
+                        },
+                        {
+                            role: 'user',
+                            content: extractedText.slice(0, 12000)
+                        }
+                    ],
+                    response_format: { type: 'json_object' },
+                    max_tokens: 2000,
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 30000,
+                }
+            );
+            aiParsed = JSON.parse(aiResponse.data.choices[0].message.content);
+        } catch (aiErr) {
+            console.warn('AI resume parsing failed, falling back to regex:', aiErr.message);
+        }
+    }
+
+    const { workExperience: regexWork, education: regexEdu } = deriveResumeFields(extractedText);
+    const regexSkills = extractSkillsFromText(extractedText);
+    const regexRole = extractTargetRoleFromText(extractedText);
+    const regexPhone = extractedText.match(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/)?.[0]?.trim() || '';
+    const regexEmail = extractedText.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)?.[0]?.trim() || '';
+    const regexLocation = (() => {
+        const m = extractedText.match(/\b([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\b/);
+        return m ? { locationName: `${m[1].trim()}, ${m[2]}`, city: m[1].trim(), state: m[2] } : null;
+    })();
+    const nameLines = extractedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 5);
+    const nameLine = nameLines.find(l => /^[A-Z][a-z]+(\s+[A-Z][a-z]+)+$/.test(l));
+    const regexFirstName = nameLine ? nameLine.split(/\s+/)[0] : '';
+    const regexLastName = nameLine ? nameLine.split(/\s+/).slice(1).join(' ') : '';
+    const filenameName = inferNameFromFilename(filename);
+
+    const finalWork = aiParsed?.workExperience || regexWork;
+    const finalEdu = aiParsed?.education || regexEdu;
+    const aiSkills = Array.isArray(aiParsed?.skills) ? aiParsed.skills : [];
+    const aiInferredKeywords = Array.isArray(aiParsed?.inferredKeywords) ? aiParsed.inferredKeywords : [];
+    const finalRole = cleanTextValue(aiParsed?.targetRole || regexRole || '');
+    const finalPhone = cleanTextValue(aiParsed?.phone || regexPhone || '');
+    const finalFirstName = cleanTextValue(aiParsed?.firstName || regexFirstName || filenameName.firstName || '');
+    const finalLastName = cleanTextValue(aiParsed?.lastName || regexLastName || filenameName.lastName || '');
+    const finalSummary = cleanTextValue(aiParsed?.summary || '');
+    const finalEmail = regexEmail;
+    const finalLocation = (() => {
+        if (aiParsed?.location) {
+            const locationText = cleanTextValue(aiParsed.location);
+            const parts = locationText.split(',').map(s => s.trim());
+            return parts[0] ? { locationName: locationText, city: parts[0], state: parts[1] || '' } : null;
+        }
+        return regexLocation;
+    })();
+
+    return {
+        aiParsed,
+        regexSkills,
+        aiSkills,
+        aiInferredKeywords,
+        finalWork,
+        finalEdu,
+        finalRole,
+        finalPhone,
+        finalFirstName,
+        finalLastName,
+        finalSummary,
+        finalEmail,
+        finalLocation,
+        extractionOk: !!(aiParsed || finalWork || finalEdu || aiSkills.length || finalFirstName || finalLastName),
+    };
+}
+
+async function parseResumeFile(file) {
+    const extractedText = await extractResumeTextFromFile(file);
+    const parsed = await parseResumeTextFields(extractedText, file?.originalname || '');
+    return { extractedText, ...parsed };
+}
+
 // Extracts work_experience and education from resume_text for candidates missing those fields.
 async function backfillCandidateResumeFields() {
     try {
@@ -1272,6 +1426,7 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     const nameLine = nameLines.find(l => /^[A-Z][a-z]+(\s+[A-Z][a-z]+)+$/.test(l))
     const regexFirstName = nameLine ? nameLine.split(/\s+/)[0] : ''
     const regexLastName = nameLine ? nameLine.split(/\s+/).slice(1).join(' ') : ''
+    const filenameName = inferNameFromFilename(file.originalname || '')
 
     const finalWork = aiParsed?.workExperience || regexWork;
     const finalEdu = aiParsed?.education || regexEdu;
@@ -1279,8 +1434,8 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     const aiInferredKeywords = Array.isArray(aiParsed?.inferredKeywords) ? aiParsed.inferredKeywords : [];
     const finalRole = cleanTextValue(aiParsed?.targetRole || regexRole || '');
     const finalPhone = cleanTextValue(aiParsed?.phone || regexPhone || '');
-    const finalFirstName = cleanTextValue(aiParsed?.firstName || regexFirstName || '');
-    const finalLastName = cleanTextValue(aiParsed?.lastName || regexLastName || '');
+    const finalFirstName = cleanTextValue(aiParsed?.firstName || regexFirstName || filenameName.firstName || '');
+    const finalLastName = cleanTextValue(aiParsed?.lastName || regexLastName || filenameName.lastName || '');
     const finalSummary = cleanTextValue(aiParsed?.summary || '');
     const finalEmail = regexEmail;
     const finalLocation = (() => {
@@ -1383,6 +1538,36 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
 });
 
 // ── Shared OpenAI helper ─────────────────────────────────────────────────────
+const parseSignupResume = asyncHandler(async (req, res) => {
+    const file = req.file;
+    if (!file) {
+        return res.status(400).json({ message: 'Resume file must be supplied.' });
+    }
+
+    const parsed = await parseResumeFile(file);
+    const skills = parsed.aiSkills.length > 0 ? parsed.aiSkills : parsed.regexSkills;
+
+    res.json({
+        fields: {
+            firstName: parsed.finalFirstName,
+            lastName: parsed.finalLastName,
+            email: parsed.finalEmail,
+            phone: parsed.finalPhone,
+            location: parsed.finalLocation?.locationName || '',
+            targetRole: parsed.finalRole,
+            skills,
+            workExperience: parsed.finalWork,
+            education: parsed.finalEdu,
+            summary: parsed.finalSummary,
+        },
+        extracted: {
+            textExtracted: !!parsed.extractedText,
+            aiParsed: !!parsed.aiParsed,
+            fieldsPopulated: parsed.extractionOk,
+        },
+    });
+});
+
 const updateCandidateCoverLetter = asyncHandler(async (req, res) => {
     const email = req.user?.email || req.body?.email;
     const file = req.file;
@@ -2393,6 +2578,7 @@ module.exports =
     updateCandidateSkills,
     pairCandidateJobsHandler,
     pairAllCandidatesHandler,
+    parseSignupResume,
     updateCandidateResume,
     updateCandidateCoverLetter,
     submitCustomRequest,

@@ -1,8 +1,31 @@
 const express = require('express')
+const multer = require('multer')
+const path = require('path')
 const router = express.Router()
 const authenticationController = require('../controllers/authenticationController')
+const jobSeekerController = require('../controllers/JobSeeker/jobSeekerController')
 const User = require('../models/User')
 const { requireAuth } = require('../middleware/requireAuth')
+
+const ALLOWED_RESUME_MIMETYPES = new Set([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+const signupResumeUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const ext = path.extname(file.originalname || '').toLowerCase()
+        if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype) || ['.pdf', '.docx'].includes(ext)) {
+            cb(null, true)
+        } else {
+            cb(Object.assign(new Error('Only PDF and DOCX files are accepted.'), { status: 400 }))
+        }
+    },
+})
+
+router.route('/signup/parse-resume')
+    .post(signupResumeUpload.single('resume'), jobSeekerController.parseSignupResume)
 
 router.route('/signup')
     .post(authenticationController.createNewUser)

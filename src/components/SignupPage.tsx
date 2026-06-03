@@ -3,7 +3,7 @@ import type React from 'react'
 import { ArrowLeft, Briefcase, Eye, EyeOff, Link2, Lock, Mail, MapPin, Phone, Upload, User } from 'lucide-react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { AnimatePresence, motion } from 'motion/react'
-import { uploadCandidateResume } from '../api/jobseeker'
+import { parseSignupResume, uploadCandidateResume } from '../api/jobseeker'
 import TermsOfServicePage from './TermsOfServicePage'
 
 interface SignupPageProps {
@@ -178,10 +178,36 @@ function getInitialSignupForm() {
   }
 }
 
+function titleCaseNamePart(value: string) {
+  return value
+    .split(/(\s+|-)/)
+    .map((part) => (/^[A-Za-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part))
+    .join('')
+}
+
+function inferNameFromResumeFilename(filename: string): Partial<Pick<ReturnType<typeof getInitialSignupForm>, 'firstName' | 'lastName'>> {
+  const base = filename.replace(/\.[^.]+$/, '')
+  const cleaned = base
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b(?:resume|cv|curriculum|vitae|copy|final|updated|new)\b/gi, ' ')
+    .replace(/\b\d{1,4}(?:[.\-/]\d{1,2}){0,2}\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const parts = cleaned.split(/\s+/).filter((part) => /^[A-Za-z][A-Za-z'.-]*$/.test(part))
+  if (parts.length < 2) return {}
+  return {
+    firstName: titleCaseNamePart(parts[0]),
+    lastName: titleCaseNamePart(parts.slice(1, 3).join(' ')),
+  }
+}
+
 export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: SignupPageProps) {
   const [form, setForm] = useState(getInitialSignupForm)
   const [showPassword, setShowPassword] = useState(false)
   const [resume, setResume] = useState<File | null>(null)
+  const [resumeParsing, setResumeParsing] = useState(false)
+  const [resumeParsed, setResumeParsed] = useState(false)
   const [resumeError, setResumeError] = useState<string | null>(null)
   const [isDraggingResume, setIsDraggingResume] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -192,11 +218,15 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   const [termsError, setTermsError] = useState<string | null>(null)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const resumeInputRef = useRef<HTMLInputElement>(null)
+  const resumeParseRunRef = useRef(0)
 
-  const setResumeFile = (file: File | null) => {
+  const setResumeFile = async (file: File | null) => {
+    resumeParseRunRef.current += 1
     setResumeError(null)
+    setResumeParsed(false)
     if (!file) {
       setResume(null)
+      setResumeParsing(false)
       return
     }
 
@@ -208,31 +238,92 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
 
     if (!allowedByName && !allowedByType) {
       setResume(null)
+      setResumeParsing(false)
       setResumeError('Upload a PDF or DOCX resume.')
       return
     }
 
     if (file.size > 10 * 1024 * 1024) {
       setResume(null)
+      setResumeParsing(false)
       setResumeError('Resume must be 10 MB or smaller.')
       return
     }
 
+    const parseRun = resumeParseRunRef.current
     setResume(file)
     setError(null)
+    const filenameFields = inferNameFromResumeFilename(file.name)
+    const filenameFieldNames = Object.keys(filenameFields) as SignupField[]
+    if (filenameFieldNames.length > 0) {
+      setForm((current) => {
+        const next = { ...current }
+        filenameFieldNames.forEach((field) => {
+          const value = filenameFields[field as 'firstName' | 'lastName']
+          if (value && !next[field].trim()) next[field] = value
+        })
+        return next
+      })
+    }
     setFieldErrors((current) => {
       const next = { ...current }
       delete next.phone
       delete next.location
       delete next.targetRole
+      filenameFieldNames.forEach((field) => delete next[field])
       return next
     })
+
+    setResumeParsing(true)
+    try {
+      const parsed = await parseSignupResume(file)
+      if (resumeParseRunRef.current !== parseRun) return
+      const fields = parsed?.fields || {}
+      const skillsValue = Array.isArray(fields.skills)
+        ? fields.skills.filter(Boolean).join(', ')
+        : typeof fields.skills === 'string'
+          ? fields.skills
+          : ''
+      const parsedValues: Partial<Record<SignupField, string>> = {
+        firstName: fields.firstName || '',
+        lastName: fields.lastName || '',
+        email: fields.email || '',
+        phone: fields.phone || '',
+        location: fields.location || '',
+        targetRole: fields.targetRole || '',
+        skills: skillsValue,
+      }
+      const parsedFieldNames = (Object.keys(parsedValues) as SignupField[]).filter((field) => parsedValues[field]?.trim())
+      if (parsedFieldNames.length > 0) {
+        setForm((current) => {
+          const next = { ...current }
+          parsedFieldNames.forEach((field) => {
+            const value = parsedValues[field]
+            if (value && !next[field].trim()) next[field] = value
+          })
+          return next
+        })
+        setFieldErrors((current) => {
+          const next = { ...current }
+          parsedFieldNames.forEach((field) => delete next[field])
+          return next
+        })
+      }
+      setResumeParsed(Boolean(parsed?.extracted?.fieldsPopulated || parsedFieldNames.length || filenameFieldNames.length))
+    } catch (parseError) {
+      if (resumeParseRunRef.current !== parseRun) return
+      console.warn('Resume parse failed during signup', parseError)
+      setResumeParsed(filenameFieldNames.length > 0)
+      setResumeError('Resume added, but auto-fill could not read every field. You can keep going and fill any missing fields.')
+    } finally {
+      if (resumeParseRunRef.current === parseRun) setResumeParsing(false)
+    }
   }
 
   const handleResumeDrop = (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault()
     setIsDraggingResume(false)
-    setResumeFile(event.dataTransfer.files?.[0] || null)
+    void setResumeFile(event.dataTransfer.files?.[0] || null)
   }
 
   const requireTerms = () => {
@@ -391,21 +482,25 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             {resume ? resume.name : 'Upload your resume to skip manual profile entry'}
           </span>
           <span className="mt-2 max-w-xl text-sm font-medium text-gray-500">
-            Drag and drop a PDF or DOCX here, or click to choose a file. We will parse it after your account is created and fill in your role, skills, location, and profile details.
+            Drag and drop a PDF or DOCX here, or click to choose a file. We will read it now and fill in your role, skills, location, and profile details.
           </span>
           <input
             ref={resumeInputRef}
             type="file"
             className="hidden"
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
+            onChange={(e) => void setResumeFile(e.target.files?.[0] || null)}
           />
         </label>
 
         {resumeError && <p className="mt-3 text-sm font-semibold text-red-700">{resumeError}</p>}
         {resume && (
           <div className="mt-4 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4 text-sm font-semibold text-[#306770]">
-            Resume added. After account setup, you can bypass the manual profile step and we will auto-fill it from this file.
+            {resumeParsing
+              ? 'Resume added. Reading it now to auto-fill your profile fields...'
+              : resumeParsed
+                ? 'Resume read. We filled the details we found, and you can bypass the manual profile step.'
+                : 'Resume added. You can bypass the manual profile step after creating your account.'}
           </div>
         )}
 
@@ -413,8 +508,11 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
           <button
             type="button"
             onClick={() => {
+              resumeParseRunRef.current += 1
               setResume(null)
               setResumeError(null)
+              setResumeParsing(false)
+              setResumeParsed(false)
               if (resumeInputRef.current) resumeInputRef.current.value = ''
             }}
             className="mt-4 text-sm font-semibold text-[#306770] underline-offset-2 hover:underline"
@@ -607,17 +705,18 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
               <button
                 type="button"
                 onClick={goNext}
-                className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl"
+                disabled={resumeParsing}
+                className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl disabled:cursor-not-allowed disabled:bg-gray-400"
               >
-                {step === 0 && resume ? 'Continue to account' : 'Next'}
+                {resumeParsing ? 'Reading resume...' : step === 0 && resume ? 'Continue to account' : 'Next'}
               </button>
             ) : (
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || resumeParsing}
                 className="w-full rounded-xl bg-[#306770] py-3 text-base font-semibold text-white shadow-lg transition hover:bg-[#245460] hover:shadow-xl disabled:bg-gray-400"
               >
-                {loading ? 'Creating account...' : 'Create Account'}
+                {resumeParsing ? 'Reading resume...' : loading ? 'Creating account...' : 'Create Account'}
               </button>
             )}
           </div>

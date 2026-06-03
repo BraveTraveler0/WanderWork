@@ -21,7 +21,8 @@ const resumeUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype)) {
+    const ext = path.extname(file.originalname || '').toLowerCase()
+    if (ALLOWED_RESUME_MIMETYPES.has(file.mimetype) || ['.pdf', '.docx'].includes(ext)) {
       cb(null, true)
     } else {
       cb(Object.assign(new Error('Only PDF and DOCX files are accepted.'), { status: 400 }))
