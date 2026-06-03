@@ -627,12 +627,14 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Actions */}
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col [@media(min-width:1800px)]:flex-row gap-3">
+                <div className="flex flex-wrap gap-3">
                   <a
-                    className="w-full [@media(min-width:1800px)]:w-auto flex items-center justify-center px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white"
+                    className="flex items-center justify-center px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white"
                     style={{
                       border: '1px solid #306770',
                       color: '#306770',
+                      flex: '0.7 1 220px',
+                      minWidth: 0,
                       transition: 'all 0.5s',
                       opacity: applyUrl ? 1 : 0.5,
                       pointerEvents: applyUrl ? 'auto' : 'none'
@@ -645,7 +647,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   >
                     Apply on site
                   </a>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} className="w-full min-w-0 [@media(min-width:1800px)]:flex-1">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1.7 1 340px', minWidth: 0 }} className="min-w-0">
                     <button
                       className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}
                       style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
