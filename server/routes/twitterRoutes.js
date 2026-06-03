@@ -1,14 +1,19 @@
 const passport = require('passport');
+const { safePublicUrl, getPublicServerUrl } = require('../utils/publicUrls');
 
 const consumerKey = process.env.TWITTER_CONSUMER_KEY;
 const consumerSecret = process.env.TWITTER_CONSUMER_SECRET;
+const twitterCallbackUrl = safePublicUrl(
+  process.env.TWITTER_CALLBACK_URL,
+  `${getPublicServerUrl()}/auth/twitter/callback`
+);
 
 if (consumerKey && consumerKey !== 'dummy' && consumerSecret && consumerSecret !== 'dummy') {
   const TwitterStrategy = require('passport-twitter').Strategy;
   passport.use(new TwitterStrategy({
     consumerKey,
     consumerSecret,
-    callbackURL: (process.env.SERVER_URL || process.env.TWITTER_CALLBACK_URL || 'http://localhost:8000/auth/twitter/callback'),
+    callbackURL: twitterCallbackUrl,
   }, (token, tokenSecret, profile, done) => {
     done(null, profile);
   }));

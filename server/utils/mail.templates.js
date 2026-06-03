@@ -1,4 +1,6 @@
-const APP_URL = process.env.APP_URL || 'https://wanderwork.io'
+const { getPublicAppUrl } = require('./publicUrls')
+
+const APP_URL = getPublicAppUrl()
 const FROM_EMAIL = { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
 
 const base = (content) => `

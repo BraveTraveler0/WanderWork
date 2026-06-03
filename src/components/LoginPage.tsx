@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
+import { API_BASE_URL } from '../api/config'
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
-  || (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined)
-  || 'http://localhost:8000'
+const BASE_URL = API_BASE_URL
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '406462367912-qsnckspm7sepdi011ubrvo80q49l1ovf.apps.googleusercontent.com'
 

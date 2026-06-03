@@ -6,11 +6,12 @@ const jwtUtils = require('../utils/jwtUtils');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { sendWelcomeEmail } = require('../utils/welcomeEmail');
+const { safePublicUrl, getPublicAppUrl, getPublicServerUrl } = require('../utils/publicUrls');
 
 const normalizeBaseUrl = (value, fallback = '') => String(value || fallback).trim().replace(/\/+$/, '');
 
-const APP_URL = normalizeBaseUrl(process.env.APP_URL, 'https://wanderwork.io');
-const SERVER_URL = normalizeBaseUrl(process.env.PUBLIC_SERVER_URL, 'https://wanderwork-backend-server.onrender.com');
+const APP_URL = getPublicAppUrl();
+const SERVER_URL = getPublicServerUrl();
 
 function getRequestBaseUrl(req) {
   const host = String(req.get('host') || req.get('x-forwarded-host') || '').split(',')[0].trim();
@@ -24,7 +25,7 @@ function getRequestBaseUrl(req) {
 }
 
 function getLinkedInCallbackUrl(req) {
-  const explicitCallback = normalizeBaseUrl(process.env.LINKEDIN_CALLBACK_URL);
+  const explicitCallback = safePublicUrl(process.env.LINKEDIN_CALLBACK_URL, '');
   if (explicitCallback) return explicitCallback;
   return `${SERVER_URL}/oauth/linkedin/callback`;
 }

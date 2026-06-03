@@ -1,7 +1,6 @@
-const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_LOCAL_APP_SERVER_URL ||
-  'http://localhost:8000';
+import { API_BASE_URL } from './config';
+
+const BASE_URL = API_BASE_URL;
 
 function getAuthHeader() {
   try {

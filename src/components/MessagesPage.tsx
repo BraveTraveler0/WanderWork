@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Search, FileText, Mail } from 'lucide-react'
+import { API_BASE_URL } from '../api/config'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wanderwork-backend-server.onrender.com'
+const API_BASE = API_BASE_URL
 
 interface Application {
   _id: string

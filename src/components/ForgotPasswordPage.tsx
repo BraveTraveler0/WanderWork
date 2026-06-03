@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Mail, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react'
+import { API_BASE_URL } from '../api/config'
 
 interface ForgotPasswordPageProps {
   onBack: () => void
@@ -20,9 +21,7 @@ export default function ForgotPasswordPage({ onBack }: ForgotPasswordPageProps) 
     setLoading(true)
 
     try {
-      const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
-        || (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined)
-        || 'http://localhost:8000'
+      const BASE_URL = API_BASE_URL
 
       const response = await fetch(`${BASE_URL}/auth/forgotPassword`, {
         method: 'POST',

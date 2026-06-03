@@ -4,8 +4,9 @@ const mongoose = require('mongoose');
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
 const Applications = require('../models/JobSeeker/jobSeeker.Application');
 const { weeklyTokenEmail } = require('../utils/mail.templates');
+const { getPublicAppUrl } = require('../utils/publicUrls');
 
-const APP_URL = process.env.APP_URL || 'https://wanderwork.io';
+const APP_URL = getPublicAppUrl();
 const TOKEN_CAP = 30;
 const LUCKY_CHANCE = 0.1;
 const LUCKY_AMOUNT = 3;

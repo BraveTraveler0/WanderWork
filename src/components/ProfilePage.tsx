@@ -2,11 +2,9 @@ import { useState, useRef } from 'react'
 import { ArrowLeft, MapPin, Link2, Briefcase, GraduationCap, Wrench, User, Upload, Plus, Minus, X } from 'lucide-react'
 import type { Candidate } from '../api/jobseeker.ts'
 import { uploadCandidateResume, updateCandidateSkills } from '../api/jobseeker.ts'
+import { API_BASE_URL } from '../api/config'
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
-  'http://localhost:8000'
+const API_BASE = API_BASE_URL
 
 interface ExperienceEntry {
   title: string

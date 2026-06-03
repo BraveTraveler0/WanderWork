@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './config'
+
 export interface User {
   _id: string
   email?: string
@@ -6,10 +8,7 @@ export interface User {
   // Extend as needed
 }
 
-const BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
-  "https://wanderwork-backend-server.onrender.com";
+const BASE_URL = API_BASE_URL;
 
 function getAuthHeader(): Record<string, string> {
   try {

@@ -15,9 +15,7 @@ import PlansPage from './components/PlansPage'
 import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || 'https://wanderwork-backend-server.onrender.com'
-
+import { API_BASE_URL } from './api/config'
 import {
   getAllJobSeekerData,
   getJobs,
@@ -32,6 +30,8 @@ import {
   type Location,
 } from './api/jobseeker.ts'
 import { deleteAccount } from './api/users'
+
+const API_BASE = API_BASE_URL
 
 const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
   if (typeof window === 'undefined') return null

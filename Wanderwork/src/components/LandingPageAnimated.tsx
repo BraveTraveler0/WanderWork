@@ -488,20 +488,25 @@ export default function LandingPageAnimated() {
 
   const handleSignUp = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const handleLogin = () => {
-    const configuredLoginUrl = import.meta.env.VITE_DASHBOARD_LOGIN_URL as string | undefined;
-    if (configuredLoginUrl) {
+    const productionLoginUrl = 'https://wanderwork.io/?login=true';
+    const configuredLoginUrl = String(import.meta.env.VITE_DASHBOARD_LOGIN_URL || '').trim();
+    const { protocol, hostname, port } = window.location;
+    const isLocalLanding = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isLocalConfiguredUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredLoginUrl);
+
+    if (configuredLoginUrl && (!isLocalConfiguredUrl || isLocalLanding)) {
       window.location.href = configuredLoginUrl;
       return;
     }
 
-    const { protocol, hostname, port } = window.location;
-    const isLocalLanding = hostname === 'localhost' || hostname === '127.0.0.1';
-    const localDashboardPort = port && port !== '5173' ? '5173' : port;
-    const origin = isLocalLanding && localDashboardPort
-      ? `${protocol}//${hostname}:${localDashboardPort}`
-      : window.location.origin;
+    if (isLocalLanding) {
+      const localDashboardPort = port && port !== '5173' ? '5173' : port;
+      const origin = localDashboardPort ? `${protocol}//${hostname}:${localDashboardPort}` : window.location.origin;
+      window.location.href = `${origin}/?login=true`;
+      return;
+    }
 
-    window.location.href = `${origin}/?login=true`;
+    window.location.href = productionLoginUrl;
   };
 
   return (

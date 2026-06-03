@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './config'
+
 export interface Location {
   city?: string;
   state?: string;
@@ -102,10 +104,7 @@ export interface JobSeekerData {
   ContactJobPairing: ContactJobPairing[];
 }
 
-const BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  (import.meta.env.VITE_LOCAL_APP_SERVER_URL as string | undefined) ||
-  'https://wanderwork-backend-server.onrender.com';
+const BASE_URL = API_BASE_URL;
 
 const TIMEOUT_MS = 10000;
 
