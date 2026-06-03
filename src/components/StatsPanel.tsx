@@ -1036,7 +1036,7 @@ const ParticleWaveIcon = () => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const W = 132
+    const W = 220
     const H = 78
     canvas.width = W
     canvas.height = H
@@ -1051,17 +1051,18 @@ const ParticleWaveIcon = () => {
 
     oc.lineWidth = 14
     oc.beginPath()
-    oc.moveTo(10, 46)
-    oc.bezierCurveTo(25, 18, 47, 18, 62, 44)
-    oc.bezierCurveTo(78, 70, 104, 69, 122, 35)
+    oc.moveTo(10, 45)
+    oc.bezierCurveTo(34, 16, 67, 18, 91, 44)
+    oc.bezierCurveTo(118, 72, 153, 70, 178, 43)
+    oc.bezierCurveTo(191, 29, 204, 24, 213, 33)
     oc.stroke()
 
     oc.lineWidth = 8
     oc.globalAlpha = 0.85
     oc.beginPath()
-    oc.moveTo(20, 56)
-    oc.bezierCurveTo(38, 37, 54, 38, 70, 56)
-    oc.bezierCurveTo(84, 71, 101, 68, 115, 51)
+    oc.moveTo(26, 56)
+    oc.bezierCurveTo(55, 38, 80, 39, 106, 56)
+    oc.bezierCurveTo(136, 76, 170, 69, 197, 50)
     oc.stroke()
     oc.globalAlpha = 1
 
@@ -1128,12 +1129,12 @@ const ParticleWaveIcon = () => {
   return (
     <div
       aria-hidden="true"
-      className="group flex h-[78px] w-[132px] items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03]"
+      className="group flex h-[78px] w-[220px] items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03]"
       style={{ cursor: 'crosshair' }}
     >
       <canvas
         ref={canvasRef}
-        style={{ width: 132, height: 78, flexShrink: 0 }}
+        style={{ width: 220, height: 78, flexShrink: 0 }}
       />
     </div>
   )
