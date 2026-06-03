@@ -45,6 +45,17 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function safePublicUrl(values, fallback) {
+    const urls = Array.isArray(values) ? values : [values];
+    for (const value of urls) {
+        const url = String(value || '').trim().replace(/\/$/, '');
+        if (!url) continue;
+        if (/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(url)) continue;
+        return url;
+    }
+    return fallback;
+}
+
 function cleanList(value) {
     if (!value) return [];
     if (Array.isArray(value)) {
@@ -447,8 +458,11 @@ const createNewUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(user._id, { verificationToken });
 
     // Send verification email
-    const publicServerUrl = (process.env.PUBLIC_SERVER_URL || process.env.SERVER_URL || 'https://wanderwork-backend-server.onrender.com').replace(/\/$/, '');
-    const appUrl = process.env.APP_URL || 'https://wanderwork.io';
+    const publicServerUrl = safePublicUrl(
+        [process.env.PUBLIC_SERVER_URL, process.env.SERVER_URL],
+        'https://wanderwork-backend-server.onrender.com'
+    );
+    const appUrl = safePublicUrl(process.env.APP_URL, 'https://wanderwork.io');
     const verificationLink = `${publicServerUrl}/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
     const plainDisplayName = safeFirstName || normalizedEmail.split('@')[0] || 'there';
     const displayName = escapeHtml(plainDisplayName);
