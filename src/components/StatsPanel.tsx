@@ -1090,14 +1090,33 @@ const ParticleWaveIcon = () => {
     }
     particlesRef.current = ps
 
-    const onMove = (e: MouseEvent) => {
+    const isTouchInteraction = window.matchMedia('(hover: none), (pointer: coarse)').matches
+    let resetTimer: ReturnType<typeof window.setTimeout> | null = null
+
+    const resetMouse = () => {
+      mouseRef.current.x = -999
+      mouseRef.current.y = -999
+    }
+
+    const setPointerPosition = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()
       mouseRef.current.x = (e.clientX - rect.left) * (W / rect.width)
       mouseRef.current.y = (e.clientY - rect.top) * (H / rect.height)
     }
-    const onLeave = () => { mouseRef.current.x = -999; mouseRef.current.y = -999 }
-    canvas.addEventListener('mousemove', onMove)
-    canvas.addEventListener('mouseleave', onLeave)
+    const onMove = (e: PointerEvent) => {
+      if (isTouchInteraction || e.pointerType !== 'mouse') return
+      setPointerPosition(e)
+    }
+    const onTap = (e: PointerEvent) => {
+      if (!isTouchInteraction) return
+      setPointerPosition(e)
+      if (resetTimer) window.clearTimeout(resetTimer)
+      resetTimer = window.setTimeout(resetMouse, 650)
+    }
+
+    canvas.addEventListener('pointermove', onMove)
+    canvas.addEventListener('pointerdown', onTap)
+    canvas.addEventListener('pointerleave', resetMouse)
 
     const animate = () => {
       ctx.clearRect(0, 0, W, H)
@@ -1106,7 +1125,7 @@ const ParticleWaveIcon = () => {
         const dx = mouse.x - p.x
         const dy = mouse.y - p.y
         const dist2 = dx * dx + dy * dy
-        if (dist2 < mouse.radius) {
+        if (dist2 > 0 && dist2 < mouse.radius) {
           const force = -mouse.radius / dist2 * 5.5
           const angle = Math.atan2(dy, dx)
           p.vx += force * Math.cos(angle)
@@ -1122,8 +1141,10 @@ const ParticleWaveIcon = () => {
     animate()
 
     return () => {
-      canvas.removeEventListener('mousemove', onMove)
-      canvas.removeEventListener('mouseleave', onLeave)
+      if (resetTimer) window.clearTimeout(resetTimer)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerdown', onTap)
+      canvas.removeEventListener('pointerleave', resetMouse)
       if (animRef.current) cancelAnimationFrame(animRef.current)
     }
   }, [])
@@ -1131,7 +1152,7 @@ const ParticleWaveIcon = () => {
   return (
     <div
       aria-hidden="true"
-      className="group flex h-[78px] w-full items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.015]"
+      className="group flex h-[78px] w-full items-center justify-center rounded-[18px] transition-all duration-300 [@media(hover:hover)]:hover:-translate-y-1 [@media(hover:hover)]:hover:scale-[1.015]"
       style={{ cursor: 'crosshair' }}
     >
       <canvas
