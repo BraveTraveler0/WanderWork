@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users } from 'lucide-react'
+import { Briefcase, Coins, MailPlus, Sparkles, Users } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
 import JobFeed from './components/JobFeed'
@@ -54,6 +54,13 @@ const getInitials = (name: string) => {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('')
+}
+
+const WELCOME_MODAL_VERSION = 'tester-100-tokens-v1'
+
+const getWelcomeStorageKey = (user: any) => {
+  const identifier = user?._id || user?.id || user?.email || user?.displayName || 'guest'
+  return `wanderworkWelcomeSeen:${WELCOME_MODAL_VERSION}:${String(identifier).toLowerCase()}`
 }
 
 // Seed data (mirrors seed-backend.js) to keep UI populated if backend is empty
@@ -448,6 +455,7 @@ function App() {
 
   const [oauthError, setOauthError] = useState<string | null>(null)
   const [tokenClaimNotice, setTokenClaimNotice] = useState<{ text: string; success: boolean } | null>(null)
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false)
 
   // Handle OAuth callbacks (LinkedIn redirect, etc.)
   useEffect(() => {
@@ -527,6 +535,29 @@ function App() {
   const [_token, setToken] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkToken', ['wanderHireToken'])
   })
+
+  useEffect(() => {
+    if (!_token || !_user) {
+      setShowWelcomeModal(false)
+      return
+    }
+    const key = getWelcomeStorageKey(_user)
+    setShowWelcomeModal(localStorage.getItem(key) !== 'true')
+  }, [_token, _user])
+
+  const dismissWelcomeModal = () => {
+    if (_user) localStorage.setItem(getWelcomeStorageKey(_user), 'true')
+    setShowWelcomeModal(false)
+  }
+
+  useEffect(() => {
+    if (!showWelcomeModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismissWelcomeModal()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showWelcomeModal, _user])
 
   useEffect(() => {
     if (!pendingCoverLetterJobId || !transformedJobs.length) return
@@ -1101,6 +1132,10 @@ function App() {
           <button onClick={() => setTokenClaimNotice(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, flexShrink: 0, fontSize: 18, lineHeight: 1, opacity: 0.7 }}>x</button>
         </div>
       )}
+      {showWelcomeModal && _token && (
+        <WelcomeModal onClose={dismissWelcomeModal} />
+      )}
+
       {/* Full-width sticky header */}
       <div className="sticky top-0 z-50 w-full" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
         <header className="max-w-[1460px] mx-auto px-4 sm:px-6 flex items-center justify-between py-4">
@@ -1303,6 +1338,70 @@ function App() {
             </div>
           </div>
         </footer>
+      </div>
+    </div>
+  )
+}
+
+function WelcomeModal({ onClose }: { onClose: () => void }) {
+  const features = [
+    {
+      icon: <Briefcase size={18} />,
+      title: 'Matched jobs',
+      text: 'We compare your profile and resume to remote roles so the dashboard shows jobs that fit your skills.',
+    },
+    {
+      icon: <Coins size={18} />,
+      title: 'Tokens',
+      text: 'Tokens power services like tailored resumes, cover letters, and recruiter outreach. Each request shows its cost before you use it.',
+    },
+    {
+      icon: <MailPlus size={18} />,
+      title: 'Contact a recruiter',
+      text: 'This connects you with recruiters in your field and helps draft a targeted message using your profile.',
+    },
+  ]
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wanderwork-welcome-title"
+    >
+      <div className="w-full max-w-[560px] rounded-2xl bg-white p-6 shadow-2xl sm:p-8" style={{ fontFamily: 'Manrope' }}>
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF6F7] text-[#306770]">
+          <Sparkles size={24} />
+        </div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#306770]">Welcome to Wander/Work</p>
+        <h2 id="wanderwork-welcome-title" className="text-2xl font-bold leading-tight text-[#1A1A2E] sm:text-3xl">
+          Thank you for testing!
+        </h2>
+        <p className="mt-3 text-base font-semibold leading-7 text-[#306770]">
+          Here is 100 tokens to get you started.
+        </p>
+        <div className="mt-6 grid gap-3">
+          {features.map((feature) => (
+            <div key={feature.title} className="flex gap-3 rounded-xl border border-[#C8DEDE] bg-[#F7FBFB] p-4">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#306770]">
+                {feature.icon}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#1A1A2E]">{feature.title}</h3>
+                <p className="mt-1 text-sm leading-6 text-[#5f6878]">{feature.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-7 w-full rounded-xl bg-[#306770] px-5 py-3 text-base font-bold text-white shadow-lg transition hover:bg-[#245460]"
+        >
+          Get Started
+        </button>
+        <p className="mt-3 text-center text-xs font-medium text-[#7b8494]">Click anywhere to close.</p>
       </div>
     </div>
   )
