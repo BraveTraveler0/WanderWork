@@ -700,7 +700,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
               </div>
             </div>
-            <div className="mt-8 flex justify-end pr-1 sm:pr-3 xl:pr-5">
+            <div className="mt-8 w-full px-1 sm:px-3 xl:px-5">
               <ParticleWaveIcon />
             </div>
           </React.Fragment>
@@ -1036,7 +1036,7 @@ const ParticleWaveIcon = () => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const W = 220
+    const W = 900
     const H = 78
     canvas.width = W
     canvas.height = H
@@ -1051,18 +1051,20 @@ const ParticleWaveIcon = () => {
 
     oc.lineWidth = 14
     oc.beginPath()
-    oc.moveTo(10, 45)
-    oc.bezierCurveTo(34, 16, 67, 18, 91, 44)
-    oc.bezierCurveTo(118, 72, 153, 70, 178, 43)
-    oc.bezierCurveTo(191, 29, 204, 24, 213, 33)
+    oc.moveTo(16, 45)
+    oc.bezierCurveTo(102, 14, 191, 15, 279, 45)
+    oc.bezierCurveTo(383, 80, 486, 77, 573, 42)
+    oc.bezierCurveTo(667, 4, 766, 12, 842, 42)
+    oc.bezierCurveTo(873, 54, 889, 46, 894, 34)
     oc.stroke()
 
     oc.lineWidth = 8
     oc.globalAlpha = 0.85
     oc.beginPath()
-    oc.moveTo(26, 56)
-    oc.bezierCurveTo(55, 38, 80, 39, 106, 56)
-    oc.bezierCurveTo(136, 76, 170, 69, 197, 50)
+    oc.moveTo(44, 56)
+    oc.bezierCurveTo(148, 35, 244, 38, 341, 56)
+    oc.bezierCurveTo(454, 77, 560, 69, 660, 47)
+    oc.bezierCurveTo(760, 26, 827, 30, 871, 45)
     oc.stroke()
     oc.globalAlpha = 1
 
@@ -1129,12 +1131,12 @@ const ParticleWaveIcon = () => {
   return (
     <div
       aria-hidden="true"
-      className="group flex h-[78px] w-[220px] items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03]"
+      className="group flex h-[78px] w-full items-center justify-center rounded-[18px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.015]"
       style={{ cursor: 'crosshair' }}
     >
       <canvas
         ref={canvasRef}
-        style={{ width: 220, height: 78, flexShrink: 0 }}
+        style={{ width: '100%', height: 78, flexShrink: 0 }}
       />
     </div>
   )
