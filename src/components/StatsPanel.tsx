@@ -1065,11 +1065,11 @@ const ParticleWaveIcon = () => {
     oc.lineCap = 'round'
     oc.lineJoin = 'round'
 
-    oc.lineWidth = 14
+    oc.lineWidth = 10
     oc.beginPath()
-    oc.moveTo(744, 48)
-    oc.bezierCurveTo(785, 64, 837, 57, 861, 34)
-    oc.bezierCurveTo(878, 18, 863, 12, 836, 24)
+    oc.moveTo(778, 50)
+    oc.bezierCurveTo(809, 60, 840, 53, 861, 34)
+    oc.bezierCurveTo(876, 20, 864, 15, 840, 25)
     oc.stroke()
 
     oc.lineWidth = 9
@@ -1079,6 +1079,12 @@ const ParticleWaveIcon = () => {
     oc.stroke()
 
     oc.globalCompositeOperation = 'source-over'
+    oc.strokeStyle = '#306770'
+    oc.lineWidth = 11
+    oc.beginPath()
+    oc.moveTo(820, 52)
+    oc.bezierCurveTo(844, 58, 875, 51, 896, 39)
+    oc.stroke()
 
     const px = oc.getImageData(0, 0, W, H).data
     const gap = 4
