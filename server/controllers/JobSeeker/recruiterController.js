@@ -113,7 +113,113 @@ Ask if they are hiring now or expect freelance, contract, or full-time needs soo
   }
 }
 
-// ── Specialty inference from candidate profile ──────────────────────────────
+// Email body safety helpers
+const MIN_RECRUITER_EMAIL_BODY_CHARS = 120
+const MIN_RECRUITER_EMAIL_BODY_WORDS = 18
+
+function normalizeEmailBody(value) {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+}
+
+function visibleEmailText(value) {
+  const visibleText = normalizeEmailBody(value)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&zwnj;|&zwj;|&#8203;|&#8204;|&#8205;|&#65279;/gi, '')
+
+  return normalizeEmailBody(visibleText)
+}
+
+function hasVisibleEmailContent(value) {
+  const visibleText = visibleEmailText(value)
+  const wordCount = (visibleText.match(/\S+/g) || []).length
+  return visibleText.length >= MIN_RECRUITER_EMAIL_BODY_CHARS &&
+    wordCount >= MIN_RECRUITER_EMAIL_BODY_WORDS
+}
+
+function usableEmailBody(value) {
+  const emailBody = normalizeEmailBody(value)
+  return hasVisibleEmailContent(emailBody) ? emailBody : ''
+}
+
+function getFirstName(person = {}) {
+  const source = normalizeEmailBody(person.firstName) || normalizeEmailBody(person.name)
+  return source.split(/\s+/).find(Boolean) || ''
+}
+
+function getRecruiterEmail(recruiter = {}) {
+  return normalizeEmailBody(recruiter.email) || normalizeEmailBody(recruiter.personalEmail)
+}
+
+function listSummary(value, limit = 4) {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,;\n]/)
+      : []
+
+  return items
+    .map((item) => normalizeEmailBody(item == null ? '' : String(item)))
+    .filter(Boolean)
+    .slice(0, limit)
+    .join(', ')
+}
+
+function buildGenericRecruiterEmail(recruiter, candidate) {
+  const recruiterFirstName = getFirstName(recruiter)
+  const greeting = recruiterFirstName ? `Hey ${recruiterFirstName},` : 'Hey,'
+  const candidateName = [candidate.firstName, candidate.lastName]
+    .map((part) => normalizeEmailBody(part))
+    .filter(Boolean)
+    .join(' ') || 'a candidate'
+  const signatureName = normalizeEmailBody(candidate.firstName) || candidateName
+  const targetRoles = listSummary(candidate.targetRoles, 3)
+  const skills = listSummary(candidate.skills, 5) || listSummary(candidate.skills_2, 5)
+  const company = normalizeEmailBody(recruiter.company)
+
+  const lines = [
+    greeting,
+    '',
+    `Hope you are doing well. I'm ${candidateName}, and I'm exploring ${targetRoles ? `new opportunities in ${targetRoles}` : 'new opportunities'}.`,
+    skills
+      ? `My background includes ${skills}, and I wanted to introduce myself in case that lines up with searches you are supporting${company ? ` at ${company}` : ''}.`
+      : `I wanted to introduce myself in case my background lines up with searches you are supporting${company ? ` at ${company}` : ''}.`,
+    'Are you currently hiring, or do you expect freelance, contract, or full-time needs soon?',
+    'I would be glad to send over more context if helpful.',
+    '',
+    'Thanks,',
+    signatureName,
+  ]
+
+  return lines.join('\n')
+}
+
+async function resolveRecruiterEmailBody(recruiter, candidate) {
+  let emailBody = usableEmailBody(recruiter.emailTemplate)
+  let source = emailBody ? 'template' : ''
+
+  if (!emailBody && process.env.OPENAI_API_KEY) {
+    emailBody = usableEmailBody(await generateEmailDraft(recruiter, candidate))
+    source = emailBody ? 'generated' : ''
+  }
+
+  if (!emailBody) {
+    emailBody = buildGenericRecruiterEmail(recruiter, candidate)
+    source = 'fallback'
+  }
+
+  return { emailBody, source }
+}
+
+// Specialty inference from candidate profile
 const SPECIALTY_RULES = [
   {
     specialty: 'tech',
@@ -350,17 +456,25 @@ const sendEmail = asyncHandler(async (req, res) => {
   // Apply any earned daily-contact refills before checking the limit
   await refillRecruiterContacts(candidateId)
 
-  // Fetch recruiter and atomically deduct tokens + daily contact in parallel.
-  const [recruiter, prevCandidate] = await Promise.all([
-    Recruiter.findById(recruiterId).lean(),
-    CandidateModel.findOneAndUpdate(
-      { _id: candidateId, tokenBalance: { $gte: RECRUITER_EMAIL_COST }, recruiterContactsLeft: { $gte: 1 } },
-      { $inc: { tokenBalance: -RECRUITER_EMAIL_COST, tokensUsed: RECRUITER_EMAIL_COST, recruiterContactsLeft: -1 } },
-      { new: false }
-    ),
-  ])
-
+  const recruiter = await Recruiter.findById(recruiterId).lean()
   if (!recruiter) return res.status(404).json({ message: 'Recruiter not found' })
+
+  const recruiterEmail = getRecruiterEmail(recruiter)
+  if (!recruiterEmail) {
+    return res.status(400).json({ message: 'Recruiter email unavailable' })
+  }
+
+  const transporter = getTransporter()
+  if (!transporter) {
+    return res.status(503).json({ message: 'Email service unavailable' })
+  }
+
+  // Atomically deduct tokens + daily contact after the recruiter is confirmed.
+  const prevCandidate = await CandidateModel.findOneAndUpdate(
+    { _id: candidateId, tokenBalance: { $gte: RECRUITER_EMAIL_COST }, recruiterContactsLeft: { $gte: 1 } },
+    { $inc: { tokenBalance: -RECRUITER_EMAIL_COST, tokensUsed: RECRUITER_EMAIL_COST, recruiterContactsLeft: -1 } },
+    { new: false }
+  )
 
   if (!prevCandidate) {
     const candidate = await CandidateModel.findById(candidateId).lean()
@@ -374,10 +488,33 @@ const sendEmail = asyncHandler(async (req, res) => {
   const tokensRemaining = (prevCandidate.tokenBalance ?? RECRUITER_EMAIL_COST) - RECRUITER_EMAIL_COST
   const contactsRemaining = (prevCandidate.recruiterContactsLeft ?? 1) - 1
 
-  // Resolve email body: use stored template, generate on-demand, or fall back to webhook
-  let emailBody = recruiter.emailTemplate
-  if (!emailBody && process.env.OPENAI_API_KEY) {
-    emailBody = await generateEmailDraft(recruiter, prevCandidate)
+  // Resolve email body: use stored template, generate on-demand, or fall back to a safe generic draft.
+  const { emailBody, source: emailBodySource } = await resolveRecruiterEmailBody(recruiter, prevCandidate)
+
+  // Send via SMTP - to recruiter + BCC candidate so they have a copy
+  const candidateEmail = prevCandidate.email || null
+  const fromName = [prevCandidate.firstName, prevCandidate.lastName].filter(Boolean).join(' ') || 'Wander/Work'
+  const subject = `${recruiter.jobTitle || 'Hiring'} - quick intro from ${fromName}`
+
+  const mailOptions = {
+    from: `"${fromName}" <${process.env.EMAIL_SMTP_USER}>`,
+    to: recruiterEmail,
+    replyTo: candidateEmail || process.env.EMAIL_SMTP_USER,
+    subject,
+    text: emailBody,
+  }
+  if (candidateEmail) mailOptions.bcc = candidateEmail
+
+  try {
+    await transporter.sendMail(mailOptions)
+    console.log(`[RecruiterEmail] Sent to ${mailOptions.to} (bcc: ${candidateEmail}, body: ${emailBodySource})`)
+  } catch (e) {
+    await CandidateModel.updateOne(
+      { _id: candidateId },
+      { $inc: { tokenBalance: RECRUITER_EMAIL_COST, tokensUsed: -RECRUITER_EMAIL_COST, recruiterContactsLeft: 1 } }
+    )
+    console.error('[RecruiterEmail] Send failed, debit refunded:', e.message)
+    return res.status(502).json({ message: 'Recruiter email failed to send. Your tokens were refunded.' })
   }
 
   const contact = await RecruiterContact.findOneAndUpdate(
@@ -385,37 +522,14 @@ const sendEmail = asyncHandler(async (req, res) => {
     {
       $set: {
         status: 'email_sent',
-        recruiterEmail: recruiter.email,
-        emailBody: emailBody || '',
+        recruiterEmail,
+        emailBody,
         sentAt: new Date(),
-        tokensUsed: 1,
+        tokensUsed: RECRUITER_EMAIL_COST,
       },
     },
     { upsert: true, new: true }
   )
-
-  // Send via SMTP — to recruiter + BCC candidate so they have a copy
-  const transporter = getTransporter()
-  const candidateEmail = prevCandidate.email || null
-  const fromName = [prevCandidate.firstName, prevCandidate.lastName].filter(Boolean).join(' ') || 'Wander/Work'
-  const subject = `${recruiter.jobTitle || 'Hiring'} - quick intro from ${fromName}`
-
-  if (transporter && emailBody) {
-    const mailOptions = {
-      from: `"${fromName}" <${process.env.EMAIL_SMTP_USER}>`,
-      to: recruiter.email || process.env.ADMIN_EMAIL,
-      replyTo: candidateEmail || process.env.EMAIL_SMTP_USER,
-      subject,
-      text: emailBody,
-    }
-    if (candidateEmail) mailOptions.bcc = candidateEmail
-
-    transporter.sendMail(mailOptions)
-      .then(() => console.log(`[RecruiterEmail] Sent to ${mailOptions.to} (bcc: ${candidateEmail})`))
-      .catch((e) => console.error('[RecruiterEmail] Send failed:', e.message))
-  } else {
-    console.warn('[RecruiterEmail] SMTP not configured or no email body — skipping send')
-  }
 
   res.json({ contact, tokensRemaining, contactsRemaining })
 })
