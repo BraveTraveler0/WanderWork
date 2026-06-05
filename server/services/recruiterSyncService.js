@@ -180,7 +180,7 @@ function normalizeRecruiterPayload(record = {}, options = {}) {
     tags,
     contactMethod: firstNonEmpty(record.contactMethod, record.contact_method),
     specialty: VALID_SPECIALTIES.has(explicitSpecialty) ? explicitSpecialty : classifySpecialty([jobTitle, headline].filter(Boolean).join(' '), company, tags.join(',')),
-    emailTemplate: firstNonEmpty(record.emailTemplate, record.email_template, record['Attachment Summary']),
+    emailTemplate: firstNonEmpty(record.emailTemplate, record.email_template, record.attachmentDraft, record['Attachment Draft']),
     status: 'active',
     score: parseScore(record.score),
     lastSeenAt: parseDate(firstNonEmpty(record.lastSeenAt, record.last_seen_at)),
@@ -357,7 +357,7 @@ async function fetchAllRecruiters() {
 function transformRecord(record) {
   const f = record.fields || {}
   const emailTemplate = (() => {
-    const s = f['Attachment Summary']
+    const s = f['Attachment Draft']
     if (!s) return null
     if (typeof s === 'string') return s
     if (s?.state === 'generated' && s?.value) return s.value
@@ -375,6 +375,7 @@ function transformRecord(record) {
     company:     f.company_name || null,
     location:    f.Location || null,
     source:      f.source || null,
+    headline:    f['Attachment Summary'] || null,
     specialty:   classifySpecialty(f.job_title, f.company_name, f.tags || ''),
     emailTemplate,
     score:       typeof f.score === 'number' ? f.score : 0,

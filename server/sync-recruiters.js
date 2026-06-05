@@ -115,7 +115,7 @@ function transform(record) {
   const f = record.fields || {}
 
   const emailTemplate = (() => {
-    const s = f['Attachment Summary']
+    const s = f['Attachment Draft']
     if (!s) return null
     if (typeof s === 'string') return s
     if (s?.state === 'generated' && s?.value) return s.value
@@ -137,6 +137,7 @@ function transform(record) {
     company:       f.company_name || null,
     location:      f.Location || null,
     source:        f.source || null,
+    headline:      f['Attachment Summary'] || null,
     specialty,
     emailTemplate,
     status:        'active',

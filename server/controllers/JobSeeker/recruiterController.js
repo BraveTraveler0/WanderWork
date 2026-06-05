@@ -74,7 +74,8 @@ const getTransporter = () => {
 const DRAFT_SYSTEM_PROMPT = `You write short outreach emails for a job seeker to recruiters, talent partners, and hiring managers.
 Output only the email body. No subject line. No markdown. No bullet points. No em dashes.
 Use "Hey [First Name]," at the start when a first name is available, otherwise "Hey,".
-Keep it 5 to 8 sentences. Warm, confident, casual, and professional. Never salesy or AI-sounding.`
+Keep it 5 to 8 complete sentences with at least one real paragraph. Never output only a title, headline, bio, or role summary.
+Warm, confident, casual, and professional. Never salesy or AI-sounding.`
 
 async function generateEmailDraft(recruiter, candidate) {
   const apiKey = process.env.OPENAI_API_KEY
@@ -116,6 +117,7 @@ Ask if they are hiring now or expect freelance, contract, or full-time needs soo
 // Email body safety helpers
 const MIN_RECRUITER_EMAIL_BODY_CHARS = 120
 const MIN_RECRUITER_EMAIL_BODY_WORDS = 18
+const MIN_RECRUITER_EMAIL_SENTENCES = 3
 
 function normalizeEmailBody(value) {
   if (typeof value !== 'string') return ''
@@ -141,8 +143,10 @@ function visibleEmailText(value) {
 function hasVisibleEmailContent(value) {
   const visibleText = visibleEmailText(value)
   const wordCount = (visibleText.match(/\S+/g) || []).length
+  const sentenceCount = (visibleText.match(/[.!?](?=\s|$)/g) || []).length
   return visibleText.length >= MIN_RECRUITER_EMAIL_BODY_CHARS &&
-    wordCount >= MIN_RECRUITER_EMAIL_BODY_WORDS
+    wordCount >= MIN_RECRUITER_EMAIL_BODY_WORDS &&
+    sentenceCount >= MIN_RECRUITER_EMAIL_SENTENCES
 }
 
 function usableEmailBody(value) {
