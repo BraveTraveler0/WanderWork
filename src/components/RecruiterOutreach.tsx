@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { X, Check, Zap, ChevronDown } from 'lucide-react'
-import { getPairedRecruiters, sendRecruiterEmail, getRecruiterContactHistory, RecruiterRecord } from '../api/jobseeker.ts'
+import { getPairedRecruiters, sendRecruiterDraft, getRecruiterContactHistory, RecruiterRecord } from '../api/jobseeker.ts'
 
 interface Props {
   candidateId: string
@@ -164,9 +164,9 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
       })
       setRecruiters(unique)
 
-      // Build sent list from all contact history (email_sent only, no time cutoff)
+      // Build draft list from all contact history. Old email_sent records are preserved for history.
       const past: SentEntry[] = (contacts as any[])
-        .filter((c) => c.status === 'email_sent' && c.sentAt)
+        .filter((c) => ['draft_sent', 'email_sent'].includes(c.status) && c.sentAt)
         .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
         .map((c) => ({
           recruiter: c.recruiterId as RecruiterRecord,
@@ -205,7 +205,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
 
     const ids = [...selectedIds]
     let lastBalance = tokens
-    const results = await Promise.allSettled(ids.map((id) => sendRecruiterEmail(candidateId, id)))
+    const results = await Promise.allSettled(ids.map((id) => sendRecruiterDraft(candidateId, id)))
 
     const now = new Date().toISOString()
     const succeeded: string[] = []
@@ -240,9 +240,9 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
     setSubmitting(false)
 
     if (succeeded.length > 0 && succeeded.length < ids.length) {
-      setErrorMsg(`${succeeded.length} of ${ids.length} emails sent. Some failed — try again.`)
+      setErrorMsg(`${succeeded.length} of ${ids.length} drafts sent to your inbox. Some failed - try again.`)
     } else if (succeeded.length === 0) {
-      setErrorMsg('Failed to send emails. Check your token balance and try again.')
+      setErrorMsg('Failed to send drafts to your inbox. Check your token balance and try again.')
     }
   }
 
@@ -256,7 +256,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
         {/* Header */}
         <div className="flex items-center justify-between px-7 pt-6 pb-5 border-b flex-shrink-0" style={{ borderColor: '#F0F0F0' }}>
           <div>
-            <h2 className="text-[18px] font-semibold text-black mb-1">Contact Recruiters</h2>
+            <h2 className="text-[18px] font-semibold text-black mb-1">Recruiter Email Drafts</h2>
             <div className="flex items-center gap-2 flex-wrap">
               {specialties.map((s) => {
                 const sc = SPECIALTY_COLORS[s] ?? SPECIALTY_COLORS.general
@@ -283,12 +283,12 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
         {/* Intro */}
         <div className="px-7 pt-5 pb-4 flex-shrink-0">
           <p className="text-[13px] leading-[1.65]" style={{ color: '#555' }}>
-            Select recruiters below and send them a personalized introduction — one of the fastest ways to get in front of hiring teams.
+            Select recruiters below and we will send personalized draft emails to your inbox. Nothing is sent to recruiters from WanderWork.
           </p>
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-1.5">
               <Zap size={13} style={{ color: '#306770' }} />
-              <span className="text-[12px] font-medium" style={{ color: '#306770' }}>{TOKENS_PER_EMAIL} tokens per email</span>
+              <span className="text-[12px] font-medium" style={{ color: '#306770' }}>{TOKENS_PER_EMAIL} tokens per draft</span>
             </div>
             <div className="text-[12px] font-semibold px-3 py-1 rounded-full" style={{ background: remaining === 0 ? '#FFF0F0' : '#EEF6F7', color: remaining === 0 ? '#C0392B' : '#306770' }}>
               {remaining} of {effectiveLimit} remaining today
@@ -301,10 +301,10 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
           {loading && <div className="py-12 text-center text-[14px]" style={{ color: '#787878' }}>Finding recruiters matched to your specialty...</div>}
 
           {!loading && visibleRecruiters.length === 0 && sentList.length === 0 && (
-            <div className="py-12 text-center text-[14px]" style={{ color: '#787878' }}>No new recruiters to contact right now. Check back soon — we add new leads daily.</div>
+            <div className="py-12 text-center text-[14px]" style={{ color: '#787878' }}>No new recruiters for drafts right now. Check back soon - we add new leads daily.</div>
           )}
 
-          {/* Unsent recruiters */}
+          {/* Recruiters without a prepared draft */}
           {!loading && visibleRecruiters.length > 0 && (
             <div className="flex flex-col gap-2.5">
               {visibleRecruiters.map((r) => (
@@ -321,7 +321,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
             </div>
           )}
 
-          {/* Previously contacted — collapsible */}
+          {/* Previously prepared drafts */}
           {!loading && sentList.length > 0 && (
             <div className="mt-5">
               <button
@@ -329,13 +329,13 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
                 className="flex items-center gap-2 w-full text-left mb-3"
               >
                 <span className="text-[12px] font-semibold" style={{ color: '#AAAAAA' }}>
-                  Previously Contacted ({sentList.length})
+                  Drafts Sent to Inbox ({sentList.length})
                 </span>
                 <ChevronDown
                   size={14}
                   style={{ color: '#AAAAAA', transform: showSent ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
                 />
-                <span className="text-[11px]" style={{ color: '#CCCCCC' }}>· removed after 90 days</span>
+                <span className="text-[11px]" style={{ color: '#CCCCCC' }}>saved in your history</span>
               </button>
               {showSent && (
                 <div className="flex flex-col gap-2">
@@ -366,10 +366,10 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
             onMouseLeave={(e) => { if (selectedIds.size > 0 && canAfford && !submitting) e.currentTarget.style.background = '#306770' }}
           >
             {submitting
-              ? 'Sending emails...'
+              ? 'Sending drafts...'
               : selectedIds.size === 0
-              ? 'Select recruiters to contact'
-              : `Send ${selectedIds.size} Email${selectedIds.size !== 1 ? 's' : ''} · ${totalCost} tokens`}
+              ? 'Select recruiters for drafts'
+              : `Send ${selectedIds.size} Draft${selectedIds.size !== 1 ? 's' : ''} to My Inbox - ${totalCost} tokens`}
           </button>
         </div>
       </div>

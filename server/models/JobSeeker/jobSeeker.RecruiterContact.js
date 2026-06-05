@@ -9,12 +9,13 @@ const recruiterContactSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ['paired', 'email_sent', 'replied', 'skipped'],
+    enum: ['paired', 'email_sent', 'draft_sent', 'replied', 'skipped'],
     default: 'paired',
   },
 
-  // The actual email body sent (filled when email_sent)
+  // The actual draft body delivered to the candidate inbox.
   emailBody: { type: String },
+  deliveryEmail: { type: String },
   sentAt:    { type: Date },
   tokensUsed: { type: Number, default: 0 },
 }, {

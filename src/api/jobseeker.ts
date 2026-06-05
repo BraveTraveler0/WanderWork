@@ -313,11 +313,11 @@ export function getPairedRecruiters(
   return fetchJson(`/recruiter/paired?${params}`, init);
 }
 
-export function sendRecruiterEmail(
+export function sendRecruiterDraft(
   candidateId: string,
   recruiterId: string,
   init?: RequestInit & { signal?: AbortSignal }
-): Promise<{ contact: any; tokensRemaining: number }> {
+): Promise<{ contact: any; tokensRemaining: number; draftRecipientEmail?: string }> {
   return fetchJson('/recruiter/send-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -325,6 +325,8 @@ export function sendRecruiterEmail(
     ...init,
   });
 }
+
+export const sendRecruiterEmail = sendRecruiterDraft;
 
 export function getRecruiterContactHistory(
   candidateId: string,

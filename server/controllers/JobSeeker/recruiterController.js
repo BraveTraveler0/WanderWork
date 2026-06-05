@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler')
 const mongoose = require('mongoose')
-const nodemailer = require('nodemailer')
 const axios = require('axios')
+const sgMail = require('@sendgrid/mail')
 const Recruiter = require('../../models/JobSeeker/jobSeeker.Recruiter')
 const RecruiterContact = require('../../models/JobSeeker/jobSeeker.RecruiterContact')
 const CandidateModel = require('../../models/JobSeeker/jobSeeker.Candidate')
@@ -57,17 +57,34 @@ async function requireCandidateOwner(req, candidateId) {
   return candidate
 }
 
-// ── Email transporter (SMTP) ─────────────────────────────────────────────────
-const getTransporter = () => {
-  const user = process.env.EMAIL_SMTP_USER
-  const pass = process.env.EMAIL_SMTP_PASS
-  if (!user || !pass) return null
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_SMTP_PORT) || 587,
-    secure: false,
-    auth: { user, pass },
-  })
+// ── Recruiter draft email delivery ───────────────────────────────────────────
+const DEFAULT_WANDERWORK_EMAIL = 'support@wanderwork.io'
+const BLOCKED_AUTOMATION_EMAIL_PATTERNS = [
+  /@aontechnologies\./i,
+]
+
+function isBlockedAutomationEmail(value) {
+  const email = normalizeEmailBody(value).toLowerCase()
+  return !!email && BLOCKED_AUTOMATION_EMAIL_PATTERNS.some((pattern) => pattern.test(email))
+}
+
+function isWanderworkEmail(value) {
+  return /@wanderwork\.io$/i.test(normalizeEmailBody(value))
+}
+
+function getWanderworkSender() {
+  const email = normalizeEmailBody(process.env.EMAIL_FROM || DEFAULT_WANDERWORK_EMAIL)
+  if (!email || isBlockedAutomationEmail(email) || !isWanderworkEmail(email)) return null
+  return { name: 'Wander/Work', email }
+}
+
+function getDraftMailer() {
+  const apiKey = normalizeEmailBody(process.env.SENDGRID_API_KEY)
+  if (!apiKey || apiKey === 'SG.placeholder') return null
+  const sender = getWanderworkSender()
+  if (!sender) return null
+  sgMail.setApiKey(apiKey)
+  return { sender, send: (message) => sgMail.send(message) }
 }
 
 // ── On-demand email draft generation via OpenAI ──────────────────────────────
@@ -541,14 +558,21 @@ const getContactHistory = asyncHandler(async (req, res) => {
 })
 
 // ── POST /recruiter/send-email ───────────────────────────────────────────────
-// Deducts 10 tokens from candidate and records the contact as email_sent.
+// Deducts 10 tokens and sends the recruiter email draft only to the candidate.
 // Body: { candidateId, recruiterId }
 const RECRUITER_EMAIL_COST = 10
 
 const sendEmail = asyncHandler(async (req, res) => {
   const { candidateId, recruiterId } = req.body
   if (!candidateId || !recruiterId) return res.status(400).json({ message: 'candidateId and recruiterId required' })
-  await requireCandidateOwner(req, candidateId)
+  const ownerCandidate = await requireCandidateOwner(req, candidateId)
+  const candidateEmail = normalizeEmailBody(ownerCandidate.email)
+  if (!candidateEmail) {
+    return res.status(400).json({ message: 'Candidate email unavailable' })
+  }
+  if (isBlockedAutomationEmail(candidateEmail)) {
+    return res.status(400).json({ message: 'Automated recruiter drafts cannot be sent to that email address. Update the user email first.' })
+  }
 
   // Apply any earned daily-contact refills before checking the limit
   await refillRecruiterContacts(candidateId)
@@ -557,13 +581,10 @@ const sendEmail = asyncHandler(async (req, res) => {
   if (!recruiter) return res.status(404).json({ message: 'Recruiter not found' })
 
   const recruiterEmail = getRecruiterEmail(recruiter)
-  if (!recruiterEmail) {
-    return res.status(400).json({ message: 'Recruiter email unavailable' })
-  }
-
-  const transporter = getTransporter()
-  if (!transporter) {
-    return res.status(503).json({ message: 'Email service unavailable' })
+  const draftMailer = getDraftMailer()
+  if (!draftMailer) {
+    console.error('[RecruiterEmail] Draft delivery unavailable: WanderWork SendGrid sender is not configured')
+    return res.status(503).json({ message: 'WanderWork email service unavailable. No recruiter email was sent.' })
   }
 
   // Atomically deduct tokens + daily contact after the recruiter is confirmed.
@@ -588,38 +609,42 @@ const sendEmail = asyncHandler(async (req, res) => {
   // Resolve email body: generate on-demand, or fall back to a safe generic draft.
   const { emailBody, source: emailBodySource } = await resolveRecruiterEmailBody(recruiter, prevCandidate)
 
-  // Send via SMTP - to recruiter + BCC candidate so they have a copy
-  const candidateEmail = prevCandidate.email || null
-  const fromName = [prevCandidate.firstName, prevCandidate.lastName].filter(Boolean).join(' ') || 'Wander/Work'
-  const subject = `${recruiter.jobTitle || 'Hiring'} - quick intro from ${fromName}`
+  // Send the generated draft only to the candidate's inbox. Do not contact the recruiter from WanderWork.
+  const recruiterLabel = [
+    normalizeEmailBody(recruiter.name),
+    normalizeEmailBody(recruiter.company),
+  ].filter(Boolean).join(' at ')
+  const subject = recruiterLabel
+    ? `Your recruiter email draft for ${recruiterLabel}`
+    : 'Your recruiter email draft'
 
   const mailOptions = {
-    from: `"${fromName}" <${process.env.EMAIL_SMTP_USER}>`,
-    to: recruiterEmail,
-    replyTo: candidateEmail || process.env.EMAIL_SMTP_USER,
+    from: draftMailer.sender,
+    to: candidateEmail,
+    replyTo: draftMailer.sender.email,
     subject,
     text: emailBody,
   }
-  if (candidateEmail) mailOptions.bcc = candidateEmail
 
   try {
-    await transporter.sendMail(mailOptions)
-    console.log(`[RecruiterEmail] Sent to ${mailOptions.to} (bcc: ${candidateEmail}, body: ${emailBodySource})`)
+    await draftMailer.send(mailOptions)
+    console.log(`[RecruiterEmail] Draft sent to candidate ${candidateEmail} for recruiter ${recruiter._id} (body: ${emailBodySource})`)
   } catch (e) {
     await CandidateModel.updateOne(
       { _id: candidateId },
       { $inc: { tokenBalance: RECRUITER_EMAIL_COST, tokensUsed: -RECRUITER_EMAIL_COST, recruiterContactsLeft: 1 } }
     )
     console.error('[RecruiterEmail] Send failed, debit refunded:', e.message)
-    return res.status(502).json({ message: 'Recruiter email failed to send. Your tokens were refunded.' })
+    return res.status(502).json({ message: 'Recruiter draft failed to send to your inbox. Your tokens were refunded.' })
   }
 
   const contact = await RecruiterContact.findOneAndUpdate(
     { candidateId, recruiterId },
     {
       $set: {
-        status: 'email_sent',
-        recruiterEmail,
+        status: 'draft_sent',
+        recruiterEmail: recruiterEmail || null,
+        deliveryEmail: candidateEmail,
         emailBody,
         sentAt: new Date(),
         tokensUsed: RECRUITER_EMAIL_COST,
@@ -628,7 +653,7 @@ const sendEmail = asyncHandler(async (req, res) => {
     { upsert: true, new: true }
   )
 
-  res.json({ contact, tokensRemaining, contactsRemaining })
+  res.json({ contact, tokensRemaining, contactsRemaining, draftRecipientEmail: candidateEmail })
 })
 
 module.exports = {
