@@ -621,7 +621,7 @@ const sendEmail = asyncHandler(async (req, res) => {
     ? `Your recruiter email draft for ${recruiterLabel}`
     : 'Your recruiter email draft'
   const deliveredDraftBody = [
-    `Recruiter email: ${recruiterEmail}`,
+    `Use this email: ${recruiterEmail}, delete this portion. Good luck!`,
     '',
     emailBody,
   ].join('\n')
