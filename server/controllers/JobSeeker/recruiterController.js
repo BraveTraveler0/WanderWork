@@ -72,27 +72,50 @@ const getTransporter = () => {
 
 // ── On-demand email draft generation via OpenAI ──────────────────────────────
 const DRAFT_SYSTEM_PROMPT = `You write short outreach emails for a job seeker to recruiters, talent partners, and hiring managers.
+Write a real, human email that feels personal, casual, and professional.
 Output only the email body. No subject line. No markdown. No bullet points. No em dashes.
 Use "Hey [First Name]," at the start when a first name is available, otherwise "Hey,".
 Keep it 5 to 8 complete sentences with at least one real paragraph. Never output only a title, headline, bio, or role summary.
-Warm, confident, casual, and professional. Never salesy or AI-sounding.`
+Open with a short, believable acknowledgment based only on the recipient details provided.
+Briefly explain what the sender does and why they may be relevant to the kinds of roles the recipient works on.
+Mention portfolio and LinkedIn naturally when URLs are provided.
+Ask if they are hiring now or expect freelance, contract, or full-time needs soon.
+Never invent open roles, hiring plans, personal details, employers, tools, or background.
+Never use fake personalization, overpraise, or generic lines like "I hope this email finds you well."
+Use only the sender details provided. Do not mention any specific person, employer, tool, client, or background detail unless it appears in the current sender profile or resume context.`
 
 async function generateEmailDraft(recruiter, candidate) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return null
   const userName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'the candidate'
+  const profile = buildCandidateEmailProfile(candidate)
   const userPrompt = `Write a short recruiter outreach email using these details.
 Recipient first name: ${recruiter.firstName || ''}
 Recipient full name: ${recruiter.name || ''}
 Recipient role: ${recruiter.jobTitle || ''}
 Company: ${recruiter.company || ''}
+Industry: ${recruiter.industry || ''}
 Specialty: ${recruiter.specialty || ''}
+Tags: ${listSummary(recruiter.tags, 8)}
+Location: ${[recruiter.city, recruiter.state, recruiter.country].filter(Boolean).join(' ') || recruiter.location || ''}
+Recipient headline or niche: ${recruiter.headline || ''}
 
 Sender: ${userName}
-Sender skills: ${(candidate.skills || []).slice(0, 8).join(', ')}
-Sender target roles: ${(candidate.targetRoles || []).slice(0, 4).join(', ')}
+Sender intro: ${profile.intro}
+Sender target roles: ${profile.targetRoles || ''}
+Sender seniority: ${profile.seniority || ''}
+Sender skills: ${profile.skills || ''}
+Sender keywords: ${profile.keywords || ''}
+Sender portfolio: ${profile.portfolioUrl || ''}
+Sender LinkedIn: ${profile.linkedinUrl || ''}
+Sender resume summary: ${profile.summary || ''}
+Sender work experience excerpt: ${profile.workExperience || ''}
+Sender education excerpt: ${profile.education || ''}
+Sender resume excerpt: ${profile.resumeExcerpt || ''}
 
-Ask if they are hiring now or expect freelance, contract, or full-time needs soon. End casually.`
+Use the sender's actual resume/profile details naturally. If a detail is missing, skip it.
+Do not copy recruiter titles or headlines as the body of the email.
+End casually and professionally.`
 
   try {
     const response = await axios.post(
@@ -117,7 +140,7 @@ Ask if they are hiring now or expect freelance, contract, or full-time needs soo
 // Email body safety helpers
 const MIN_RECRUITER_EMAIL_BODY_CHARS = 120
 const MIN_RECRUITER_EMAIL_BODY_WORDS = 18
-const MIN_RECRUITER_EMAIL_SENTENCES = 3
+const MIN_RECRUITER_EMAIL_SENTENCES = 5
 
 function normalizeEmailBody(value) {
   if (typeof value !== 'string') return ''
@@ -177,27 +200,97 @@ function listSummary(value, limit = 4) {
     .join(', ')
 }
 
+function compactText(value, maxChars = 900) {
+  const text = normalizeEmailBody(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (text.length <= maxChars) return text
+  return `${text.slice(0, maxChars).trim()}...`
+}
+
+function findCandidateUrl(candidate = {}, pattern) {
+  const urls = Array.isArray(candidate.urls) ? candidate.urls : []
+  const match = urls.find((item) => {
+    const name = normalizeEmailBody(item?.urlName)
+    const address = normalizeEmailBody(item?.urlAddress)
+    return pattern.test(`${name} ${address}`)
+  })
+
+  return normalizeEmailBody(match?.urlAddress)
+}
+
+function buildCandidateEmailProfile(candidate = {}) {
+  const name = [candidate.firstName, candidate.lastName]
+    .map((part) => normalizeEmailBody(part))
+    .filter(Boolean)
+    .join(' ') || 'the candidate'
+  const targetRoles = listSummary(candidate.targetRoles, 4)
+  const seniority = listSummary(candidate.seniority, 3)
+  const skills = listSummary([...(candidate.skills || []), ...(candidate.skills_2 || [])], 10)
+  const keywords = listSummary(candidate.inferredKeywords, 10)
+  const summary = compactText(candidate.summary, 600)
+  const workExperience = compactText(candidate.work_experience, 900)
+  const education = compactText(candidate.education, 400)
+  const resumeExcerpt = compactText(candidate.resume_text, 1200)
+  const portfolioUrl = findCandidateUrl(candidate, /portfolio|website|personal|work/i)
+  const linkedinUrl = findCandidateUrl(candidate, /linkedin/i)
+
+  let intro = targetRoles
+    ? [seniority, targetRoles].filter(Boolean).join(' ')
+    : seniority
+      ? `${seniority} professional`
+      : 'a professional exploring new opportunities'
+  if (skills) intro = `${intro} with experience in ${skills}`
+
+  return {
+    name,
+    targetRoles,
+    seniority,
+    skills,
+    keywords,
+    summary,
+    workExperience,
+    education,
+    resumeExcerpt,
+    portfolioUrl,
+    linkedinUrl,
+    intro,
+  }
+}
+
 function buildGenericRecruiterEmail(recruiter, candidate) {
   const recruiterFirstName = getFirstName(recruiter)
   const greeting = recruiterFirstName ? `Hey ${recruiterFirstName},` : 'Hey,'
-  const candidateName = [candidate.firstName, candidate.lastName]
-    .map((part) => normalizeEmailBody(part))
-    .filter(Boolean)
-    .join(' ') || 'a candidate'
+  const profile = buildCandidateEmailProfile(candidate)
+  const candidateName = profile.name
   const signatureName = normalizeEmailBody(candidate.firstName) || candidateName
-  const targetRoles = listSummary(candidate.targetRoles, 3)
-  const skills = listSummary(candidate.skills, 5) || listSummary(candidate.skills_2, 5)
+  const skills = profile.skills
   const company = normalizeEmailBody(recruiter.company)
+  const recipientFocus = normalizeEmailBody(recruiter.headline) ||
+    [recruiter.jobTitle, company].map(normalizeEmailBody).filter(Boolean).join(' at ')
+  const links = [
+    profile.portfolioUrl ? `portfolio: ${profile.portfolioUrl}` : '',
+    profile.linkedinUrl ? `LinkedIn: ${profile.linkedinUrl}` : '',
+  ].filter(Boolean).join(', ')
+
+  const paragraph = [
+    recipientFocus
+      ? `I saw your focus around ${recipientFocus}, and it seemed close to the kind of work I am exploring.`
+      : 'I saw your recruiting work and wanted to make a quick introduction.',
+    `I'm ${candidateName}, ${profile.intro}.`,
+    skills
+      ? `I wanted to introduce myself in case that background lines up with searches you are supporting${company ? ` at ${company}` : ''}.`
+      : `I wanted to introduce myself in case my background lines up with searches you are supporting${company ? ` at ${company}` : ''}.`,
+    links ? `You can see more of my work here: ${links}.` : null,
+    'Are you currently hiring, or do you expect freelance, contract, or full-time needs soon?',
+    'If there is a fit, I would be glad to send over more context.',
+  ].filter(Boolean).join(' ')
 
   const lines = [
     greeting,
     '',
-    `Hope you are doing well. I'm ${candidateName}, and I'm exploring ${targetRoles ? `new opportunities in ${targetRoles}` : 'new opportunities'}.`,
-    skills
-      ? `My background includes ${skills}, and I wanted to introduce myself in case that lines up with searches you are supporting${company ? ` at ${company}` : ''}.`
-      : `I wanted to introduce myself in case my background lines up with searches you are supporting${company ? ` at ${company}` : ''}.`,
-    'Are you currently hiring, or do you expect freelance, contract, or full-time needs soon?',
-    'I would be glad to send over more context if helpful.',
+    paragraph,
     '',
     'Thanks,',
     signatureName,
@@ -207,10 +300,10 @@ function buildGenericRecruiterEmail(recruiter, candidate) {
 }
 
 async function resolveRecruiterEmailBody(recruiter, candidate) {
-  let emailBody = usableEmailBody(recruiter.emailTemplate)
-  let source = emailBody ? 'template' : ''
+  let emailBody = ''
+  let source = ''
 
-  if (!emailBody && process.env.OPENAI_API_KEY) {
+  if (process.env.OPENAI_API_KEY) {
     emailBody = usableEmailBody(await generateEmailDraft(recruiter, candidate))
     source = emailBody ? 'generated' : ''
   }
@@ -492,7 +585,7 @@ const sendEmail = asyncHandler(async (req, res) => {
   const tokensRemaining = (prevCandidate.tokenBalance ?? RECRUITER_EMAIL_COST) - RECRUITER_EMAIL_COST
   const contactsRemaining = (prevCandidate.recruiterContactsLeft ?? 1) - 1
 
-  // Resolve email body: use stored template, generate on-demand, or fall back to a safe generic draft.
+  // Resolve email body: generate on-demand, or fall back to a safe generic draft.
   const { emailBody, source: emailBodySource } = await resolveRecruiterEmailBody(recruiter, prevCandidate)
 
   // Send via SMTP - to recruiter + BCC candidate so they have a copy
