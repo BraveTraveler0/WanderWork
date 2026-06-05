@@ -581,6 +581,9 @@ const sendEmail = asyncHandler(async (req, res) => {
   if (!recruiter) return res.status(404).json({ message: 'Recruiter not found' })
 
   const recruiterEmail = getRecruiterEmail(recruiter)
+  if (!recruiterEmail) {
+    return res.status(400).json({ message: 'Recruiter email unavailable. No draft was sent and no tokens were charged.' })
+  }
   const draftMailer = getDraftMailer()
   if (!draftMailer) {
     console.error('[RecruiterEmail] Draft delivery unavailable: WanderWork SendGrid sender is not configured')
@@ -617,13 +620,18 @@ const sendEmail = asyncHandler(async (req, res) => {
   const subject = recruiterLabel
     ? `Your recruiter email draft for ${recruiterLabel}`
     : 'Your recruiter email draft'
+  const deliveredDraftBody = [
+    `Recruiter email: ${recruiterEmail}`,
+    '',
+    emailBody,
+  ].join('\n')
 
   const mailOptions = {
     from: draftMailer.sender,
     to: candidateEmail,
     replyTo: draftMailer.sender.email,
     subject,
-    text: emailBody,
+    text: deliveredDraftBody,
   }
 
   try {
@@ -643,9 +651,9 @@ const sendEmail = asyncHandler(async (req, res) => {
     {
       $set: {
         status: 'draft_sent',
-        recruiterEmail: recruiterEmail || null,
+        recruiterEmail,
         deliveryEmail: candidateEmail,
-        emailBody,
+        emailBody: deliveredDraftBody,
         sentAt: new Date(),
         tokensUsed: RECRUITER_EMAIL_COST,
       },
