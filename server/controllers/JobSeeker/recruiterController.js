@@ -621,8 +621,8 @@ const sendEmail = asyncHandler(async (req, res) => {
     ? `Your recruiter email draft for ${recruiterLabel}`
     : 'Your recruiter email draft'
   const deliveredDraftBody = [
-    `Use this email: ${recruiterEmail}, delete this portion. Good luck!`,
-    'Do not reply, and do not forward. Copy this into a fresh email before sending. It looks much more professional and will increase your probability of getting the job.',
+    `Use this email address: ${recruiterEmail}. Delete this instruction block before sending. Good luck!`,
+    'Please do not reply to or forward this message. Copy the draft below into a new email before sending; it looks more professional and improves your chances of getting the job.',
     '',
     '------------------------------------------------------------',
     '',
