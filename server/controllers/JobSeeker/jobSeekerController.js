@@ -1977,6 +1977,12 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     const totalCost = (resume ? 1 : 0) + (coverLetter ? 1 : 0);
     if (totalCost === 0) return res.status(400).json({ message: 'No items requested.' });
 
+    const sgApiKey = process.env.SENDGRID_API_KEY
+    if (!sgApiKey || sgApiKey === 'SG.placeholder') {
+        console.error('[CustomRequest] SendGrid not configured - SENDGRID_API_KEY required')
+        return res.status(503).json({ message: 'Email delivery is unavailable. No credits were charged.' })
+    }
+
     // Atomic token check + deduction — same pattern as recruiter sendEmail
     const prevCandidate = await Candidates.findOneAndUpdate(
         {
@@ -2218,6 +2224,24 @@ Tailor every bullet point to match the target job description — highlight spec
     const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
         ?.split('\n').filter(line => !/^---+$/.test(line.trim())).join('\n')
 
+    const failedDocuments = [
+        resume && !resumeContent ? 'resume' : '',
+        coverLetter && !coverLetterContent ? 'cover letter' : '',
+    ].filter(Boolean)
+
+    if (failedDocuments.length) {
+        await Candidates.updateOne(
+            { _id: prevCandidate._id },
+            { $inc: { tokenBalance: totalCost, tokensUsed: -totalCost } }
+        )
+        console.error(`[CustomRequest] Generation failed for ${failedDocuments.join(', ')}; credits refunded for ${email}`)
+        return res.status(502).json({
+            message: `We could not generate the requested ${failedDocuments.join(' and ')}. Your credits were refunded.`,
+            generationFailed: failedDocuments,
+            tokensRemaining: prevCandidate.tokenBalance ?? totalCost,
+        })
+    }
+
     let application = null
     if (jobDoc?._id && (resumeContent || coverLetterContent)) {
         application = await Applications.findOneAndUpdate(
@@ -2245,10 +2269,8 @@ Tailor every bullet point to match the target job description — highlight spec
     }
 
     // Send emails via SendGrid
-    const sgApiKey = process.env.SENDGRID_API_KEY
-    if (sgApiKey && sgApiKey !== 'SG.placeholder') {
-        const sgMail = require('@sendgrid/mail')
-        sgMail.setApiKey(sgApiKey)
+    const sgMail = require('@sendgrid/mail')
+    sgMail.setApiKey(sgApiKey)
 
         const FROM_EMAIL = { name: 'Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
         const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'sephrim07@gmail.com'
@@ -2279,12 +2301,14 @@ Tailor every bullet point to match the target job description — highlight spec
 
             return attachments
         }
-        const sends = []
+        const candidateSends = []
 
         if (resume) {
             const subject = `Your Resume for ${jobTitle} at ${company}`
             if (resumeContent) {
-                sends.push(sgMail.send({
+                candidateSends.push({
+                    label: 'resume',
+                    promise: sgMail.send({
                     from: FROM_EMAIL,
                     to: email,
                     subject,
@@ -2295,21 +2319,17 @@ Tailor every bullet point to match the target job description — highlight spec
                         documentType: 'resume',
                         title: `Resume for ${jobTitle || 'Role'} at ${company || 'Company'}`,
                     }),
-                }))
-            } else {
-                sends.push(sgMail.send({
-                    from: FROM_EMAIL,
-                    to: email,
-                    subject,
-                    text: `Hi ${candidateGreeting},\n\nYour resume request for ${jobTitle} at ${company} has been received.\n\nWe'll have it ready and sent to your email in minutes!\n\nWander/Work Team`,
-                }))
+                    }),
+                })
             }
         }
 
         if (coverLetter) {
             const subject = `Your Cover Letter for ${jobTitle} at ${company}`
             if (coverLetterContent) {
-                sends.push(sgMail.send({
+                candidateSends.push({
+                    label: 'cover letter',
+                    promise: sgMail.send({
                     from: FROM_EMAIL,
                     to: email,
                     subject,
@@ -2320,15 +2340,34 @@ Tailor every bullet point to match the target job description — highlight spec
                         documentType: 'coverLetter',
                         title: `Cover Letter for ${jobTitle || 'Role'} at ${company || 'Company'}`,
                     }),
-                }))
-            } else {
-                sends.push(sgMail.send({
-                    from: FROM_EMAIL,
-                    to: email,
-                    subject,
-                    text: `Hi ${candidateGreeting},\n\nYour cover letter request for ${jobTitle} at ${company} has been received.\n\nWe'll have it ready and sent to your email in minutes!\n\nWander/Work Team`,
-                }))
+                    }),
+                })
             }
+        }
+
+        const deliveryResults = await Promise.allSettled(candidateSends.map((item) => item.promise))
+        const failedDeliveries = deliveryResults
+            .map((result, index) => ({ result, label: candidateSends[index]?.label }))
+            .filter(({ result }) => result.status === 'rejected')
+
+        if (failedDeliveries.length) {
+            await Candidates.updateOne(
+                { _id: prevCandidate._id },
+                { $inc: { tokenBalance: totalCost, tokensUsed: -totalCost } }
+            )
+            const failedLabels = failedDeliveries.map(({ label }) => label).filter(Boolean)
+            const errorDetails = failedDeliveries
+                .map(({ result, label }) => `${label}: ${result.reason?.response?.body ? JSON.stringify(result.reason.response.body) : result.reason?.message || result.reason}`)
+                .join(' | ')
+            console.error(`[CustomRequest] Email delivery failed for ${email}; credits refunded: ${errorDetails}`)
+            return res.status(502).json({
+                message: `Your materials were generated${application ? ' and saved to Messages' : ''}, but email delivery failed for ${failedLabels.join(' and ')}. Your credits were refunded.`,
+                emailDelivery: { sent: false, failed: failedLabels },
+                tokensRemaining: prevCandidate.tokenBalance ?? totalCost,
+                application,
+                fileFormat,
+                includedFormats: ['rtf', fileFormat],
+            })
         }
 
         const requested = [resume && 'Resume', coverLetter && 'Cover Letter'].filter(Boolean).join(' + ')
@@ -2341,24 +2380,32 @@ Tailor every bullet point to match the target job description — highlight spec
             resumeContent ? `\n== RESUME ==\n${resumeContent}` : '',
             coverLetterContent ? `\n== COVER LETTER ==\n${coverLetterContent}` : '',
         ].filter(Boolean).join('\n')
-        sends.push(sgMail.send({
+        const adminSend = sgMail.send({
             from: FROM_EMAIL,
             to: ADMIN_EMAIL,
             subject: `[Wander/Work] ${requested} Request from ${candidateName}`,
             text: adminBody,
-        }))
+        })
 
         try {
-            await Promise.all(sends)
+            await adminSend
         } catch (e) {
-            console.error('[CustomRequest] Email send failed:', e.message)
+            console.warn('[CustomRequest] Admin notification failed:', e.message)
             // Still return ok — tokens were deducted, content was generated
         }
-    } else {
-        console.warn('[CustomRequest] SendGrid not configured — SENDGRID_API_KEY required')
-    }
 
-    return res.json({ ok: true, tokensRemaining, application, fileFormat, includedFormats: ['rtf', fileFormat] })
+    return res.json({
+        ok: true,
+        tokensRemaining,
+        application,
+        fileFormat,
+        includedFormats: ['rtf', fileFormat],
+        emailDelivery: {
+            sent: true,
+            to: email,
+            documents: candidateSends.map((item) => item.label),
+        },
+    })
 });
 
 const UpdateAllData = asyncHandler(async (req, res) => {

@@ -439,6 +439,7 @@ function App() {
   const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
   const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
+  const [autoOpenCoverLetterJobId, setAutoOpenCoverLetterJobId] = useState<number | null>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [hamburgerHovered, setHamburgerHovered] = useState(false)
   const [logoText, setLogoText] = useState('')
@@ -564,6 +565,7 @@ function App() {
     const match = transformedJobs.find((j: any) => j.backendId === pendingCoverLetterJobId || j.backendId?.toString() === pendingCoverLetterJobId)
     if (match) {
       setSelectedJobId(match.id)
+      setAutoOpenCoverLetterJobId(match.id)
       setPendingCoverLetterJobId(null)
     }
   }, [pendingCoverLetterJobId, transformedJobs])
@@ -607,6 +609,12 @@ function App() {
   })
   const [showPlans, setShowPlans] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+
+  useEffect(() => {
+    if (pendingCoverLetterJobId && !_token) {
+      setShowLogin(true)
+    }
+  }, [pendingCoverLetterJobId, _token])
 
   // Push a history entry when navigating to auth screens so the browser back button
   // returns to the landing page instead of potentially bypassing auth.
@@ -1299,6 +1307,8 @@ function App() {
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                       isAuthenticated={!!_token}
                       onSignUp={() => setShowSignup(true)}
+                      autoOpenCoverLetterJobId={autoOpenCoverLetterJobId}
+                      onAutoOpenCoverLetterHandled={() => setAutoOpenCoverLetterJobId(null)}
                     />
                   </div>
                 </div>
@@ -1316,7 +1326,9 @@ function App() {
                   onNewJobsClick={() => setShowNewOnly(true)}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                   isAuthenticated={!!_token}
-                      onSignUp={() => setShowSignup(true)}
+                  onSignUp={() => setShowSignup(true)}
+                  autoOpenCoverLetterJobId={autoOpenCoverLetterJobId}
+                  onAutoOpenCoverLetterHandled={() => setAutoOpenCoverLetterJobId(null)}
                 />
               )}
             </div>

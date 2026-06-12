@@ -13,8 +13,10 @@ interface CustomJobRequestModalProps {
   jobTitle: string
   company: string
   onClose: () => void
-  onSubmit: (options: CustomJobRequestOptions) => Promise<void> | void
+  onSubmit: (options: CustomJobRequestOptions) => Promise<any> | any
   currentCredits: number
+  initialResume?: boolean
+  initialCoverLetter?: boolean
 }
 
 export default function CustomJobRequestModal({
@@ -22,10 +24,12 @@ export default function CustomJobRequestModal({
   company,
   onClose,
   onSubmit,
-  currentCredits
+  currentCredits,
+  initialResume = false,
+  initialCoverLetter = false
 }: CustomJobRequestModalProps) {
-  const [selectedResume, setSelectedResume] = useState(false)
-  const [selectedCoverLetter, setSelectedCoverLetter] = useState(false)
+  const [selectedResume, setSelectedResume] = useState(initialResume)
+  const [selectedCoverLetter, setSelectedCoverLetter] = useState(initialCoverLetter)
   const [fileFormat, setFileFormat] = useState<CustomDocumentFormat>('pdf')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,8 +45,12 @@ export default function CustomJobRequestModal({
     setError(null)
     setSuccess(null)
     Promise.resolve(onSubmit({ resume: selectedResume, coverLetter: selectedCoverLetter, fileFormat }))
-      .then(() => {
-        setSuccess('Request submitted successfully. You will receive your materials soon.')
+      .then((result) => {
+        const deliveredTo = result?.emailDelivery?.sent ? result?.emailDelivery?.to : ''
+        setSuccess(deliveredTo
+          ? `Request submitted successfully. We emailed your materials to ${deliveredTo}.`
+          : 'Request submitted successfully. Your materials were saved to Messages.'
+        )
         setTimeout(() => {
           onClose()
         }, 1200)

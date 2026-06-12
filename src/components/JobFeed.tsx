@@ -623,7 +623,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
     const nextCredits = result?.tokensRemaining ?? Math.max(0, currentCredits - totalCost)
     setCreditBalanceOverride(nextCredits)
-    setShowCustomRequestModal(null)
+    return result
   }
 
 

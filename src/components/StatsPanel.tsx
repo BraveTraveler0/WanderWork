@@ -19,9 +19,11 @@ interface StatsPanelProps {
   onRecruiterContactsClick?: () => void
   isAuthenticated?: boolean
   onSignUp?: () => void
+  autoOpenCoverLetterJobId?: number | null
+  onAutoOpenCoverLetterHandled?: () => void
 }
 
-const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
   const newJobsCount = allJobs.filter((j: any) => j.hasNewBadge === true).length
@@ -32,6 +34,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const hasBasicProfile = !!(firstCandidate?.firstName?.trim() && firstCandidate?.targetRoles?.length)
   const canOrder = hasUploadedResume && hasBasicProfile
   const [showCustomRequestModal, setShowCustomRequestModal] = useState<{ jobId: string | number; jobTitle: string; company: string; job?: any } | null>(null)
+  const [initialCustomRequest, setInitialCustomRequest] = useState<{ resume?: boolean; coverLetter?: boolean } | null>(null)
   const selectedJobForCompany = jobs?.find((job: any) => job.id === jobId) ?? data?.Jobs?.find((job: any) => job.id === jobId)
   const selectedCompany: string | undefined = selectedJobForCompany?.company
 
@@ -209,6 +212,25 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
     return () => { cancelled = true }
   }, [selectedCompany, firstCandidate?._id])
 
+  useEffect(() => {
+    if (!autoOpenCoverLetterJobId || autoOpenCoverLetterJobId !== jobId) return
+    const selectedJob = jobs?.find((job: any) => job.id === jobId) ||
+      data?.Jobs?.find((job: any) => job.id === jobId) ||
+      selectedJobForCompany
+
+    if (!selectedJob) return
+    if (canOrder) {
+      setInitialCustomRequest({ coverLetter: true })
+      setShowCustomRequestModal({
+        jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
+        jobTitle: selectedJob.title,
+        company: selectedJob.company,
+        job: selectedJob,
+      })
+    }
+    onAutoOpenCoverLetterHandled?.()
+  }, [autoOpenCoverLetterJobId, jobId, jobs, data?.Jobs, selectedJobForCompany, canOrder, onAutoOpenCoverLetterHandled])
+
   const handleCustomRequest = async (options: CustomJobRequestOptions) => {
     if (!showCustomRequestModal) return
     const totalCost = (options.resume ? 1 : 0) + (options.coverLetter ? 1 : 0)
@@ -231,6 +253,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
     // Server handles token deduction atomically and returns the new balance
     const newBalance = result?.tokensRemaining ?? Math.max(0, currentCredits - totalCost)
     setCreditBalanceOverride(newBalance)
+    return result
   }
   
   return (
@@ -652,12 +675,15 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                       className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}
                       style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
                       disabled={!canOrder}
-                      onClick={canOrder ? () => setShowCustomRequestModal({
-                        jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
-                        jobTitle: selectedJob.title,
-                        company: selectedJob.company,
-                        job: selectedJob
-                      }) : undefined}
+                      onClick={canOrder ? () => {
+                        setInitialCustomRequest(null)
+                        setShowCustomRequestModal({
+                          jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
+                          jobTitle: selectedJob.title,
+                          company: selectedJob.company,
+                          job: selectedJob
+                        })
+                      } : undefined}
                     >
                       Get Resume or Cover Letter
                       <span className="arrow-nudge"><ArrowRight size={14} /></span>
@@ -905,9 +931,14 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         <CustomJobRequestModal
           jobTitle={showCustomRequestModal.jobTitle}
           company={showCustomRequestModal.company}
-          onClose={() => setShowCustomRequestModal(null)}
+          onClose={() => {
+            setShowCustomRequestModal(null)
+            setInitialCustomRequest(null)
+          }}
           onSubmit={handleCustomRequest}
           currentCredits={currentCredits}
+          initialResume={Boolean(initialCustomRequest?.resume)}
+          initialCoverLetter={Boolean(initialCustomRequest?.coverLetter)}
         />
       )}
 
