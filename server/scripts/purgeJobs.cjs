@@ -167,8 +167,9 @@ async function purgeJobs() {
     if (!desc) {
       recordHard(job._id, 'no_description'); continue;
     }
-    if (job.date_posted) {
-      const ageDays = (Date.now() - new Date(job.date_posted).getTime()) / 86400000;
+    const dateRef = job.date_posted || job.createdAt;
+    if (dateRef) {
+      const ageDays = (Date.now() - new Date(dateRef).getTime()) / 86400000;
       if (ageDays > 60) {
         recordHard(job._id, 'stale_60d'); continue;
       }
