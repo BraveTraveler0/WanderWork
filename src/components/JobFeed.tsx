@@ -136,6 +136,48 @@ function getJobTime(job: any): number {
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'])
+const CA_PROVINCES = new Set(['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'])
+const AU_STATES = new Set(['NSW','VIC','QLD','WA','SA','TAS','ACT','NT'])
+
+const COUNTRY_PATTERNS: Record<string, RegExp> = {
+  US: /\b(usa|u\.s\.a\.?|united states?|america)\b/i,
+  CA: /\b(canada|canadian|ontario|british columbia|alberta|quebec)\b/i,
+  UK: /\b(uk|u\.k\.?|united kingdom|england|britain|london|manchester|birmingham|edinburgh|glasgow)\b/i,
+  AU: /\b(australia|australian|sydney|melbourne|brisbane|perth|adelaide)\b/i,
+  DE: /\b(germany|german|deutschland|berlin|hamburg|munich|münchen|frankfurt|cologne|köln)\b/i,
+  FR: /\b(france|french|paris|lyon|marseille|toulouse|bordeaux)\b/i,
+  IN: /\b(india|indian|bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune)\b/i,
+}
+
+function detectUserCountry(loc: any): string | null {
+  if (!loc) return null
+  const state = (loc.state || '').trim().toUpperCase()
+  const city = (loc.city || '').toLowerCase().trim()
+  const postal = (loc.postalCode || '').trim()
+  if (US_STATES.has(state) || /^\d{5}(-\d{4})?$/.test(postal)) return 'US'
+  if (CA_PROVINCES.has(state) || /^[A-Z]\d[A-Z]/.test(postal)) return 'CA'
+  if (AU_STATES.has(state)) return 'AU'
+  if (/^(london|manchester|birmingham|leeds|glasgow|liverpool|edinburgh|bristol|sheffield|cardiff|belfast)$/.test(city)) return 'UK'
+  if (/^(berlin|hamburg|munich|münchen|frankfurt|cologne|köln|düsseldorf|stuttgart)$/.test(city)) return 'DE'
+  if (/^(paris|lyon|marseille|toulouse|nice|nantes|bordeaux|strasbourg)$/.test(city)) return 'FR'
+  if (/^(bangalore|bengaluru|mumbai|delhi|hyderabad|chennai|pune|kolkata)$/.test(city)) return 'IN'
+  return null
+}
+
+// 2 = user's country, 1 = remote/neutral, 0 = different country
+function getJobCountryScore(jobLocation: string, userCountry: string): number {
+  if (!jobLocation) return 1
+  const loc = jobLocation.trim()
+  if (/^(remote|worldwide|global|anywhere|virtual|online)$/i.test(loc)) return 1
+  const userPat = COUNTRY_PATTERNS[userCountry]
+  if (userPat?.test(loc)) return 2
+  for (const [c, re] of Object.entries(COUNTRY_PATTERNS)) {
+    if (c !== userCountry && re.test(loc)) return 0
+  }
+  return 1
+}
+
 const JUNK_LOCATION_RE = /^(remote|worldwide|global|anywhere|online|virtual|home|platform|product|engineering|marketing|sales|design|tech|media|data|software|hardware|mobile|web|cloud|human|devops|backend|frontend|fullstack|operations|finance|legal|hr|it|various|multiple|flexible|tbd|na|n\/a|unknown|all|any|other)\b/i
 const isRealLocation = (loc: string): boolean => {
   if (!loc) return false
@@ -327,6 +369,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const candidate = data?.Candidates?.[0]
   const candidateId = candidate?._id
   const candidateLevel = useMemo(() => candidateSeniorityLevel(candidate), [candidate])
+  const userCountry = useMemo(() => detectUserCountry(candidate?.location?.[0]), [candidate?.location?.[0]])
   const candidateKeywords = useMemo(() => {
     const values: string[] = []
     const addValue = (value: any) => {
@@ -522,8 +565,8 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       )
     })
     .sort((a: any, b: any) => {
-      // When searching, rank title matches above description-only matches
       if (searchQuery.trim()) {
+        // When searching: rank title matches above description-only matches
         const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
         const titleScore = (job: any) => {
           const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
@@ -533,10 +576,14 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         }
         const diff = titleScore(b) - titleScore(a)
         if (diff !== 0) return diff
+      } else if (userCountry) {
+        // No search: show user's country first, then remote/neutral, then other countries
+        const diff = getJobCountryScore(b.location, userCountry) - getJobCountryScore(a.location, userCountry)
+        if (diff !== 0) return diff
       }
       return getJobTime(b) - getJobTime(a)
     })
-  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery])
+  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Report the top visible job to the parent whenever the list changes
