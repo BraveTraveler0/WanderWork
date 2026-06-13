@@ -177,6 +177,21 @@ router.post('/webhook', async (req, res) => {
           { $inc: { tokenBalance: tokenQty } },
           { sort: { createdAt: -1 } }
         );
+
+        // Celebration email to founder
+        try {
+          const sgMail = require('@sendgrid/mail');
+          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+          const amountDollars = ((session.amount_total || 0) / 100).toFixed(2);
+          await sgMail.send({
+            to: 'darrienccarter@gmail.com',
+            from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
+            subject: `🎉 Token sale! $${amountDollars} from ${email}`,
+            text: `Someone just bought tokens!\n\nCustomer: ${email}\nTokens: ${tokenQty}\nAmount: $${amountDollars}\n\nKeep it up! 🚀`,
+          });
+        } catch (celebErr) {
+          console.warn('[Stripe] Celebration email failed (non-fatal):', celebErr.message);
+        }
       }
 
       if (email && plan) {
