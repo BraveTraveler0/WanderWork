@@ -146,17 +146,20 @@ async function fetchWorkingNomads(category = null) {
 
 // Each entry is { name, fetch } — Jobicy is called once per geo region
 const SOURCES = [
-  // Remotive — broad mix + targeted non-tech categories
+  // Remotive — broad mix + every category (covers art direction, advertising, graphic design)
   { name: 'Remotive (all)',             fetch: () => fetchRemotive() },
+  { name: 'Remotive (design)',          fetch: () => fetchRemotive('design') },
+  { name: 'Remotive (marketing)',       fetch: () => fetchRemotive('marketing') },
   { name: 'Remotive (finance-legal)',   fetch: () => fetchRemotive('finance-legal') },
   { name: 'Remotive (mgmt-finance)',    fetch: () => fetchRemotive('management-finance') },
   { name: 'Remotive (customer-svc)',    fetch: () => fetchRemotive('customer-service') },
-  { name: 'Remotive (hr)',             fetch: () => fetchRemotive('hr') },
-  { name: 'Remotive (sales)',          fetch: () => fetchRemotive('sales') },
-  { name: 'Remotive (marketing)',      fetch: () => fetchRemotive('marketing') },
-  { name: 'Remotive (writing)',        fetch: () => fetchRemotive('writing') },
-  { name: 'Remotive (product)',        fetch: () => fetchRemotive('product') },
-  { name: 'Remotive (data)',           fetch: () => fetchRemotive('data') },
+  { name: 'Remotive (hr)',              fetch: () => fetchRemotive('hr') },
+  { name: 'Remotive (sales)',           fetch: () => fetchRemotive('sales') },
+  { name: 'Remotive (writing)',         fetch: () => fetchRemotive('writing') },
+  { name: 'Remotive (product)',         fetch: () => fetchRemotive('product') },
+  { name: 'Remotive (data)',            fetch: () => fetchRemotive('data') },
+  { name: 'Remotive (devops)',          fetch: () => fetchRemotive('devops-sysadmin') },
+  { name: 'Remotive (all-others)',      fetch: () => fetchRemotive('all-others') },
 
   // Jobicy — geo-based (returns all industries per region)
   { name: 'Jobicy (USA)',        fetch: () => fetchJobicyGeo('usa') },
@@ -185,6 +188,7 @@ const SOURCES = [
   { name: 'WorkingNomads (writing)',     fetch: () => fetchWorkingNomads('content') },
   { name: 'WorkingNomads (design)',      fetch: () => fetchWorkingNomads('design') },
   { name: 'WorkingNomads (ux)',          fetch: () => fetchWorkingNomads('ux') },
+  { name: 'WorkingNomads (seo)',         fetch: () => fetchWorkingNomads('seo') },
 ];
 
 async function importRemoteJobs() {
