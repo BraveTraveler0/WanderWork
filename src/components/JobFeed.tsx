@@ -1042,9 +1042,18 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
         {!isAuthenticated && (
           <div className="flex flex-col items-center gap-3 py-10 px-6">
-            <p className="text-[13px] text-center" style={{ color: '#787878', fontFamily: 'Manrope' }}>
-              Sign in to see hundreds more remote jobs matched to your profile.
-            </p>
+            <div className="flex flex-col gap-2 text-center max-w-[340px]">
+              <p className="text-[14px] font-semibold" style={{ color: '#306770', fontFamily: 'Manrope' }}>
+                Sign up to unlock everything.
+              </p>
+              <div className="flex flex-col gap-1">
+                {['Get paired with jobs automatically', 'Custom resumes and cover letters', 'Connect directly with recruiters'].map(item => (
+                  <p key={item} className="text-[12px]" style={{ color: '#787878', fontFamily: 'Manrope' }}>
+                    ✓ {item}
+                  </p>
+                ))}
+              </div>
+            </div>
             <button
               onClick={() => onSignIn?.()}
               style={{
