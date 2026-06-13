@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { importRemoteJobs } = require('../scripts/importRemoteJobs.cjs');
 const { importAtsJobs } = require('../scripts/importAtsJobs.cjs');
 const { cleanNewJobs } = require('../scripts/cleanJobDescriptions.cjs');
+const { tagRecruiterJobs } = require('../scripts/tagRecruiterJobs.cjs');
 
 // Every 6 hours: midnight, 6am, noon, 6pm UTC
 const SCHEDULE = '0 0,6,12,18 * * *';
@@ -19,6 +20,8 @@ async function runImport() {
     try { await importAtsJobs(); } catch (e) { console.warn('[RemoteJobs] ATS import error:', e.message); }
     // Clean descriptions for any newly added jobs
     try { await cleanNewJobs(); } catch (e) { console.warn('[RemoteJobs] Clean error:', e.message); }
+    // Re-pair recruiter companies with jobs so new jobs get tagged immediately
+    try { await tagRecruiterJobs(); } catch (e) { console.warn('[RemoteJobs] Recruiter tag error:', e.message); }
     // Bust the in-memory job cache so new jobs show within the next request
     try {
       const ctrl = require('../controllers/JobSeeker/jobSeekerController');

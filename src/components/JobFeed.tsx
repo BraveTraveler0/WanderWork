@@ -587,8 +587,11 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       )
     })
     .sort((a: any, b: any) => {
+      // Composite quality score used in both search and default modes
+      const qualityScore = (job: any) => (job.has_recruiter ? 2 : 0) + (job.ats_direct ? 1 : 0)
+
       if (searchQuery.trim()) {
-        // When searching: rank title matches above description-only matches
+        // When searching: title match first, then quality score, then recency
         const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
         const titleScore = (job: any) => {
           const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
@@ -596,14 +599,16 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           const anyInTitle = terms.some(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
           return allInTitle ? 2 : anyInTitle ? 1 : 0
         }
-        const diff = titleScore(b) - titleScore(a)
-        if (diff !== 0) return diff
+        const titleDiff = titleScore(b) - titleScore(a)
+        if (titleDiff !== 0) return titleDiff
+        // Within same title-match tier, recruiter-linked and ATS-direct rise
+        const qDiff = qualityScore(b) - qualityScore(a)
+        if (qDiff !== 0) return qDiff
       } else {
-        // ATS-direct jobs always float to top — these support autofill
-        const atsDiff = (b.ats_direct ? 1 : 0) - (a.ats_direct ? 1 : 0)
-        if (atsDiff !== 0) return atsDiff
+        // Default: recruiter-linked jobs first, then ATS-direct, then country score
+        const qDiff = qualityScore(b) - qualityScore(a)
+        if (qDiff !== 0) return qDiff
         if (userCountry) {
-          // Then show user's country first, then remote/neutral, then other countries/languages
           const diff = getJobCountryScore(b, userCountry) - getJobCountryScore(a, userCountry)
           if (diff !== 0) return diff
         }
