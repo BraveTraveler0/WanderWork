@@ -2617,17 +2617,10 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 const getFeaturedJobs = asyncHandler(async (req, res) => {
     const all = await getAllJobsPure();
-    const cutoff = Date.now() - THIRTY_DAYS_MS;
+    const now = Date.now();
 
     const scored = [];
     for (const job of all) {
-        // Must be within the last 30 days
-        const raw = job.date_posted || job.datePosted || job.postedAt || job.postedDate;
-        if (raw) {
-            const ts = new Date(raw).getTime();
-            if (!Number.isNaN(ts) && ts < cutoff) continue;
-        }
-
         // Hard excludes: must have a real title, company, and URL
         const title = String(job.title || job.job_title || job.name || '').trim();
         const company = String(job.company || '').trim();
@@ -2648,8 +2641,19 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         const skillCount = Array.isArray(job.skills) ? job.skills.length : 0;
         if (skillCount >= 3) score += 1;
         if (/greenhouse|lever|workday|ashby|smartrecruiters|icims|jobvite|breezy/i.test(src)) score += 2;
-        score += Math.random() * 0.5;
 
+        // Recency bonus based on posting date (not a hard filter)
+        const raw = job.date_posted || job.datePosted || job.postedAt || job.postedDate;
+        if (raw) {
+            const ts = new Date(raw).getTime();
+            if (!Number.isNaN(ts)) {
+                const daysOld = (now - ts) / (1000 * 60 * 60 * 24);
+                if (daysOld <= 7) score += 2;
+                else if (daysOld <= 30) score += 1;
+            }
+        }
+
+        score += Math.random() * 0.5;
         scored.push({ job, score });
     }
 
