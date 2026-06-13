@@ -55,8 +55,10 @@ function get(url, opts = {}) {
 
 // ── Source fetchers ───────────────────────────────────────────────────────────
 
-async function fetchRemotive() {
-  const res = await get('https://remotive.com/api/remote-jobs', { params: { limit: 100 } });
+async function fetchRemotive(category = null) {
+  const params = { limit: 100 };
+  if (category) params.category = category;
+  const res = await get('https://remotive.com/api/remote-jobs', { params });
   return (res.data?.jobs || []).map(j => ({
     title: stripHtml(j.title),
     company: stripHtml(j.company_name),
@@ -121,8 +123,10 @@ async function fetchArbeitnow() {
   }));
 }
 
-async function fetchWorkingNomads() {
-  const res = await get('https://www.workingnomads.com/api/exposed_jobs/', { params: { limit: 100 } });
+async function fetchWorkingNomads(category = null) {
+  const params = { limit: 50 };
+  if (category) params.category = category;
+  const res = await get('https://www.workingnomads.com/api/exposed_jobs/', { params });
   const raw = Array.isArray(res.data) ? res.data : (res.data?.jobs || []);
   return raw.map(j => ({
     title: stripHtml(j.title),
@@ -142,7 +146,19 @@ async function fetchWorkingNomads() {
 
 // Each entry is { name, fetch } — Jobicy is called once per geo region
 const SOURCES = [
-  { name: 'Remotive',            fetch: fetchRemotive },
+  // Remotive — broad mix + targeted non-tech categories
+  { name: 'Remotive (all)',             fetch: () => fetchRemotive() },
+  { name: 'Remotive (finance-legal)',   fetch: () => fetchRemotive('finance-legal') },
+  { name: 'Remotive (mgmt-finance)',    fetch: () => fetchRemotive('management-finance') },
+  { name: 'Remotive (customer-svc)',    fetch: () => fetchRemotive('customer-service') },
+  { name: 'Remotive (hr)',             fetch: () => fetchRemotive('hr') },
+  { name: 'Remotive (sales)',          fetch: () => fetchRemotive('sales') },
+  { name: 'Remotive (marketing)',      fetch: () => fetchRemotive('marketing') },
+  { name: 'Remotive (writing)',        fetch: () => fetchRemotive('writing') },
+  { name: 'Remotive (product)',        fetch: () => fetchRemotive('product') },
+  { name: 'Remotive (data)',           fetch: () => fetchRemotive('data') },
+
+  // Jobicy — geo-based (returns all industries per region)
   { name: 'Jobicy (USA)',        fetch: () => fetchJobicyGeo('usa') },
   { name: 'Jobicy (Europe)',     fetch: () => fetchJobicyGeo('europe') },
   { name: 'Jobicy (UK)',         fetch: () => fetchJobicyGeo('uk') },
@@ -150,9 +166,25 @@ const SOURCES = [
   { name: 'Jobicy (Latin Am.)', fetch: () => fetchJobicyGeo('latam') },
   { name: 'Jobicy (Canada)',    fetch: () => fetchJobicyGeo('canada') },
   { name: 'Jobicy (Australia)', fetch: () => fetchJobicyGeo('australia') },
-  { name: 'RemoteOK',            fetch: fetchRemoteOK },
-  { name: 'Arbeitnow',          fetch: fetchArbeitnow },
-  { name: 'WorkingNomads',      fetch: fetchWorkingNomads },
+
+  // RemoteOK & Arbeitnow — general remote boards
+  { name: 'RemoteOK',   fetch: fetchRemoteOK },
+  { name: 'Arbeitnow',  fetch: fetchArbeitnow },
+
+  // Working Nomads — category-specific for non-tech roles
+  { name: 'WorkingNomads (dev)',         fetch: () => fetchWorkingNomads('back-end-programming') },
+  { name: 'WorkingNomads (frontend)',    fetch: () => fetchWorkingNomads('front-end-programming') },
+  { name: 'WorkingNomads (accounting)',  fetch: () => fetchWorkingNomads('accounting') },
+  { name: 'WorkingNomads (finance)',     fetch: () => fetchWorkingNomads('finance') },
+  { name: 'WorkingNomads (legal)',       fetch: () => fetchWorkingNomads('legal') },
+  { name: 'WorkingNomads (customer)',    fetch: () => fetchWorkingNomads('customer-support') },
+  { name: 'WorkingNomads (sales)',       fetch: () => fetchWorkingNomads('sales') },
+  { name: 'WorkingNomads (marketing)',   fetch: () => fetchWorkingNomads('marketing') },
+  { name: 'WorkingNomads (management)',  fetch: () => fetchWorkingNomads('management') },
+  { name: 'WorkingNomads (proj-mgmt)',   fetch: () => fetchWorkingNomads('project-management') },
+  { name: 'WorkingNomads (writing)',     fetch: () => fetchWorkingNomads('content') },
+  { name: 'WorkingNomads (design)',      fetch: () => fetchWorkingNomads('design') },
+  { name: 'WorkingNomads (ux)',          fetch: () => fetchWorkingNomads('ux') },
 ];
 
 async function importRemoteJobs() {
