@@ -1014,6 +1014,8 @@ async function getAllJobsPure() {
 
     const filtered = jobs.filter((job) => {
         if (isJunkJobRecord(job)) return false
+        const jobUrl = String(job.url || job.apply_url || '')
+        if (/linkedin\.com/i.test(jobUrl)) return false
         const ts = parseJobDate(job);
         if (!ts) return true;
         return ts >= cutoff;
