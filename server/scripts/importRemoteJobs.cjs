@@ -33,8 +33,16 @@ function truncateDesc(text) {
 function normalizeLocation(loc) {
   if (!loc) return 'Remote';
   const l = stripHtml(loc).trim();
-  if (!l || /remote|worldwide|anywhere|global/i.test(l)) return 'Remote';
+  if (!l || /remote|worldwide|anywhere|global|^-$/i.test(l)) return 'Remote';
   return l.replace(/\s+\d{5}(-\d{4})?$/, '').trim();
+}
+
+function formatSalary(min, max, currency = 'USD', period = 'yearly') {
+  const sym = currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
+  const fmt = n => Number(n).toLocaleString();
+  if (min && max) return `${sym}${fmt(min)} - ${sym}${fmt(max)} / ${period === 'yearly' ? 'year' : period}`;
+  if (min) return `${sym}${fmt(min)}+ / year`;
+  return 'Not Listed';
 }
 
 function get(url, opts = {}) {
@@ -63,60 +71,48 @@ async function fetchRemotive() {
   }));
 }
 
-async function fetchJobicy() {
-  const res = await get('https://jobicy.com/api/v2/remote-jobs', { params: { count: 50 } });
-  return (res.data?.jobs || []).map(j => {
-    const min = j.annualSalaryMin, max = j.annualSalaryMax, cur = j.salaryCurrency || 'USD';
-    const salary = min && max ? `${cur} ${Number(min).toLocaleString()} - ${Number(max).toLocaleString()} / year`
-      : min ? `${cur} ${Number(min).toLocaleString()}+ / year`
-      : 'Not Listed';
-    return {
-      title: stripHtml(j.jobTitle),
-      company: stripHtml(j.companyName),
-      url: j.url,
-      salary,
-      location: normalizeLocation(j.jobGeo),
-      job_type: j.jobType || 'Full-time',
-      date_posted: j.pubDate ? new Date(j.pubDate) : new Date(),
-      description_short: truncateDesc(j.jobDescription),
-      source: 'Jobicy',
-      tags: Array.isArray(j.jobIndustry) ? j.jobIndustry : [],
-    };
-  });
+// Jobicy supports geo: usa, europe, uk, canada, australia, latin-america, asia, worldwide
+async function fetchJobicyGeo(geo) {
+  const res = await get('https://jobicy.com/api/v2/remote-jobs', { params: { count: 50, geo } });
+  return (res.data?.jobs || []).map(j => ({
+    title: stripHtml(j.jobTitle),
+    company: stripHtml(j.companyName),
+    url: j.url,
+    salary: formatSalary(j.salaryMin, j.salaryMax, j.salaryCurrency, j.salaryPeriod),
+    location: normalizeLocation(j.jobGeo),
+    job_type: Array.isArray(j.jobType) ? j.jobType.join(', ') : (j.jobType || 'Full-time'),
+    date_posted: j.pubDate ? new Date(j.pubDate) : new Date(),
+    description_short: truncateDesc(j.jobDescription),
+    source: 'Jobicy',
+    tags: Array.isArray(j.jobIndustry) ? j.jobIndustry : [],
+  }));
 }
 
 async function fetchRemoteOK() {
   const res = await get('https://remoteok.com/api');
   const raw = Array.isArray(res.data) ? res.data.slice(1) : [];
-  return raw.map(j => {
-    const salary = j.salary_min && j.salary_max
-      ? `$${Number(j.salary_min).toLocaleString()} - $${Number(j.salary_max).toLocaleString()} / year`
-      : j.salary_min ? `$${Number(j.salary_min).toLocaleString()}+ / year`
-      : 'Not Listed';
-    return {
-      title: stripHtml(j.position),
-      company: stripHtml(j.company),
-      url: j.url || `https://remoteok.com/l/${j.slug}`,
-      salary,
-      location: 'Remote',
-      job_type: 'Full-time',
-      date_posted: j.epoch ? new Date(Number(j.epoch) * 1000) : new Date(),
-      description_short: truncateDesc(j.description),
-      source: 'RemoteOK',
-      tags: Array.isArray(j.tags) ? j.tags.slice(0, 10) : [],
-    };
-  });
+  return raw.map(j => ({
+    title: stripHtml(j.position),
+    company: stripHtml(j.company),
+    url: j.url || `https://remoteok.com/l/${j.slug}`,
+    salary: formatSalary(j.salary_min, j.salary_max),
+    location: 'Remote',
+    job_type: 'Full-time',
+    date_posted: j.epoch ? new Date(Number(j.epoch) * 1000) : new Date(),
+    description_short: truncateDesc(j.description),
+    source: 'RemoteOK',
+    tags: Array.isArray(j.tags) ? j.tags.slice(0, 10) : [],
+  }));
 }
 
 async function fetchArbeitnow() {
   const res = await get('https://www.arbeitnow.com/api/job-board-api');
-  const jobs = (res.data?.data || []).filter(j => j.remote);
-  return jobs.map(j => ({
+  return (res.data?.data || []).filter(j => j.remote).map(j => ({
     title: stripHtml(j.title),
     company: stripHtml(j.company_name),
     url: j.url,
     salary: 'Not Listed',
-    location: 'Remote',
+    location: normalizeLocation(j.location) || 'Remote',
     job_type: Array.isArray(j.job_types) && j.job_types.length ? j.job_types.join(', ') : 'Full-time',
     date_posted: j.created_at ? new Date(Number(j.created_at) * 1000) : new Date(),
     description_short: truncateDesc(j.description),
@@ -125,13 +121,37 @@ async function fetchArbeitnow() {
   }));
 }
 
+async function fetchWorkingNomads() {
+  const res = await get('https://www.workingnomads.com/api/exposed_jobs/', { params: { limit: 100 } });
+  const raw = Array.isArray(res.data) ? res.data : (res.data?.jobs || []);
+  return raw.map(j => ({
+    title: stripHtml(j.title),
+    company: stripHtml(j.company_name),
+    url: j.url,
+    salary: 'Not Listed',
+    location: normalizeLocation(j.location),
+    job_type: j.job_type || 'Full-time',
+    date_posted: j.pub_date ? new Date(j.pub_date) : new Date(),
+    description_short: truncateDesc(j.description),
+    source: 'WorkingNomads',
+    tags: j.tags ? String(j.tags).split(',').map(t => t.trim()).filter(Boolean).slice(0, 10) : [],
+  }));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+// Each entry is { name, fetch } — Jobicy is called once per geo region
 const SOURCES = [
-  { name: 'Remotive',  fetch: fetchRemotive  },
-  { name: 'Jobicy',    fetch: fetchJobicy    },
-  { name: 'RemoteOK',  fetch: fetchRemoteOK  },
-  { name: 'Arbeitnow', fetch: fetchArbeitnow },
+  { name: 'Remotive',            fetch: fetchRemotive },
+  { name: 'Jobicy (USA)',        fetch: () => fetchJobicyGeo('usa') },
+  { name: 'Jobicy (Europe)',     fetch: () => fetchJobicyGeo('europe') },
+  { name: 'Jobicy (UK)',         fetch: () => fetchJobicyGeo('uk') },
+  { name: 'Jobicy (Asia)',       fetch: () => fetchJobicyGeo('asia') },
+  { name: 'Jobicy (Latin Am.)', fetch: () => fetchJobicyGeo('latin-america') },
+  { name: 'Jobicy (Worldwide)', fetch: () => fetchJobicyGeo('worldwide') },
+  { name: 'RemoteOK',            fetch: fetchRemoteOK },
+  { name: 'Arbeitnow',          fetch: fetchArbeitnow },
+  { name: 'WorkingNomads',      fetch: fetchWorkingNomads },
 ];
 
 async function importRemoteJobs() {
