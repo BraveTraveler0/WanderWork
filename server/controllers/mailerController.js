@@ -70,6 +70,30 @@ const reportBug = asyncHandler(async (req, res) => {
     return res.status(201).json({ message: 'Thank you! Your bug report has been received and we are investigating further!' });
 });
 
+const joinTeam = asyncHandler(async (req, res) => {
+    const { name = '', email = '', role = '', message = '' } = req.body || {};
+
+    if (!name || !email || !role) {
+        return res.status(400).json({ message: 'name, email, and role are required' });
+    }
+
+    console.log(`[JoinTeam] From: ${name} <${email}> | Role: ${role}`);
+
+    try {
+        await sgMail.send({
+            to: 'darrienccarter@gmail.com',
+            from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
+            replyTo: email,
+            subject: `Join Our Team Application - ${role}`,
+            text: `New team application\n\nName: ${name}\nEmail: ${email}\nRole: ${role}\n\nMessage:\n${message || '(none)'}`,
+        });
+    } catch (emailErr) {
+        console.error('[JoinTeam] Email send failed (non-fatal):', emailErr?.message || emailErr);
+    }
+
+    return res.status(201).json({ message: 'Application received!' });
+});
+
 // @desc Get all mailer users
 // @route GET /users
 // @access Private
@@ -145,5 +169,6 @@ module.exports = {
     getAllMailer,
     createNewMailer,
     deleteMailer,
-    reportBug
+    reportBug,
+    joinTeam
 }

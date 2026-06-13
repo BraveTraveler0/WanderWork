@@ -15,6 +15,7 @@ import PlansPage from './components/PlansPage'
 import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
+import JoinTeamPage from './components/JoinTeamPage'
 import { API_BASE_URL } from './api/config'
 import {
   getAllJobSeekerData,
@@ -484,7 +485,7 @@ function App() {
   const [topVisibleJobId, setTopVisibleJobId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug'>('dashboard')
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>('dashboard')
   const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
   const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
@@ -1097,6 +1098,7 @@ function App() {
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
     { label: 'Report a Bug',    action: () => { setCurrentPage('reportbug'); setShowMenu(false) } },
+    { label: 'Join Our Team!',  action: () => { setCurrentPage('jointeam'); setShowMenu(false) } },
     { label: 'Sign Out',        action: () => {
       clearLocalAuth()
       setShowLogin(false)
@@ -1202,6 +1204,10 @@ function App() {
 
   if (currentPage === 'reportbug') {
     return <ReportBugPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
+  }
+
+  if (currentPage === 'jointeam') {
+    return <JoinTeamPage onBack={() => setCurrentPage('dashboard')} />
   }
 
   if (currentPage === 'privacy') {

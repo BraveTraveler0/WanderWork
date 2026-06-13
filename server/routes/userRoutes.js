@@ -19,6 +19,9 @@ router.route('/waitlist')
 router.route('/bugreport')
     .post(mailerController.reportBug)
 
+router.route('/jointeam')
+    .post(mailerController.joinTeam)
+
 router.route('/career')
     .post(usersController.createCareerCandidate)
 
