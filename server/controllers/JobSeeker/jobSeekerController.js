@@ -2615,6 +2615,19 @@ const JUNK_SALARY_RE = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|se
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Non-ASCII chars common in European languages (German umlauts, French accents, Spanish ñ, etc.)
+const NON_ENGLISH_CHARS_RE = /[äöüßéèêëàâçñïîùûœæøåãõ]/i;
+// Common function words that only appear in German, French, Spanish, Italian, Dutch, Portuguese
+const NON_ENGLISH_WORDS_RE = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|ihrer|ihrer|bewirb|dich|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|para|cargo|é|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|degli|degli|lavoro|siamo|cerchiamo|offerta)\b/i;
+
+function isLikelyEnglish(text) {
+    if (!text) return true;
+    const t = String(text);
+    if (NON_ENGLISH_CHARS_RE.test(t)) return false;
+    if (NON_ENGLISH_WORDS_RE.test(t)) return false;
+    return true;
+}
+
 const getFeaturedJobs = asyncHandler(async (req, res) => {
     const all = await getAllJobsPure();
     const now = Date.now();
@@ -2628,8 +2641,11 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         if (!company || company === 'Unknown') continue;
         if (!job.url && !job.apply_url && !job.applyUrl) continue;
 
-        const src = String(job.source || '').toLowerCase();
+        // English-only for the public guest feed
         const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
+        if (!isLikelyEnglish(title) || !isLikelyEnglish(desc)) continue;
+
+        const src = String(job.source || '').toLowerCase();
         const salary = String(job.salary || '').trim();
         const hasSalary = salary && !JUNK_SALARY_RE.test(salary) && SALARY_NUM_RE.test(salary);
 

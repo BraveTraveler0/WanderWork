@@ -35,6 +35,15 @@ import { deleteAccount } from './api/users'
 const API_BASE = API_BASE_URL
 const NEW_JOB_WINDOW_DAYS = 30
 
+const NON_ENGLISH_CHARS = /[äöüßéèêëàâçñïîùûœæøåãõ]/i
+const NON_ENGLISH_WORDS = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|bewirb|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|cargo|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|lavoro|siamo|cerchiamo|offerta)\b/i
+const isLikelyEnglish = (text: string) => {
+  if (!text) return true
+  if (NON_ENGLISH_CHARS.test(text)) return false
+  if (NON_ENGLISH_WORDS.test(text)) return false
+  return true
+}
+
 const parseJobDate = (value: unknown): Date | null => {
   if (!value) return null
   const parsed = new Date(value as any)
@@ -727,7 +736,11 @@ function App() {
         return r.json()
       })
       .then(data => {
-        const jobs = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
+        const jobs = (Array.isArray(data) ? data : (data?.Jobs || data?.jobs || []))
+          .filter((j: any) => {
+            const t = String(j.title || ''); const d = String(j.description_short || j.shortDescription || j.description || '')
+            return isLikelyEnglish(t) && isLikelyEnglish(d)
+          })
         setPublicJobs(mapJobs(jobs))
       })
       .catch(() =>
@@ -746,6 +759,8 @@ function App() {
                 }
                 const title = String(j.title || j.positionName || '').trim()
                 const company = String(j.company || '').trim()
+                const descText = String(j.description_short || j.shortDescription || j.description || '')
+                if (!isLikelyEnglish(title) || !isLikelyEnglish(descText)) return false
                 return title && title !== 'Untitled' && company && company !== 'Unknown' && (j.url || j.apply_url)
               })
               .map(j => {
