@@ -207,6 +207,15 @@ function getJobTime(job: any): number {
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
+const JUNK_LOCATION_RE = /^(remote|worldwide|global|anywhere|online|virtual|home|platform|product|engineering|marketing|sales|design|tech|media|data|software|hardware|mobile|web|cloud|human|devops|backend|frontend|fullstack|operations|finance|legal|hr|it|various|multiple|flexible|tbd|na|n\/a|unknown|all|any|other)\b/i
+const isRealLocation = (loc: string): boolean => {
+  if (!loc) return false
+  const t = loc.trim()
+  if (t.length < 2) return false
+  if (JUNK_LOCATION_RE.test(t)) return false
+  return /^[A-Z]/.test(t) // proper noun — real city names are capitalized
+}
+
 const LOW_LEVEL_JOB_RE = /\b(junior|jr|entry level|intern|internship|apprentice|apprenticeship|trainee|new grad|new graduate|early career|campus|student|co op|fellowship)\b/
 
 const SENIORITY_TIERS = [
@@ -1310,10 +1319,12 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
             <div className="text-left sm:text-right" style={{ color: '#787878' }}>
               <p className="text-[12px] mb-2">{formatPostedDate(postedAt ?? rawDate)}</p>
               <p className="text-[14px] sm:text-[16px] mb-2 line-clamp-1 max-w-[160px] sm:max-w-[180px] sm:ml-auto">{company}</p>
-              {location && !/^remote$/i.test(location.trim()) && (
-                <p className="text-[10px] truncate max-w-[140px] sm:ml-auto">Based in {location}</p>
-              )}
-              <p className="text-[10px] sm:ml-auto" style={{ color: '#306770' }}>Remote</p>
+              <div className="mt-2">
+                {isRealLocation(location) && (
+                  <p className="text-[10px] truncate max-w-[140px] sm:ml-auto">Based in {location}</p>
+                )}
+                <p className="text-[10px] sm:ml-auto" style={{ color: '#306770' }}>Remote</p>
+              </div>
             </div>
           </div>
 
