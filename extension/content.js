@@ -86,7 +86,7 @@ function injectWidget(profile) {
   // ── Autofill button ──────────────────────────────────────────────────────
   const autofillBtn = document.createElement('button');
   autofillBtn.id = 'ww-autofill-btn';
-  autofillBtn.textContent = 'Wander/Work Autofill';
+  autofillBtn.innerHTML = '⚡ Wander/Work Autofill';
   Object.assign(autofillBtn.style, {
     background: '#306770', color: '#fff', border: 'none', borderRadius: '24px',
     padding: '10px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
@@ -97,10 +97,10 @@ function injectWidget(profile) {
   autofillBtn.addEventListener('mouseleave', () => { autofillBtn.style.background = '#306770'; autofillBtn.style.transform = 'scale(1)'; });
   autofillBtn.addEventListener('click', () => {
     const count = autofill(profile);
-    autofillBtn.textContent = count > 0 ? `✓ Filled ${count} fields` : '⚠ No fields found';
+    autofillBtn.innerHTML = count > 0 ? `✓ Filled ${count} fields` : '⚠ No fields found';
     autofillBtn.style.background = count > 0 ? '#27ae60' : '#c0392b';
     setTimeout(() => {
-      autofillBtn.textContent = 'Wander/Work Autofill';
+      autofillBtn.innerHTML = '⚡ Wander/Work Autofill';
       autofillBtn.style.background = '#306770';
     }, 2500);
   });
@@ -184,13 +184,16 @@ function injectWidget(profile) {
   panel.append(panelTitle, jobInfo, resumeRow, clRow, statusMsg, sendBtn);
 
   // ── Toggle button ────────────────────────────────────────────────────────
+  const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`;
+
   const docBtn = document.createElement('button');
-  docBtn.textContent = 'Get Resume / Cover Letter';
+  docBtn.innerHTML = `${SPARKLES_SVG}Get Resume / Cover Letter`;
   Object.assign(docBtn.style, {
     background: '#fff', color: '#306770', border: '1.5px solid #306770',
     borderRadius: '24px', padding: '8px 16px', fontSize: '12px', fontWeight: '700',
     cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
     transition: 'background 0.15s, color 0.15s, transform 0.1s', whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center',
   });
   docBtn.addEventListener('mouseenter', () => { docBtn.style.background = '#306770'; docBtn.style.color = '#fff'; docBtn.style.transform = 'scale(1.03)'; });
   docBtn.addEventListener('mouseleave', () => { docBtn.style.background = '#fff'; docBtn.style.color = '#306770'; docBtn.style.transform = 'scale(1)'; });
@@ -205,7 +208,8 @@ function injectWidget(profile) {
     if (!panel.contains(e.target) && e.target !== docBtn) panel.style.display = 'none';
   });
 
-  widget.append(panel, docBtn, autofillBtn);
+  // autofillBtn on top, docBtn on bottom (closest to screen edge)
+  widget.append(panel, autofillBtn, docBtn);
   document.body.appendChild(widget);
 }
 
