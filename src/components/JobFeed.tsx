@@ -590,10 +590,15 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         }
         const diff = titleScore(b) - titleScore(a)
         if (diff !== 0) return diff
-      } else if (userCountry) {
-        // No search: show user's country first, then remote/neutral, then other countries/languages
-        const diff = getJobCountryScore(b, userCountry) - getJobCountryScore(a, userCountry)
-        if (diff !== 0) return diff
+      } else {
+        // ATS-direct jobs always float to top — these support autofill
+        const atsDiff = (b.ats_direct ? 1 : 0) - (a.ats_direct ? 1 : 0)
+        if (atsDiff !== 0) return atsDiff
+        if (userCountry) {
+          // Then show user's country first, then remote/neutral, then other countries/languages
+          const diff = getJobCountryScore(b, userCountry) - getJobCountryScore(a, userCountry)
+          if (diff !== 0) return diff
+        }
       }
       return getJobTime(b) - getJobTime(a)
     })

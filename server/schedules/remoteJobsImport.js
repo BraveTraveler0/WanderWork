@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { importRemoteJobs } = require('../scripts/importRemoteJobs.cjs');
+const { importAtsJobs } = require('../scripts/importAtsJobs.cjs');
 const { cleanNewJobs } = require('../scripts/cleanJobDescriptions.cjs');
 
 // Every 6 hours: midnight, 6am, noon, 6pm UTC
@@ -14,6 +15,8 @@ async function runImport() {
     console.log('[RemoteJobs] Starting scheduled import...');
     const result = await importRemoteJobs();
     console.log('[RemoteJobs] Import complete:', result);
+    // Direct ATS import — runs after so slugs discovered from remoteJobs are available
+    try { await importAtsJobs(); } catch (e) { console.warn('[RemoteJobs] ATS import error:', e.message); }
     // Clean descriptions for any newly added jobs
     try { await cleanNewJobs(); } catch (e) { console.warn('[RemoteJobs] Clean error:', e.message); }
     // Bust the in-memory job cache so new jobs show within the next request

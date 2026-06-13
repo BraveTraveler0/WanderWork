@@ -977,7 +977,7 @@ const JOB_PROJECTION = {
     salary: 1,
     date_posted: 1, datePosted: 1, postedAt: 1, postedDate: 1, rawDate: 1, preparedAt: 1,
     url: 1, apply_url: 1, applyUrl: 1, company_url: 1,
-    source: 1, job_code: 1, job_id: 1, lang: 1,
+    source: 1, job_code: 1, job_id: 1, lang: 1, ats_direct: 1, ats: 1,
     interested: 1, hasNewBadge: 1,
 }
 
