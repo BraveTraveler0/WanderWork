@@ -7,9 +7,9 @@ const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 const { requireAuth } = require('../middleware/requireAuth');
 
-// Content scripts run in the page's origin context (e.g. greenhouse.io, lever.co),
-// not chrome-extension://, so the global CORS config blocks them.
-// All /extension routes are key-authenticated — wildcard origin is safe here.
+// This router is mounted BEFORE global CORS in server.js so content scripts
+// calling from ATS origins (greenhouse.io, lever.co, etc.) aren't rejected.
+// Wildcard origin is safe because every route requires x-extension-key auth.
 const extensionCors = cors({
   origin: '*',
   allowedHeaders: ['Content-Type', 'x-extension-key'],
@@ -17,6 +17,9 @@ const extensionCors = cors({
 });
 router.use(extensionCors);
 router.options('*', extensionCors);
+
+// Body parser — must be local because this router runs before global express.json()
+router.use(express.json({ limit: '1mb' }));
 
 function normalizeCompany(s) {
   return String(s || '').toLowerCase()

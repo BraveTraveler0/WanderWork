@@ -50,6 +50,12 @@ const checkConnection = async (req, res, next) => {
 // Stripe webhook must receive the raw body before express.json() parses it
 app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
 
+// Extension routes must be mounted BEFORE global CORS. Content scripts call from ATS origins
+// (boards.greenhouse.io, jobs.lever.co, etc.) which are not in allowedOrigins. The global CORS
+// middleware would reject their OPTIONS preflights before our route-level wildcard CORS runs.
+// Moving extension routes first lets them handle their own CORS with no interference.
+app.use('/extension', require('./routes/extensionRoutes'));
+
 const defaultAllowedOrigins = [
   'https://wanderwork.io',
   'https://www.wanderwork.io',
@@ -178,7 +184,6 @@ const routes = {
   '/sync': './routes/sync',
   '/tally': './routes/tallyWebhook',
   '/oauth': './routes/oauthRoutes',
-  '/extension': './routes/extensionRoutes'
 };
 
 // Register routes
