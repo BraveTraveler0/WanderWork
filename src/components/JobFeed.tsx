@@ -153,6 +153,7 @@ interface JobFeedProps {
   loading?: boolean
   isAuthenticated?: boolean
   onSignIn?: () => void
+  onTopJobChange?: (id: number | null) => void
 }
 
 const BATCH = 15
@@ -255,7 +256,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -610,6 +611,11 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
   , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
+
+  // Report the top visible job to the parent whenever the list changes
+  useEffect(() => {
+    onTopJobChange?.(visibleJobs[0]?.id ?? null)
+  }, [visibleJobs[0]?.id])
 
   // Process descriptions only for the jobs currently rendered — not the full list
   const jobDescriptions = useMemo(() => {

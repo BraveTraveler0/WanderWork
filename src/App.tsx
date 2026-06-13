@@ -481,6 +481,7 @@ function App() {
   const [publicJobs, setPublicJobs] = useState<any[]>([])
   const [publicJobsLoading, setPublicJobsLoading] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [topVisibleJobId, setTopVisibleJobId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug'>('dashboard')
@@ -1087,7 +1088,7 @@ function App() {
     return () => controller.abort()
   }, [_user])
 
-  const displayedJobId = selectedJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
+  const displayedJobId = selectedJobId ?? topVisibleJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
 
   // Menu dropdown component
   const menuItems = [
@@ -1404,6 +1405,7 @@ function App() {
                   isAuthenticated={!!_token}
                   onSignIn={() => setShowLogin(true)}
                   onSignUp={() => setShowSignup(true)}
+                  onTopJobChange={setTopVisibleJobId}
                 />
               </div>
 
