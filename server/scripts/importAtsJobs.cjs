@@ -166,17 +166,20 @@ async function fetchSitemapSlugs(atsName) {
     const xml = String(res.data);
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].trim());
 
-    // Handle sitemap index (points to sub-sitemaps)
+    // Handle sitemap index (points to sub-sitemaps) — no cap, fetch all
     if (xml.includes('<sitemapindex')) {
-      const subUrls = locs.slice(0, 30); // cap at 30 sub-sitemaps
       const subSlugs = new Set();
-      await Promise.all(subUrls.map(async subUrl => {
-        try {
-          const sub = await get(subUrl, { timeout: 15000 });
-          const subLocs = [...String(sub.data).matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].trim());
-          for (const u of subLocs) { const s = cfg.extract(u); if (s) subSlugs.add(s); }
-        } catch {}
-      }));
+      // Fetch sub-sitemaps in parallel batches of 20
+      for (let i = 0; i < locs.length; i += 20) {
+        const batch = locs.slice(i, i + 20);
+        await Promise.all(batch.map(async subUrl => {
+          try {
+            const sub = await get(subUrl, { timeout: 15000 });
+            const subLocs = [...String(sub.data).matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].trim());
+            for (const u of subLocs) { const s = cfg.extract(u); if (s) subSlugs.add(s); }
+          } catch {}
+        }));
+      }
       return subSlugs;
     }
 
@@ -349,6 +352,38 @@ const ATS_FETCHERS = {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+// Max companies to attempt per ATS per import cycle.
+// Seeds always run; remaining slots are filled from sitemap discovery in random order
+// so the full catalogue rotates across every few import cycles.
+const PER_CYCLE_CAP = {
+  greenhouse:      600,
+  lever:           200,
+  ashby:           150,
+  smartrecruiters: 80,
+};
+
+const CONCURRENCY = 12; // parallel company fetches per batch
+
+async function upsertJobs(col, jobs) {
+  let added = 0, updated = 0, errors = 0;
+  await Promise.all(jobs.map(async job => {
+    try {
+      if (!job.title || !job.url) return;
+      const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
+      const r = await col.updateOne(
+        { url_normalized: urlNormalized },
+        {
+          $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
+          $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
+        },
+        { upsert: true }
+      );
+      if (r.upsertedCount) added++; else updated++;
+    } catch { errors++; }
+  }));
+  return { added, updated, errors };
+}
+
 async function importAtsJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   const slugsByAts = await discoverAllSlugs(col);
@@ -356,43 +391,45 @@ async function importAtsJobs() {
   let totalNew = 0, totalUpdated = 0, totalErrors = 0;
 
   for (const [atsName, slugSet] of Object.entries(slugsByAts)) {
-    const slugs = [...slugSet];
+    const seeds = new Set(SEEDS[atsName] || []);
+    const allSlugs = [...slugSet];
+    const cap = PER_CYCLE_CAP[atsName] || 200;
+
+    // Seeds always first, then shuffle the rest and fill up to cap
+    const seedSlugs = allSlugs.filter(s => seeds.has(s));
+    const otherSlugs = allSlugs.filter(s => !seeds.has(s)).sort(() => Math.random() - 0.5);
+    const slugs = [...new Set([...seedSlugs, ...otherSlugs])].slice(0, cap);
+
     if (!slugs.length) continue;
-    console.log(`[importAtsJobs] ${atsName}: ${slugs.length} companies to fetch`);
+    console.log(`[importAtsJobs] ${atsName}: ${allSlugs.length} discovered → processing ${slugs.length} this cycle`);
     const { fetch, urlFragment } = ATS_FETCHERS[atsName];
 
-    for (const slug of slugs) {
-      let jobs;
-      try {
-        const company = await resolveCompanyName(col, urlFragment(slug), slug);
-        jobs = await fetch(slug, company);
-        if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote jobs`);
-      } catch (err) {
-        if (err.response?.status !== 404) {
-          console.warn(`  ${atsName}/${slug} failed: ${err.message}`);
-        }
-        totalErrors++;
-        continue;
-      }
-
-      for (const job of jobs) {
+    // Process in parallel batches
+    for (let i = 0; i < slugs.length; i += CONCURRENCY) {
+      const batch = slugs.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(batch.map(async slug => {
         try {
-          if (!job.title || !job.url) continue;
-          const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
-          const result = await col.updateOne(
-            { url_normalized: urlNormalized },
-            {
-              $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
-              $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
-            },
-            { upsert: true }
-          );
-          if (result.upsertedCount) totalNew++;
-          else totalUpdated++;
-        } catch { totalErrors++; }
+          const company = await resolveCompanyName(col, urlFragment(slug), slug);
+          const jobs = await fetch(slug, company);
+          if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote jobs`);
+          return jobs;
+        } catch (err) {
+          if (err.response?.status !== 404) {
+            console.warn(`  ${atsName}/${slug} failed: ${err.message}`);
+          }
+          totalErrors++;
+          return [];
+        }
+      }));
+
+      const allJobs = batchResults.flat();
+      if (allJobs.length) {
+        const { added, updated, errors } = await upsertJobs(col, allJobs);
+        totalNew += added; totalUpdated += updated; totalErrors += errors;
       }
 
-      await new Promise(r => setTimeout(r, 100));
+      // Small pause between batches to avoid rate limiting
+      if (i + CONCURRENCY < slugs.length) await new Promise(r => setTimeout(r, 150));
     }
   }
 
