@@ -2653,6 +2653,7 @@ module.exports =
     getAllCandidates,
     getAllJobs,
     getFeaturedJobs,
+    _invalidateJobsCache,
     getAllApplications,
     getAllContacts,
     getAllCandidateJobPairings,
