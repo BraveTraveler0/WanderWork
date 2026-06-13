@@ -9,8 +9,8 @@ const { requireAuth } = require('../middleware/requireAuth');
 router.get('/key', requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) return res.status(404).json({ message: 'User not found.' });
-  if (user.plan !== 'premium') {
-    return res.status(403).json({ message: 'The autofill extension requires a Premium plan.' });
+  if (!['pro', 'premium'].includes(user.plan) && !user.isAdmin) {
+    return res.status(403).json({ message: 'The autofill extension requires a Pro or Premium plan.' });
   }
 
   if (!user.extensionKey) {
@@ -25,8 +25,8 @@ router.get('/key', requireAuth, async (req, res) => {
 router.post('/key/regenerate', requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) return res.status(404).json({ message: 'User not found.' });
-  if (user.plan !== 'premium') {
-    return res.status(403).json({ message: 'The autofill extension requires a Premium plan.' });
+  if (!['pro', 'premium'].includes(user.plan) && !user.isAdmin) {
+    return res.status(403).json({ message: 'The autofill extension requires a Pro or Premium plan.' });
   }
 
   user.extensionKey = crypto.randomBytes(32).toString('hex');
@@ -41,7 +41,7 @@ router.get('/profile', async (req, res) => {
 
   const user = await User.findOne({ extensionKey: key });
   if (!user) return res.status(401).json({ message: 'Invalid extension key.' });
-  if (user.plan !== 'premium') return res.status(403).json({ message: 'Premium plan required.' });
+  if (!['pro', 'premium'].includes(user.plan) && !user.isAdmin) return res.status(403).json({ message: 'Pro or Premium plan required.' });
 
   const candidate = await Candidate.findOne({ email: user.email.toLowerCase() }).sort({ createdAt: -1 });
   if (!candidate) return res.status(404).json({ message: 'Profile not found. Complete your Wander/Work profile first.' });
