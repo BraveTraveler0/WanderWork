@@ -1342,7 +1342,7 @@ function App() {
             {/* Left panel: profile sidebar (auth) or particle sign-up panel (guest) */}
             {_token
               ? <Sidebar data={safeData} onProfileImageChange={setProfileImage} onCandidateUpdate={handleCandidateUpdate} />
-              : <div className="hidden md:flex md:flex-col md:w-[280px] lg:w-[300px] xl:w-[320px] shrink-0 md:h-full md:min-h-0 md:overflow-y-auto no-scrollbar">
+              : <div className="hidden lg:flex lg:flex-col lg:w-[280px] xl:w-[320px] shrink-0 lg:h-full lg:min-h-0 lg:overflow-y-auto no-scrollbar">
                   <ParticleProfile onSignIn={() => setShowLogin(true)} onSignUp={() => setShowSignup(true)} />
                 </div>
             }
