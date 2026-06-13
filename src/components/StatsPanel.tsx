@@ -483,10 +483,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         const AGGREGATOR_HOSTS = ['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com']
         const isAggregator = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return AGGREGATOR_HOSTS.some(a => h === a || h.endsWith('.' + a)) } catch { return false } }
         const _directUrl = _rawApplyUrl && !isAggregator(_rawApplyUrl) ? _rawApplyUrl : ''
-        const _company = typeof (selectedJob as any).company === 'string' ? (selectedJob as any).company : ''
-        const _jobTitle = typeof (selectedJob as any).title === 'string' ? (selectedJob as any).title : ''
-        const _googleFallback = _company ? `https://www.google.com/search?q=${encodeURIComponent(_company + ' ' + _jobTitle + ' jobs')}` : ''
-        const applyUrl: string = _directUrl || _googleFallback
+        const _companyUrl: string = (selectedJob as any).company_url || ''
+        const applyUrl: string = _directUrl || _companyUrl
 
         // For Wellfound specific job URLs, show a fallback to the company jobs page in case the listing expired.
         // Only applies when the URL points at a specific job (has content after /jobs/),

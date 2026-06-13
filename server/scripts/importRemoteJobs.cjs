@@ -63,6 +63,39 @@ function normalizeLocation(loc) {
   return l.replace(/\s+\d{5}(-\d{4})?$/, '').trim();
 }
 
+// Clearbit free autocomplete — resolves company names to their homepage domain.
+// Results cached per import run so each company is only looked up once.
+const _companyUrlCache = new Map();
+
+async function resolveCompanyUrls(jobs) {
+  const needLookup = new Set(
+    jobs.filter(j => !j.apply_url).map(j => j.company).filter(Boolean)
+  );
+  // Deduplicate against cache
+  const toFetch = [...needLookup].filter(c => !_companyUrlCache.has(c.toLowerCase()));
+
+  if (toFetch.length) {
+    await Promise.all(toFetch.map(async company => {
+      const key = company.toLowerCase();
+      try {
+        const res = await get(
+          `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(company)}`,
+          { timeout: 5000 }
+        );
+        const domain = (Array.isArray(res.data) ? res.data : [])[0]?.domain || null;
+        _companyUrlCache.set(key, domain ? `https://${domain}` : null);
+      } catch {
+        _companyUrlCache.set(key, null);
+      }
+    }));
+  }
+
+  return jobs.map(j => ({
+    ...j,
+    company_url: j.apply_url ? undefined : (_companyUrlCache.get((j.company || '').toLowerCase()) || null),
+  }));
+}
+
 function formatSalary(min, max, currency = 'USD', period = 'yearly') {
   const sym = currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
   const fmt = n => Number(n).toLocaleString();
@@ -244,6 +277,9 @@ async function importRemoteJobs() {
       totalErrors++;
       continue;
     }
+
+    // Resolve company homepage URLs for jobs without a direct apply link
+    jobs = await resolveCompanyUrls(jobs);
 
     let upserted = 0, updated = 0, skipped = 0, errors = 0;
     for (const job of jobs) {
