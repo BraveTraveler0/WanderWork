@@ -50,6 +50,9 @@ const _stripDuplicateAboutHeading = (text: string): string => {
     .trim()
 }
 
+const _stripJunkLeadPrefix = (text: string): string =>
+  text.replace(/^(?:job\s+(?:overview|summary|description|details|brief|post)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description)\s*[:\-–—]\s*/i, '').trim()
+
 const _stripLeadingPresentationLines = (text: string): string => {
   const presentationOnly =
     /^(?:#{1,6}|[-*_]{3,}|(?:\*\*|__|\*|_)?\s*(?:about\s+(?:the\s+role|us|the\s+opportu?nity)|company\s+description|company|description|job\s+details|position|hiring)\s*:?\s*(?:\*\*|__|\*|_)?)$/i
@@ -131,9 +134,9 @@ const _isTooShort = (value: string): boolean => {
 
 function processJobDescription(d: unknown): string {
   const run = (raw: string) => {
-    const formatted = _stripLeadingPresentationLines(
+    const formatted = _stripJunkLeadPrefix(_stripLeadingPresentationLines(
       _addBreaks(_stripLeadIns(_stripDuplicateAboutHeading(_stripMarkdown(_stripJunkMeta(_stripHtml(raw))))))
-    )
+    ))
     return !formatted || _isTooShort(formatted) ? FALLBACK_DESC : formatted
   }
   if (typeof d === 'string') return run(d)

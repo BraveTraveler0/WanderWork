@@ -21,9 +21,13 @@ function generateJobCode(str) {
   return 'jb_' + (hash >>> 0).toString(36);
 }
 
+const JUNK_LEAD_RE = /^(?:job\s+(?:overview|summary|description|details|brief|post)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description)\s*[:\-–—]\s*/i;
+
 function truncateDesc(text) {
   if (!text) return '';
-  const clean = stripHtml(text).trim();
+  const clean = JUNK_LEAD_RE.source
+    ? stripHtml(text).trim().replace(JUNK_LEAD_RE, '')
+    : stripHtml(text).trim();
   if (clean.length <= 500) return clean;
   const cut = clean.slice(0, 500);
   const lastSentence = cut.search(/[.!?][^.!?]*$/);

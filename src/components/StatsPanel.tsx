@@ -511,8 +511,11 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             return lines.join('\n\n').trim()
           }
 
+          const stripJunkLeadPrefix = (text: string) =>
+            text.replace(/^(?:job\s+(?:overview|summary|description|details|brief|post)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description)\s*[:\-–—]\s*/i, '').trim()
+
           const cleanDescriptionText = (value: string) =>
-            stripLeadingPresentationLines(stripDuplicateAboutHeading(stripMarkdown(stripJunkMeta(stripHtml(value)))))
+            stripJunkLeadPrefix(stripLeadingPresentationLines(stripDuplicateAboutHeading(stripMarkdown(stripJunkMeta(stripHtml(value))))))
 
           const fromValue = (value: any): string => {
             if (!value) return ''
