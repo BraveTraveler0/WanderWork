@@ -668,10 +668,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   )}
                   <div className="flex flex-col xl:flex-1 min-w-0" style={{ gap: 4 }}>
                     <button
-                      className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}
-                      style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
-                      disabled={!canOrder}
-                      onClick={canOrder ? () => {
+                      className="cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300 hover:scale-[1.015]"
+                      style={{ background: '#306770' }}
+                      onClick={() => {
                         setInitialCustomRequest(null)
                         setShowCustomRequestModal({
                           jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
@@ -679,18 +678,11 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                           company: asText(selectedJob.company, 'Company'),
                           job: selectedJob
                         })
-                      } : undefined}
+                      }}
                     >
                       Get Resume or Cover Letter
                       <span className="arrow-nudge"><ArrowRight size={14} /></span>
                     </button>
-                    {!canOrder && (
-                      <p style={{ fontSize: 11, color: '#AAAAAA', margin: 0, lineHeight: 1.4 }}>
-                        {!hasUploadedResume
-                          ? 'Upload a resume in your profile to unlock this.'
-                          : 'Add your name and a target role in your profile to unlock this.'}
-                      </p>
-                    )}
                   </div>
                 </div>
                 {wellfoundCompanyUrl && (
