@@ -2617,10 +2617,6 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
 
     const scored = [];
     for (const job of all) {
-        // Hard excludes: source
-        const src = String(job.source || '').toLowerCase();
-        if (INDEED_RE.test(src)) continue;
-
         // Hard excludes: must have a real title, company, and URL
         const title = String(job.title || job.job_title || job.name || '').trim();
         const company = String(job.company || '').trim();
@@ -2628,6 +2624,7 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         if (!company || company === 'Unknown') continue;
         if (!job.url && !job.apply_url && !job.applyUrl) continue;
 
+        const src = String(job.source || '').toLowerCase();
         const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
         const salary = String(job.salary || '').trim();
         const hasSalary = salary && !JUNK_SALARY_RE.test(salary) && SALARY_NUM_RE.test(salary);
