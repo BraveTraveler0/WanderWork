@@ -20,6 +20,29 @@ const profileText = (value: any): string => {
 
 const isBlankProfileValue = (value: any) => profileText(value).trim().length === 0
 
+const asArray = (value: any): any[] => Array.isArray(value) ? value : []
+
+const stringList = (value: any): string[] => {
+  if (Array.isArray(value)) return value.map((item) => profileText(item).trim()).filter(Boolean)
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean)
+  return []
+}
+
+const firstTargetRole = (candidate: any, fallback = 'Full Stack Developer') => {
+  return stringList(candidate?.targetRoles)[0] || fallback
+}
+
+const candidateLocation = (candidate: any, fallback = 'New York, NY') => {
+  const locations = asArray(candidate?.location)
+  const first = locations[0]
+  if (!first) return fallback
+  return first.city || first.locationName || fallback
+}
+
+const candidateUrl = (candidate: any, label: string, fallback: string) => {
+  return asArray(candidate?.urls).find((u: any) => u?.urlName === label)?.urlAddress || fallback
+}
+
 const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any, onProfileImageChange?: (image: string | null) => void, onCandidateUpdate?: (patch: any) => void }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -48,15 +71,15 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     const rawCandidate = data?.Candidates?.[0]
     return rawCandidate ? {
       name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
-      title: rawCandidate.targetRoles?.[0] || 'Full Stack Developer',
-      location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'New York, NY',
+      title: firstTargetRole(rawCandidate),
+      location: candidateLocation(rawCandidate),
       email: rawCandidate.email || 'email@example.com',
       phone: rawCandidate.phone || '+1-000-000-0000',
-      skills: Array.isArray(rawCandidate.skills) ? rawCandidate.skills.join(', ') : 'Skills',
-      linkedin: rawCandidate.urls?.find((u: any) => u.urlName === 'LinkedIn')?.urlAddress || 'LinkedinURL.com',
-      portfolio: rawCandidate.urls?.find((u: any) => u.urlName === 'Portfolio')?.urlAddress || 'LinkedinURL.com',
-      github: rawCandidate.urls?.find((u: any) => u.urlName === 'GitHub')?.urlAddress || 'GithubURL.com',
-      calendly: rawCandidate.urls?.find((u: any) => u.urlName === 'Calendly')?.urlAddress || 'CalendlyURL.com',
+      skills: stringList(rawCandidate.skills).join(', ') || 'Skills',
+      linkedin: candidateUrl(rawCandidate, 'LinkedIn', 'LinkedinURL.com'),
+      portfolio: candidateUrl(rawCandidate, 'Portfolio', 'LinkedinURL.com'),
+      github: candidateUrl(rawCandidate, 'GitHub', 'GithubURL.com'),
+      calendly: candidateUrl(rawCandidate, 'Calendly', 'CalendlyURL.com'),
       resume: rawCandidate.resume || rawCandidate.resumeLink || null
     } : {
       name: 'User',
@@ -76,9 +99,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
   const [editForm, setEditForm] = useState<any>(profile)
 
   const parseSkills = (raw: any): string[] => {
-    if (Array.isArray(raw)) return raw.filter(Boolean)
-    if (typeof raw === 'string') return raw.split(',').map(s => s.trim()).filter(Boolean)
-    return []
+    return stringList(raw)
   }
 
   const [skillsList, setSkillsList] = useState<string[]>(() =>
@@ -91,15 +112,15 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
     if (rawCandidate) {
       const newProfile = {
         name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
-        title: rawCandidate.targetRoles?.[0] || 'Full Stack Developer',
-        location: rawCandidate.location?.[0]?.city || rawCandidate.location?.[0]?.locationName || 'New York, NY',
+        title: firstTargetRole(rawCandidate),
+        location: candidateLocation(rawCandidate),
         email: rawCandidate.email || 'email@example.com',
         phone: rawCandidate.phone || '+1-000-000-0000',
-        skills: Array.isArray(rawCandidate.skills) ? rawCandidate.skills.join(', ') : 'Skills',
-        linkedin: rawCandidate.urls?.find((u: any) => u.urlName === 'LinkedIn')?.urlAddress || 'LinkedinURL.com',
-        portfolio: rawCandidate.urls?.find((u: any) => u.urlName === 'Portfolio')?.urlAddress || 'LinkedinURL.com',
-        github: rawCandidate.urls?.find((u: any) => u.urlName === 'GitHub')?.urlAddress || 'GithubURL.com',
-        calendly: rawCandidate.urls?.find((u: any) => u.urlName === 'Calendly')?.urlAddress || 'CalendlyURL.com',
+        skills: stringList(rawCandidate.skills).join(', ') || 'Skills',
+        linkedin: candidateUrl(rawCandidate, 'LinkedIn', 'LinkedinURL.com'),
+        portfolio: candidateUrl(rawCandidate, 'Portfolio', 'LinkedinURL.com'),
+        github: candidateUrl(rawCandidate, 'GitHub', 'GithubURL.com'),
+        calendly: candidateUrl(rawCandidate, 'Calendly', 'CalendlyURL.com'),
         resume: rawCandidate.resume || rawCandidate.resumeLink || null
       }
       setProfile(newProfile)
@@ -220,17 +241,21 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
 
       // Populate profile fields from parsed resume data
       const updates: any = { resume: uploadedResume }
-      if (returnedCandidate?.skills?.length) updates.skills = returnedCandidate.skills.join(', ')
-      if (returnedCandidate?.targetRoles?.length) updates.title = returnedCandidate.targetRoles[0]
-      if (returnedCandidate?.location?.[0] && isBlankProfileValue(profile.location)) {
-        const loc = returnedCandidate.location[0]
+      const returnedSkills = stringList(returnedCandidate?.skills)
+      const returnedRoles = stringList(returnedCandidate?.targetRoles)
+      const returnedLocations = asArray(returnedCandidate?.location)
+      if (returnedSkills.length) updates.skills = returnedSkills.join(', ')
+      if (returnedRoles.length) updates.title = returnedRoles[0]
+      if (returnedLocations[0] && isBlankProfileValue(profile.location)) {
+        const loc = returnedLocations[0]
         updates.location = loc.city
           ? (loc.state ? `${loc.city}, ${loc.state}` : loc.city)
           : (loc.locationName || profile.location)
       }
       if (returnedCandidate?.phone && isBlankProfileValue(profile.phone)) updates.phone = returnedCandidate.phone
-      if (returnedCandidate?.urls?.length) {
-        const findUrl = (name: string) => returnedCandidate.urls.find((u: any) => u.urlName === name)?.urlAddress
+      const returnedUrls = asArray(returnedCandidate?.urls)
+      if (returnedUrls.length) {
+        const findUrl = (name: string) => returnedUrls.find((u: any) => u?.urlName === name)?.urlAddress
         if (findUrl('LinkedIn') && isBlankProfileValue(profile.linkedin)) updates.linkedin = findUrl('LinkedIn')
         if (findUrl('GitHub') && isBlankProfileValue(profile.github)) updates.github = findUrl('GitHub')
         if (findUrl('Portfolio') && isBlankProfileValue(profile.portfolio)) updates.portfolio = findUrl('Portfolio')

@@ -10,6 +10,19 @@ function loadInterestedOverrides(): Record<number, boolean> {
 import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
 import RecruiterOutreach from './RecruiterOutreach'
 
+const asText = (value: unknown, fallback = ''): string => {
+  if (typeof value === 'string') return value
+  if (value == null) return fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+const asStringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map((item) => asText(item).trim()).filter(Boolean)
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean)
+  return []
+}
+
 const NEW_JOB_WINDOW_DAYS = 30
 
 const parseJobDate = (value: unknown): Date | null => {
@@ -72,13 +85,14 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const firstCandidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const tokensCount = (firstCandidate?.tokenBalance ?? firstCandidate?.tokens ?? 30)
   const recruiterContactsLeft: number = firstCandidate?.recruiterContactsLeft ?? 10
-  const hasUploadedResume = !!(firstCandidate?.resume_text?.trim() || firstCandidate?.resumeLink)
-  const hasBasicProfile = !!(firstCandidate?.firstName?.trim() && firstCandidate?.targetRoles?.length)
+  const targetRoles = asStringList(firstCandidate?.targetRoles)
+  const hasUploadedResume = !!(asText(firstCandidate?.resume_text).trim() || firstCandidate?.resumeLink)
+  const hasBasicProfile = !!(asText(firstCandidate?.firstName).trim() && targetRoles.length)
   const canOrder = hasUploadedResume && hasBasicProfile
   const [showCustomRequestModal, setShowCustomRequestModal] = useState<{ jobId: string | number; jobTitle: string; company: string; job?: any } | null>(null)
   const [initialCustomRequest, setInitialCustomRequest] = useState<{ resume?: boolean; coverLetter?: boolean } | null>(null)
   const selectedJobForCompany = jobs?.find((job: any) => job.id === jobId) ?? data?.Jobs?.find((job: any) => job.id === jobId)
-  const selectedCompany: string | undefined = selectedJobForCompany?.company
+  const selectedCompany = asText(selectedJobForCompany?.company).trim() || undefined
 
   const [interestedOverrides, setInterestedOverrides] = useState<Record<number, boolean>>(loadInterestedOverrides)
 
@@ -265,8 +279,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       setInitialCustomRequest({ coverLetter: true })
       setShowCustomRequestModal({
         jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
-        jobTitle: selectedJob.title,
-        company: selectedJob.company,
+        jobTitle: asText(selectedJob.title, 'Job Title'),
+        company: asText(selectedJob.company, 'Company'),
         job: selectedJob,
       })
     }
@@ -548,8 +562,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0 pr-3 lg:pr-4">
-                  <h3 className="text-[18px] xl:text-[22px] 2xl:text-[24px] text-black mb-2 line-clamp-2">{selectedJob.title}</h3>
-                  <p className="text-[18px] xl:text-[22px] 2xl:text-[24px] mb-3 xl:mb-4 line-clamp-2" style={{ color: '#787878' }}>{selectedJob.company}</p>
+                  <h3 className="text-[18px] xl:text-[22px] 2xl:text-[24px] text-black mb-2 line-clamp-2">{asText(selectedJob.title, 'Job Title')}</h3>
+                  <p className="text-[18px] xl:text-[22px] 2xl:text-[24px] mb-3 xl:mb-4 line-clamp-2" style={{ color: '#787878' }}>{asText(selectedJob.company, 'Company')}</p>
                 </div>
                 <div className="text-right text-[12px]" style={{ color: '#787878' }}>
                   {(() => {
@@ -579,7 +593,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                     )
                   })()}
                   <p className="mb-1">{formatPostedDate(selectedJob.postedAt ?? selectedJob.rawDate)}</p>
-                  <p>{selectedJob.location}</p>
+                  <p>{asText(selectedJob.location, 'Remote')}</p>
                 </div>
               </div>
 
@@ -656,9 +670,10 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   return found.slice(0, 3);
                 };
 
-                const matchSkills: string[] = selectedJob.skills?.length > 0
-                  ? selectedJob.skills.slice(0, 3)
-                  : extractFallbackSkills(selectedJob.title || '', selectedJob.shortDescription || selectedJob.description_short || '', selectedJob.jobType || selectedJob.job_type || '');
+                const selectedSkills = asStringList(selectedJob.skills)
+                const matchSkills: string[] = selectedSkills.length > 0
+                  ? selectedSkills.slice(0, 3)
+                  : extractFallbackSkills(asText(selectedJob.title), asText(selectedJob.shortDescription || selectedJob.description_short), asText(selectedJob.jobType || selectedJob.job_type));
                 return (
                   <div>
                     <p className="text-[13px] mb-2" style={{ color: '#787878' }}>Why you were matched</p>
@@ -721,8 +736,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                         setInitialCustomRequest(null)
                         setShowCustomRequestModal({
                           jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
-                          jobTitle: selectedJob.title,
-                          company: selectedJob.company,
+                          jobTitle: asText(selectedJob.title, 'Job Title'),
+                          company: asText(selectedJob.company, 'Company'),
                           job: selectedJob
                         })
                       } : undefined}

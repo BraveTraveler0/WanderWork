@@ -95,6 +95,21 @@ const getInitials = (name: string) => {
     .join('')
 }
 
+const asText = (value: unknown, fallback = ''): string => {
+  if (typeof value === 'string') return value
+  if (value == null) return fallback
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+const asTextList = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map((item) => asText(item).trim()).filter(Boolean)
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean)
+  return []
+}
+
+const asArray = (value: unknown): any[] => Array.isArray(value) ? value : []
+
 const WELCOME_MODAL_VERSION = 'tester-100-tokens-v1'
 
 const getWelcomeStorageKey = (user: any) => {
@@ -152,9 +167,9 @@ const JOB_BOARDS = new Set([
   'remote', 'remoteok', 'weworkremotely', 'builtin', 'dice', 'simplyhired',
 ])
 
-const isUnknownCompany = (value?: string) => {
+const isUnknownCompany = (value?: unknown) => {
   if (!value) return true
-  const v = value.trim().toLowerCase()
+  const v = asText(value).trim().toLowerCase()
   if (/^(unknown|n\/a|na|none|null|undefined|\-|tbd)$/i.test(v)) return true
   // Treat job board names stored as company by scrapers as unknown
   if (JOB_BOARDS.has(v)) return true
@@ -256,9 +271,9 @@ const inferCompanyFromDescription = (description: string, jobTitle?: string) => 
   return best
 }
 
-const cleanCompanyName = (raw: string): string => {
+const cleanCompanyName = (raw: unknown): string => {
   // Strip junk patterns like "Oriient About Oriient", "Acme Inc About Acme Inc"
-  let s = raw.trim()
+  let s = asText(raw, 'Unknown').trim()
   // Remove trailing "About <anything>" suffixes
   s = s.replace(/\s+About\s+.+$/i, '').trim()
   // Remove leading "About <Company>" prefixes
@@ -268,13 +283,13 @@ const cleanCompanyName = (raw: string): string => {
   return s
 }
 
-const inferCompanyName = (company: string | undefined, description: string, url: string, title?: string) => {
-  if (!isUnknownCompany(company)) return cleanCompanyName(company?.trim() || '')
+const inferCompanyName = (company: unknown, description: string, url: string, title?: string) => {
+  if (!isUnknownCompany(company)) return cleanCompanyName(company)
   const fromDescription = inferCompanyFromDescription(description, title)
   if (fromDescription) return cleanCompanyName(fromDescription)
   const fromUrl = inferCompanyFromUrl(url)
   if (fromUrl) return fromUrl
-  return company?.trim() || 'Unknown'
+  return asText(company, 'Unknown').trim() || 'Unknown'
 }
 
 const cleanLocationString = (raw: string): string => {
@@ -436,12 +451,13 @@ function transformJob(job: Job, index: number) {
     return 'No description available'
   })()
 
-  const inferredCompany = inferCompanyName(job.company, description, (job as any).url || '', job.title)
+  const jobTitle = asText((job as any).title, 'Untitled')
+  const inferredCompany = inferCompanyName((job as any).company, description, asText((job as any).url), jobTitle)
 
   return {
     id: index + 1,
     backendId: job._id,
-    title: job.title,
+    title: jobTitle,
     company: inferredCompany,
     description,
     location: locationString,
@@ -1144,12 +1160,16 @@ function App() {
     const backendCandidate = safeData?.Candidates?.[0] as any
     const localFallback = buildFallbackCandidate() as any
     const storedImage = localStorage.getItem('wanderworkProfileImage')
+    const backendTargetRoles = asTextList(backendCandidate?.targetRoles)
+    const backendSkills = asTextList(backendCandidate?.skills)
+    const backendLocation = asArray(backendCandidate?.location)
+    const backendUrls = asArray(backendCandidate?.urls)
     const profileCandidate = backendCandidate ? {
       ...backendCandidate,
-      targetRoles: backendCandidate.targetRoles?.length ? backendCandidate.targetRoles : (localFallback?.targetRoles || []),
-      skills: backendCandidate.skills?.length ? backendCandidate.skills : (localFallback?.skills || []),
-      location: backendCandidate.location?.length ? backendCandidate.location : (localFallback?.location || []),
-      urls: backendCandidate.urls?.length ? backendCandidate.urls : (localFallback?.urls || []),
+      targetRoles: backendTargetRoles.length ? backendTargetRoles : (localFallback?.targetRoles || []),
+      skills: backendSkills.length ? backendSkills : (localFallback?.skills || []),
+      location: backendLocation.length ? backendLocation : (localFallback?.location || []),
+      urls: backendUrls.length ? backendUrls : (localFallback?.urls || []),
       phone: backendCandidate.phone || localFallback?.phone || '',
       profileImage: backendCandidate.profileImage || storedImage || undefined,
     } : (localFallback || (_user ? {
