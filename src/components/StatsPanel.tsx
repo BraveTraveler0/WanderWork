@@ -658,8 +658,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                 <div className="flex flex-col xl:flex-row xl:items-start gap-3">
                   {applyUrl && (
                   <a
-                    className="flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] border border-[#306770] text-[#306770] bg-white whitespace-nowrap transition-all duration-300 hover:bg-[#306770] hover:text-white hover:scale-[1.015] xl:flex-1"
-                    style={{ minWidth: 0 }}
+                    className="w-full min-w-0 flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] border border-[#306770] text-[#306770] bg-white whitespace-nowrap transition-all duration-300 hover:bg-[#306770] hover:text-white hover:scale-[1.015] xl:flex-1"
                     href={applyUrl}
                     target="_blank"
                     rel="noreferrer"
