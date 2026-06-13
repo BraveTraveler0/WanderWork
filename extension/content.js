@@ -209,10 +209,8 @@ function injectWidget(profile) {
   document.body.appendChild(widget);
 }
 
-// Only inject if there's a form and a connected profile
+// Inject whenever the user is connected, regardless of form presence
 chrome.storage.local.get(['profile'], ({ profile }) => {
   if (!profile) return;
-  const hasForm = document.querySelector('form input, form textarea');
-  if (!hasForm) return;
   injectWidget(profile);
 });
