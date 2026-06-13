@@ -2617,30 +2617,29 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
 
     const scored = [];
     for (const job of all) {
+        // Hard excludes: source
         const src = String(job.source || '').toLowerCase();
         if (INDEED_RE.test(src)) continue;
 
-        const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
-        if (desc.length < 80) continue;
-
+        // Hard excludes: must have a real title, company, and URL
         const title = String(job.title || job.job_title || job.name || '').trim();
         const company = String(job.company || '').trim();
-        if (!title || !company || company === 'Unknown' || title === 'Untitled') continue;
-
+        if (!title || title === 'Untitled') continue;
+        if (!company || company === 'Unknown') continue;
         if (!job.url && !job.apply_url && !job.applyUrl) continue;
 
+        const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
         const salary = String(job.salary || '').trim();
         const hasSalary = salary && !JUNK_SALARY_RE.test(salary) && SALARY_NUM_RE.test(salary);
 
         let score = 0;
         if (hasSalary) score += 3;
-        if (desc.length >= 250) score += 2;
-        else if (desc.length >= 150) score += 1;
+        if (desc.length >= 250) score += 3;
+        else if (desc.length >= 80) score += 2;
+        else if (desc.length >= 20) score += 1;
         const skillCount = Array.isArray(job.skills) ? job.skills.length : 0;
         if (skillCount >= 3) score += 1;
-        // Prefer well-known ATS sources
-        if (/greenhouse|lever|workday|linkedin|ashby|smartrecruiters|icims|jobvite|breezy/i.test(src)) score += 2;
-        // Small random tiebreaker so the 50 are shuffled among equals
+        if (/greenhouse|lever|workday|ashby|smartrecruiters|icims|jobvite|breezy/i.test(src)) score += 2;
         score += Math.random() * 0.5;
 
         scored.push({ job, score });
