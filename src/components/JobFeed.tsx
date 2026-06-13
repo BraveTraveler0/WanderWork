@@ -1328,9 +1328,9 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
             <div className="text-left sm:text-right" style={{ color: '#787878' }}>
               <p className="text-[12px] mb-2">{formatPostedDate(postedAt ?? rawDate)}</p>
               <p className="text-[14px] sm:text-[16px] mb-2 line-clamp-1 max-w-[160px] sm:max-w-[180px] sm:ml-auto">{company}</p>
-              <div className="mt-2">
+              <div className="mt-2 flex flex-col gap-2">
                 {isRealLocation(location) && (
-                  <p className="text-[10px] truncate max-w-[140px] sm:ml-auto mb-1">Based in {location}</p>
+                  <p className="text-[10px] truncate max-w-[140px] sm:ml-auto">Based in {location}</p>
                 )}
                 <p className="text-[10px] sm:ml-auto" style={{ color: '#306770' }}>Remote</p>
               </div>
