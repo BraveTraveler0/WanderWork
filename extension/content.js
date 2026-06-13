@@ -2,7 +2,6 @@
 
 const API = 'https://wanderwork-backend-server.onrender.com';
 
-// Field selectors tried in order — first match wins
 const FIELDS = [
   { key: 'firstName', selectors: ['#first_name', '[name="firstName"]', '[name="first_name"]', '[autocomplete="given-name"]', '[placeholder*="First name" i]'] },
   { key: 'lastName',  selectors: ['#last_name',  '[name="lastName"]',  '[name="last_name"]',  '[autocomplete="family-name"]', '[placeholder*="Last name" i]'] },
@@ -48,7 +47,6 @@ function getJobInfo() {
     .replace(/\s*[-–|]\s*Jobs?\s*$/i, '')
     .trim();
 
-  // Try to pull company from URL slug
   let company = '';
   const ghMatch  = url.match(/boards\.greenhouse\.io\/([^/]+)/i) || url.match(/\.greenhouse\.io\/jobs\//i);
   const levMatch = url.match(/jobs\.lever\.co\/([^/]+)/i);
@@ -59,7 +57,6 @@ function getJobInfo() {
   else if (ashMatch?.[1]) company = ashMatch[1].replace(/-/g, ' ');
   else if (srMatch?.[1])  company = srMatch[1].replace(/-/g, ' ');
 
-  // Fallback: try OG meta tags
   if (!company) {
     company = document.querySelector('meta[property="og:site_name"]')?.content || '';
   }
@@ -73,14 +70,53 @@ function injectWidget(profile) {
   if (document.getElementById('ww-widget')) return;
 
   const { title: jobTitle, company, url: jobUrl } = getJobInfo();
+  const LOGO_URL = chrome.runtime.getURL('logo.svg');
+  const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`;
 
-  // Wrapper — fixed bottom-right
+  // ── Root container ───────────────────────────────────────────────────────
   const widget = document.createElement('div');
   widget.id = 'ww-widget';
   Object.assign(widget.style, {
     position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px',
     fontFamily: 'system-ui, -apple-system, sans-serif',
+  });
+
+  // ── Minimize button (appears at top on hover) ────────────────────────────
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.title = 'Minimize';
+  minimizeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 15l-6 6-6-6"/></svg> minimize`;
+  Object.assign(minimizeBtn.style, {
+    background: 'rgba(48,103,112,0.12)', color: '#306770', border: 'none',
+    borderRadius: '20px', padding: '4px 10px', fontSize: '10px', fontWeight: '700',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
+    opacity: '0', transition: 'opacity 0.2s', letterSpacing: '0.02em',
+    whiteSpace: 'nowrap', backdropFilter: 'blur(4px)',
+    pointerEvents: 'none',
+  });
+
+  // ── Logo ball (minimized state) ──────────────────────────────────────────
+  const logoBall = document.createElement('button');
+  logoBall.title = 'Wander/Work — click to expand';
+  const logoImg = document.createElement('img');
+  logoImg.src = LOGO_URL;
+  Object.assign(logoImg.style, { width: '26px', height: '26px', filter: 'brightness(0) invert(1)', display: 'block' });
+  logoBall.appendChild(logoImg);
+  Object.assign(logoBall.style, {
+    width: '48px', height: '48px', borderRadius: '50%',
+    background: '#306770', border: 'none', cursor: 'pointer',
+    display: 'none', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 4px 16px rgba(48,103,112,0.4)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+    padding: '0',
+  });
+  logoBall.addEventListener('mouseenter', () => {
+    logoBall.style.transform = 'scale(1.08)';
+    logoBall.style.boxShadow = '0 6px 20px rgba(48,103,112,0.5)';
+  });
+  logoBall.addEventListener('mouseleave', () => {
+    logoBall.style.transform = 'scale(1)';
+    logoBall.style.boxShadow = '0 4px 16px rgba(48,103,112,0.4)';
   });
 
   // ── Autofill button ──────────────────────────────────────────────────────
@@ -147,7 +183,6 @@ function injectWidget(profile) {
   });
   sendBtn.addEventListener('mouseenter', () => { sendBtn.style.background = '#255860'; });
   sendBtn.addEventListener('mouseleave', () => { sendBtn.style.background = '#306770'; });
-
   sendBtn.addEventListener('click', async () => {
     if (!resumeCb.checked && !clCb.checked) {
       statusMsg.textContent = 'Select at least one document.';
@@ -183,9 +218,7 @@ function injectWidget(profile) {
 
   panel.append(panelTitle, jobInfo, resumeRow, clRow, statusMsg, sendBtn);
 
-  // ── Toggle button ────────────────────────────────────────────────────────
-  const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`;
-
+  // ── Doc toggle button ────────────────────────────────────────────────────
   const docBtn = document.createElement('button');
   docBtn.innerHTML = `${SPARKLES_SVG}Get Resume / Cover Letter`;
   Object.assign(docBtn.style, {
@@ -203,13 +236,47 @@ function injectWidget(profile) {
     panel.style.display = open ? 'none' : 'flex';
   });
 
-  // Close panel on outside click
   document.addEventListener('click', (e) => {
     if (!panel.contains(e.target) && e.target !== docBtn) panel.style.display = 'none';
   });
 
-  // autofillBtn on top, docBtn on bottom (closest to screen edge)
-  widget.append(panel, autofillBtn, docBtn);
+  // ── Minimize / expand logic ──────────────────────────────────────────────
+  const expandedEls = [panel, autofillBtn, docBtn];
+
+  function setMinimized(val) {
+    if (val) {
+      expandedEls.forEach(el => { el.style.display = 'none'; });
+      minimizeBtn.style.opacity = '0';
+      minimizeBtn.style.pointerEvents = 'none';
+      logoBall.style.display = 'flex';
+    } else {
+      logoBall.style.display = 'none';
+      // restore display values (panel stays hidden until toggled)
+      autofillBtn.style.display = '';
+      docBtn.style.display = 'flex';
+    }
+  }
+
+  widget.addEventListener('mouseenter', () => {
+    if (logoBall.style.display !== 'flex') {
+      minimizeBtn.style.opacity = '1';
+      minimizeBtn.style.pointerEvents = 'auto';
+    }
+  });
+  widget.addEventListener('mouseleave', () => {
+    minimizeBtn.style.opacity = '0';
+    minimizeBtn.style.pointerEvents = 'none';
+  });
+
+  minimizeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMinimized(true);
+  });
+
+  logoBall.addEventListener('click', () => setMinimized(false));
+
+  // DOM order: minimizeBtn at top, then panel, autofill, doc, logoBall at bottom
+  widget.append(minimizeBtn, panel, autofillBtn, docBtn, logoBall);
   document.body.appendChild(widget);
 }
 
