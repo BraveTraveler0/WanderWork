@@ -1,35 +1,26 @@
 'use strict';
 const mongoose = require('mongoose');
-const axios = require('axios');
+const { OpenAI } = require('openai');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-async function callClaude(description) {
-  const res = await axios.post(
-    'https://api.anthropic.com/v1/messages',
-    {
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 350,
-      messages: [{
-        role: 'user',
-        content: `Clean this job description excerpt. Remove section headers (like "Requirements:", "EDUCATIONAL/EXPERIENCE", "Job Summary:", "Qualifications:", "Responsibilities:", "Minimum Requirements:"), bullet markers, and any formatting labels. Keep all actual job content. Return only clean, readable prose. Return ONLY the cleaned text with no explanation.\n\n${description}`,
-      }],
-    },
-    {
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      timeout: 30000,
-    }
-  );
-  return res.data?.content?.[0]?.text?.trim() || description;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+async function callGPT(description) {
+  const res = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 350,
+    messages: [{
+      role: 'user',
+      content: `Clean this job description excerpt. Remove section headers (like "Requirements:", "EDUCATIONAL/EXPERIENCE", "Job Summary:", "Qualifications:", "Responsibilities:", "Minimum Requirements:"), bullet markers, and any formatting labels. Keep all actual job content. Return only clean, readable prose. Return ONLY the cleaned text with no explanation.\n\n${description}`,
+    }],
+  });
+  return res.choices?.[0]?.message?.content?.trim() || description;
 }
 
 async function cleanJob(col, job) {
   try {
-    const cleaned = await callClaude(job.description_short);
+    const cleaned = await callGPT(job.description_short);
     await col.updateOne(
       { _id: job._id },
       { $set: { description_short: cleaned, desc_cleaned: true } }
@@ -43,8 +34,8 @@ async function cleanJob(col, job) {
 
 // Called from the import cron after each run — cleans up to 200 newly added jobs
 async function cleanNewJobs() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[CleanDesc] ANTHROPIC_API_KEY not set — skipping');
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('[CleanDesc] OPENAI_API_KEY not set — skipping');
     return;
   }
   const col = mongoose.connection.collection('jobseeker.jobs');
@@ -96,7 +87,7 @@ async function cleanAllJobs() {
 }
 
 if (require.main === module) {
-  if (!process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY not set'); process.exit(1); }
+  if (!process.env.OPENAI_API_KEY) { console.error('OPENAI_API_KEY not set'); process.exit(1); }
   mongoose.connect(process.env.DATABASE_URI)
     .then(() => cleanAllJobs())
     .then(() => { console.log('Done'); mongoose.disconnect(); })
