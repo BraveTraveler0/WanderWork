@@ -1,10 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const cors = require('cors');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 const { requireAuth } = require('../middleware/requireAuth');
+
+// Content scripts run in the page's origin context (e.g. greenhouse.io, lever.co),
+// not chrome-extension://, so the global CORS config blocks them.
+// All /extension routes are key-authenticated — wildcard origin is safe here.
+const extensionCors = cors({
+  origin: '*',
+  allowedHeaders: ['Content-Type', 'x-extension-key'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+});
+router.use(extensionCors);
+router.options('*', extensionCors);
 
 function normalizeCompany(s) {
   return String(s || '').toLowerCase()
