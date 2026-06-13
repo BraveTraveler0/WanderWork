@@ -574,11 +574,30 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
     .filter((job: any) => {
       if (!searchQuery.trim()) return true
+      const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
+      if (terms.length === 0) return true
       const entry = jobSearchTexts.get(job.id)
-      const txt = entry ? entry.txt : _normSearch([job.title, job.company, job.description].filter(Boolean).join(' '))
-      return txt.includes(_normSearch(searchQuery))
+      const tokens = entry?.tokens ?? new Set(_normSearch([job.title, job.company, job.description].filter(Boolean).join(' ')).split(' ').filter(Boolean))
+      // Every search term must match as a whole word token, or as a prefix for terms ≥3 chars
+      return terms.every(term =>
+        tokens.has(term) || (term.length >= 3 && Array.from(tokens).some(t => t.startsWith(term)))
+      )
     })
-    .sort((a: any, b: any) => getJobTime(b) - getJobTime(a))
+    .sort((a: any, b: any) => {
+      // When searching, rank title matches above description-only matches
+      if (searchQuery.trim()) {
+        const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
+        const titleScore = (job: any) => {
+          const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
+          const allInTitle = terms.every(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
+          const anyInTitle = terms.some(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
+          return allInTitle ? 2 : anyInTitle ? 1 : 0
+        }
+        const diff = titleScore(b) - titleScore(a)
+        if (diff !== 0) return diff
+      }
+      return getJobTime(b) - getJobTime(a)
+    })
   , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
