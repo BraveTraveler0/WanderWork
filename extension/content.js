@@ -85,14 +85,13 @@ function injectWidget(profile) {
   // ── Minimize button (appears at top on hover) ────────────────────────────
   const minimizeBtn = document.createElement('button');
   minimizeBtn.title = 'Minimize';
-  minimizeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 15l-6 6-6-6"/></svg> minimize`;
+  minimizeBtn.textContent = '−';
   Object.assign(minimizeBtn.style, {
-    background: 'rgba(48,103,112,0.12)', color: '#306770', border: 'none',
-    borderRadius: '20px', padding: '4px 10px', fontSize: '10px', fontWeight: '700',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
-    opacity: '0', transition: 'opacity 0.2s', letterSpacing: '0.02em',
-    whiteSpace: 'nowrap', backdropFilter: 'blur(4px)',
-    pointerEvents: 'none',
+    background: 'rgba(48,103,112,0.15)', color: '#306770', border: 'none',
+    borderRadius: '50%', width: '22px', height: '22px', fontSize: '16px', fontWeight: '400',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    opacity: '0', transition: 'opacity 0.2s',
+    pointerEvents: 'none', lineHeight: '1',
   });
 
   // ── Logo ball (minimized state) ──────────────────────────────────────────

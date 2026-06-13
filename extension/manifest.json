@@ -15,6 +15,12 @@
     "https://jobs.jobvite.com/*",
     "https://*.greenhouse.io/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["logo.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Wander/Work Autofill"
