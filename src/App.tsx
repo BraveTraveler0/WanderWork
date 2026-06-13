@@ -1403,6 +1403,7 @@ function App() {
                   loading={_token ? loading : publicJobsLoading}
                   isAuthenticated={!!_token}
                   onSignIn={() => setShowLogin(true)}
+                  onSignUp={() => setShowSignup(true)}
                 />
               </div>
 

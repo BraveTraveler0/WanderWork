@@ -17,6 +17,8 @@ interface CustomJobRequestModalProps {
   currentCredits: number
   initialResume?: boolean
   initialCoverLetter?: boolean
+  isAuthenticated?: boolean
+  onSignUp?: () => void
 }
 
 export default function CustomJobRequestModal({
@@ -26,7 +28,9 @@ export default function CustomJobRequestModal({
   onSubmit,
   currentCredits,
   initialResume = false,
-  initialCoverLetter = false
+  initialCoverLetter = false,
+  isAuthenticated = true,
+  onSignUp,
 }: CustomJobRequestModalProps) {
   const [selectedResume, setSelectedResume] = useState(initialResume)
   const [selectedCoverLetter, setSelectedCoverLetter] = useState(initialCoverLetter)
@@ -338,41 +342,53 @@ export default function CustomJobRequestModal({
           >
             Cancel
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!hasSelection || !canAfford || submitting}
-            className="flex-1 px-4 py-3 rounded-[12px] text-[14px] text-white transition-all font-medium disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            style={{
-              background: hasSelection && canAfford ? '#306770' : '#D1D5DB',
-              opacity: hasSelection && canAfford ? 1 : 0.6
-            }}
-            onMouseEnter={(e) => {
-              if (hasSelection && canAfford && !submitting) {
-                e.currentTarget.style.background = '#255860'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (hasSelection && canAfford) {
-                e.currentTarget.style.background = '#306770'
-              }
-            }}
-          >
-            {submitting && (
-              <span
-                className="animate-spin"
-                style={{
-                  width: 15,
-                  height: 15,
-                  borderRadius: '50%',
-                  border: '2px solid rgba(255,255,255,0.35)',
-                  borderTopColor: '#ffffff',
-                  display: 'inline-block',
-                  flexShrink: 0,
-                }}
-              />
-            )}
-            {submitting ? 'Submitting...' : !hasSelection ? 'Select an Option' : !canAfford ? 'Not Enough Credits' : 'Submit Request'}
-          </button>
+          {!isAuthenticated ? (
+            <button
+              onClick={() => { onClose(); onSignUp?.() }}
+              className="flex-1 px-4 py-3 rounded-[12px] text-[14px] text-white font-medium"
+              style={{ background: '#306770', cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#255860' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#306770' }}
+            >
+              Sign Up
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={!hasSelection || !canAfford || submitting}
+              className="flex-1 px-4 py-3 rounded-[12px] text-[14px] text-white transition-all font-medium disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              style={{
+                background: hasSelection && canAfford ? '#306770' : '#D1D5DB',
+                opacity: hasSelection && canAfford ? 1 : 0.6
+              }}
+              onMouseEnter={(e) => {
+                if (hasSelection && canAfford && !submitting) {
+                  e.currentTarget.style.background = '#255860'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (hasSelection && canAfford) {
+                  e.currentTarget.style.background = '#306770'
+                }
+              }}
+            >
+              {submitting && (
+                <span
+                  className="animate-spin"
+                  style={{
+                    width: 15,
+                    height: 15,
+                    borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.35)',
+                    borderTopColor: '#ffffff',
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {submitting ? 'Submitting...' : !hasSelection ? 'Select an Option' : !canAfford ? 'Not Enough Credits' : 'Submit Request'}
+            </button>
+          )}
         </div>
       </div>
     </div>

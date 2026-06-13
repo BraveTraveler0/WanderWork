@@ -996,6 +996,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           currentCredits={currentCredits}
           initialResume={Boolean(initialCustomRequest?.resume)}
           initialCoverLetter={Boolean(initialCustomRequest?.coverLetter)}
+          isAuthenticated={isAuthenticated}
+          onSignUp={onSignUp}
         />
       )}
 
