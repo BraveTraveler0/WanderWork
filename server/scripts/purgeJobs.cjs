@@ -36,13 +36,16 @@ const MIN_PURGE = 0;           // never forced to remove beyond hard+low-score
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const AGGREGATOR_HOSTS = [
-  'jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com',
+  'jobicy.com', 'remoteok.com', 'remotive.com', 'arbeitnow.com', 'workingnomads.com',
   'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com',
   'simplyhired.com', 'careerjet.com', 'jooble.org', 'trovit.com',
   'smartremotejobs.com', 'remote.co', 'weworkremotely.com',
   'jobboard.io', 'remotejobs.world', 'nodesk.co',
   'himalayas.app', 'himalayas.com', 'otta.com', 'getro.com',
   'wellfound.com', 'angel.co',
+  'builtin.com', 'builtinsf.com', 'builtinnyc.com', 'builtinla.com',
+  'builtinboston.com', 'builtinchicago.com', 'builtincolorado.com',
+  'builtinaustin.com', 'builtinseattle.com',
 ];
 
 const ATS_HOSTS = [

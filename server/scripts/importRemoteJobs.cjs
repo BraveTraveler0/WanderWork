@@ -152,33 +152,55 @@ async function fetchRemotive(category = null) {
   const params = { limit: 100 };
   if (category) params.category = category;
   const res = await get('https://remotive.com/api/remote-jobs', { params });
-  return (res.data?.jobs || []).map(j => {
+  return (res.data?.jobs || []).flatMap(j => {
     const desc = truncateDesc(j.description);
-    return {
+    if (detectLang(desc) !== 'en') return [];
+    return [{
       title: stripEmoji(stripHtml(j.title)),
       company: stripHtml(j.company_name),
       url: j.url,
-      apply_url: j.url,
+      apply_url: null,           // remotive.com URLs are aggregator pages, not direct apply
+      company_url: j.company_url || null,
       salary: j.salary ? stripHtml(j.salary) : 'Not Listed',
       location: normalizeLocation(j.candidate_required_location),
       job_type: j.job_type || 'Full-time',
       date_posted: j.publication_date ? new Date(j.publication_date) : new Date(),
       description_short: desc,
-      lang: detectLang(desc),
+      lang: 'en',
       source: 'Remotive',
+      ats_direct: false,
       tags: Array.isArray(j.tags) ? j.tags.slice(0, 10) : [],
-    };
+    }];
   });
 }
 
 // Jobicy supports geo: usa, europe, uk, canada, australia, latin-america, asia, worldwide
+function isAggregatorHost(url) {
+  try {
+    const h = new URL(String(url)).hostname.replace(/^www\./, '').toLowerCase();
+    return AGGREGATOR_DOMAINS.some(d => h === d || h.endsWith('.' + d));
+  } catch { return true; } // treat unparseable URLs as aggregator
+}
+
+const AGGREGATOR_DOMAINS = [
+  'jobicy.com', 'remoteok.com', 'remotive.com', 'arbeitnow.com', 'workingnomads.com',
+  'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com',
+  'simplyhired.com', 'smartremotejobs.com', 'remote.co', 'weworkremotely.com',
+  'himalayas.app', 'himalayas.com', 'otta.com', 'getro.com',
+  'wellfound.com', 'angel.co', 'jobboard.io', 'nodesk.co',
+  'builtin.com', 'builtinsf.com', 'builtinnyc.com', 'builtinla.com',
+  'builtinboston.com', 'builtinchicago.com', 'builtincolorado.com',
+  'builtinaustin.com', 'builtinseattle.com',
+];
+
 async function fetchJobicyGeo(geo) {
   const res = await get('https://jobicy.com/api/v2/remote-jobs', { params: { count: 50, geo } });
-  return (res.data?.jobs || []).map(j => {
+  return (res.data?.jobs || []).flatMap(j => {
     const desc = truncateDesc(j.jobDescription);
-    // Only use jobApplyURL if it's a real company URL (not back to Jobicy)
-    const directUrl = j.jobApplyURL && !j.jobApplyURL.includes('jobicy.com') ? j.jobApplyURL : null;
-    return {
+    if (detectLang(desc) !== 'en') return [];
+    const rawApply = j.jobApplyURL || '';
+    const directUrl = rawApply && !isAggregatorHost(rawApply) ? rawApply : null;
+    return [{
       title: stripEmoji(stripHtml(j.jobTitle)),
       company: stripHtml(j.companyName),
       url: j.url,
@@ -188,20 +210,23 @@ async function fetchJobicyGeo(geo) {
       job_type: Array.isArray(j.jobType) ? j.jobType.join(', ') : (j.jobType || 'Full-time'),
       date_posted: j.pubDate ? new Date(j.pubDate) : new Date(),
       description_short: desc,
-      lang: detectLang(desc),
+      lang: 'en',
       source: 'Jobicy',
+      ats_direct: false,
       tags: Array.isArray(j.jobIndustry) ? j.jobIndustry : [],
-    };
+    }];
   });
 }
 
 async function fetchRemoteOK() {
   const res = await get('https://remoteok.com/api');
   const raw = Array.isArray(res.data) ? res.data.slice(1) : [];
-  return raw.map(j => {
+  return raw.flatMap(j => {
     const desc = truncateDesc(j.description);
-    const directUrl = j.apply_url && !j.apply_url.includes('remoteok.com') ? j.apply_url : null;
-    return {
+    if (detectLang(desc) !== 'en') return [];
+    const rawApply = j.apply_url || '';
+    const directUrl = rawApply && !isAggregatorHost(rawApply) ? rawApply : null;
+    return [{
       title: stripEmoji(stripHtml(j.position)),
       company: stripHtml(j.company),
       url: j.url || `https://remoteok.com/l/${j.slug}`,
@@ -211,10 +236,11 @@ async function fetchRemoteOK() {
       job_type: 'Full-time',
       date_posted: j.epoch ? new Date(Number(j.epoch) * 1000) : new Date(),
       description_short: desc,
-      lang: detectLang(desc),
+      lang: 'en',
       source: 'RemoteOK',
+      ats_direct: false,
       tags: Array.isArray(j.tags) ? j.tags.slice(0, 10) : [],
-    };
+    }];
   });
 }
 
@@ -301,12 +327,12 @@ async function importRemoteJobs() {
     let upserted = 0, updated = 0, skipped = 0, errors = 0;
     for (const job of jobs) {
       try {
-        if (!job.title || !job.url) { skipped++; continue; }
+        if (!job.title || !job.url || !job.description_short) { skipped++; continue; }
         const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
         const result = await col.updateOne(
           { url_normalized: urlNormalized },
           {
-            $set: { ...job, url_normalized: urlNormalized, score: 0, cover_letter: '', updatedAt: new Date() },
+            $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
             $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
           },
           { upsert: true }
