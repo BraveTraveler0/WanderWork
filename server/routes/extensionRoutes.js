@@ -1,9 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 const { requireAuth } = require('../middleware/requireAuth');
+
+function normalizeCompany(s) {
+  return String(s || '').toLowerCase()
+    .replace(/\b(inc|llc|ltd|corp|co|company|technologies|solutions|group|holdings)\b\.?/gi, '')
+    .replace(/[^a-z0-9]/g, '');
+}
 
 // GET /extension/key — returns (or generates) the extension key for the authenticated premium user
 router.get('/key', requireAuth, async (req, res) => {
@@ -105,6 +112,38 @@ router.post('/request-document', async (req, res) => {
   } catch (err) {
     console.error('[extension/request-document]', err.message);
     res.status(500).json({ message: 'Server error. Please try again.' });
+  }
+});
+
+// GET /extension/recruiters?company=X — returns recruiters paired to a company
+router.get('/recruiters', async (req, res) => {
+  try {
+    const key = req.headers['x-extension-key'] || req.query.key;
+    if (!key) return res.status(401).json({ recruiters: [] });
+    const user = await User.findOne({ extensionKey: key });
+    if (!user) return res.status(401).json({ recruiters: [] });
+
+    const company = String(req.query.company || '').trim();
+    if (!company) return res.json({ recruiters: [] });
+
+    const normTarget = normalizeCompany(company);
+    if (normTarget.length < 3) return res.json({ recruiters: [] });
+
+    const recruiterCol = mongoose.connection.collection('jobseeker.recruiters');
+    const all = await recruiterCol.find(
+      { company: { $exists: true, $ne: '' } },
+      { projection: { name: 1, firstName: 1, lastName: 1, company: 1, jobTitle: 1, specialty: 1, email: 1 } }
+    ).toArray();
+
+    const matched = all.filter(r => {
+      const norm = normalizeCompany(r.company);
+      return norm === normTarget || norm.includes(normTarget) || normTarget.includes(norm);
+    }).slice(0, 5);
+
+    res.json({ recruiters: matched });
+  } catch (err) {
+    console.error('[extension/recruiters]', err.message);
+    res.json({ recruiters: [] });
   }
 });
 

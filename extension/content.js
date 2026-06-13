@@ -246,6 +246,67 @@ function injectWidget(profile) {
 
   panel.append(panelTitle, jobInfo, resumeRow, clRow, formatRow, statusMsg, sendBtn);
 
+  // ── Recruiter panel ──────────────────────────────────────────────────────
+  const USERS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+
+  const recruiterPanel = document.createElement('div');
+  Object.assign(recruiterPanel.style, {
+    background: '#fff', borderRadius: '14px', padding: '14px 16px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '260px',
+    display: 'none', flexDirection: 'column', gap: '8px',
+  });
+
+  const recruiterPanelTitle = document.createElement('p');
+  recruiterPanelTitle.textContent = 'Recruiters at ' + (company || 'this company');
+  Object.assign(recruiterPanelTitle.style, { fontSize: '12px', fontWeight: '700', color: '#306770', margin: '0' });
+
+  const recruiterList = document.createElement('div');
+  Object.assign(recruiterList.style, { display: 'flex', flexDirection: 'column', gap: '6px' });
+
+  const recruiterOpenLink = document.createElement('a');
+  recruiterOpenLink.textContent = 'Open in Wander/Work →';
+  recruiterOpenLink.href = `https://wanderwork.io?recruiterCompany=${encodeURIComponent(company || '')}`;
+  recruiterOpenLink.target = '_blank';
+  Object.assign(recruiterOpenLink.style, {
+    fontSize: '11px', color: '#306770', textDecoration: 'none', fontWeight: '700',
+    marginTop: '2px', display: 'block', textAlign: 'right',
+  });
+
+  recruiterPanel.append(recruiterPanelTitle, recruiterList, recruiterOpenLink);
+
+  const recruiterBtn = document.createElement('button');
+  recruiterBtn.innerHTML = `${USERS_SVG}Contact Recruiter`;
+  Object.assign(recruiterBtn.style, {
+    background: 'linear-gradient(135deg, #e8f4f6 0%, #d0eaee 100%)',
+    color: '#306770', border: '1.5px solid rgba(48,103,112,0.35)',
+    borderRadius: '24px', padding: '8px 16px', fontSize: '12px', fontWeight: '700',
+    cursor: 'pointer', boxShadow: '0 2px 8px rgba(48,103,112,0.12)',
+    transition: 'all 0.15s', whiteSpace: 'nowrap',
+    display: 'none', alignItems: 'center',
+  });
+  recruiterBtn.addEventListener('mouseenter', () => {
+    recruiterBtn.style.background = '#306770';
+    recruiterBtn.style.color = '#fff';
+    recruiterBtn.style.border = '1.5px solid #306770';
+    recruiterBtn.style.transform = 'scale(1.03)';
+  });
+  recruiterBtn.addEventListener('mouseleave', () => {
+    recruiterBtn.style.background = 'linear-gradient(135deg, #e8f4f6 0%, #d0eaee 100%)';
+    recruiterBtn.style.color = '#306770';
+    recruiterBtn.style.border = '1.5px solid rgba(48,103,112,0.35)';
+    recruiterBtn.style.transform = 'scale(1)';
+  });
+  recruiterBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = recruiterPanel.style.display === 'flex';
+    recruiterPanel.style.display = open ? 'none' : 'flex';
+    panel.style.display = 'none';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!recruiterPanel.contains(e.target) && e.target !== recruiterBtn) recruiterPanel.style.display = 'none';
+  });
+
   // ── Doc toggle button ────────────────────────────────────────────────────
   const docBtn = document.createElement('button');
   docBtn.innerHTML = `${SPARKLES_SVG}Get Resume / Cover Letter`;
@@ -269,19 +330,19 @@ function injectWidget(profile) {
   });
 
   // ── Minimize / expand logic ──────────────────────────────────────────────
-  const expandedEls = [panel, autofillBtn, docBtn];
+  let hasRecruiters = false;
 
   function setMinimized(val) {
     if (val) {
-      expandedEls.forEach(el => { el.style.display = 'none'; });
+      [panel, recruiterPanel, autofillBtn, docBtn, recruiterBtn].forEach(el => { el.style.display = 'none'; });
       minimizeBtn.style.opacity = '0';
       minimizeBtn.style.pointerEvents = 'none';
       logoBall.style.display = 'flex';
     } else {
       logoBall.style.display = 'none';
-      // restore display values (panel stays hidden until toggled)
       autofillBtn.style.display = '';
       docBtn.style.display = 'flex';
+      if (hasRecruiters) recruiterBtn.style.display = 'flex';
     }
   }
 
@@ -296,16 +357,99 @@ function injectWidget(profile) {
     minimizeBtn.style.pointerEvents = 'none';
   });
 
-  minimizeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setMinimized(true);
-  });
-
+  minimizeBtn.addEventListener('click', (e) => { e.stopPropagation(); setMinimized(true); });
   logoBall.addEventListener('click', () => setMinimized(false));
 
-  // DOM order: minimizeBtn at top, then panel, autofill, doc, logoBall at bottom
-  widget.append(minimizeBtn, panel, autofillBtn, docBtn, logoBall);
+  // DOM: minimizeBtn top → panels → autofill → doc → recruiter → logoBall bottom
+  widget.append(minimizeBtn, panel, recruiterPanel, autofillBtn, docBtn, recruiterBtn, logoBall);
   document.body.appendChild(widget);
+
+  // ── Async: fetch recruiters for this company ─────────────────────────────
+  if (company) {
+    chrome.storage.local.get(['extensionKey'], async ({ extensionKey }) => {
+      if (!extensionKey) return;
+      try {
+        const res = await fetch(`${API}/extension/recruiters?company=${encodeURIComponent(company)}`, {
+          headers: { 'x-extension-key': extensionKey },
+        });
+        const data = await res.json().catch(() => ({ recruiters: [] }));
+        const recruiters = data.recruiters || [];
+        if (!recruiters.length) return;
+
+        hasRecruiters = true;
+
+        const SPECIALTY_COLORS = {
+          tech:       { bg: '#EEF4FF', text: '#3B6FD4' },
+          creative:   { bg: '#FFF4EE', text: '#C45A1A' },
+          product:    { bg: '#F0FAF4', text: '#2A7A50' },
+          data:       { bg: '#F5F0FF', text: '#6B3AB0' },
+          sales:      { bg: '#FFF8EE', text: '#B06A1A' },
+          operations: { bg: '#F3F4F6', text: '#555555' },
+          finance:    { bg: '#F0F8FF', text: '#1A6AB0' },
+          healthcare: { bg: '#FFF0F5', text: '#B0386A' },
+          legal:      { bg: '#F5F0FF', text: '#6B3AB0' },
+          business:   { bg: '#F0FAF4', text: '#2A7A50' },
+          general:    { bg: '#F3F4F6', text: '#555555' },
+        };
+
+        recruiters.forEach(r => {
+          const card = document.createElement('div');
+          Object.assign(card.style, {
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '8px 10px', borderRadius: '10px',
+            background: 'linear-gradient(135deg, #f7fbfc 0%, #eef6f8 100%)',
+            border: '1px solid rgba(48,103,112,0.12)',
+          });
+
+          // Avatar circle with initials
+          const avatar = document.createElement('div');
+          const initials = ((r.firstName?.[0] || '') + (r.lastName?.[0] || '') || r.name?.[0] || '?').toUpperCase();
+          Object.assign(avatar.style, {
+            width: '32px', height: '32px', borderRadius: '50%', flexShrink: '0',
+            background: 'linear-gradient(135deg, #306770, #255860)',
+            color: '#fff', fontSize: '12px', fontWeight: '700',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          });
+          avatar.textContent = initials;
+
+          const info = document.createElement('div');
+          Object.assign(info.style, { flex: '1', minWidth: '0' });
+
+          const nameEl = document.createElement('p');
+          nameEl.textContent = r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim();
+          Object.assign(nameEl.style, { fontSize: '12px', fontWeight: '700', color: '#1a1a1a', margin: '0', lineHeight: '1.3' });
+
+          const meta = document.createElement('div');
+          Object.assign(meta.style, { display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' });
+
+          if (r.jobTitle) {
+            const title = document.createElement('span');
+            title.textContent = r.jobTitle;
+            Object.assign(title.style, { fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '110px' });
+            meta.appendChild(title);
+          }
+
+          if (r.specialty) {
+            const colors = SPECIALTY_COLORS[r.specialty] || SPECIALTY_COLORS.general;
+            const badge = document.createElement('span');
+            badge.textContent = r.specialty.charAt(0).toUpperCase() + r.specialty.slice(1);
+            Object.assign(badge.style, {
+              fontSize: '9px', fontWeight: '700', padding: '2px 6px', borderRadius: '99px',
+              background: colors.bg, color: colors.text, whiteSpace: 'nowrap', flexShrink: '0',
+            });
+            meta.appendChild(badge);
+          }
+
+          info.append(nameEl, meta);
+          card.append(avatar, info);
+          recruiterList.appendChild(card);
+        });
+
+        recruiterBtn.innerHTML = `${USERS_SVG}Contact Recruiter${recruiters.length > 1 ? 's (' + recruiters.length + ')' : ''}`;
+        recruiterBtn.style.display = 'flex';
+      } catch (_) { /* silently skip */ }
+    });
+  }
 }
 
 // Inject whenever the user is connected, regardless of form presence
