@@ -41,6 +41,8 @@ const AGGREGATOR_HOSTS = [
   'simplyhired.com', 'careerjet.com', 'jooble.org', 'trovit.com',
   'smartremotejobs.com', 'remote.co', 'weworkremotely.com',
   'jobboard.io', 'remotejobs.world', 'nodesk.co',
+  'himalayas.app', 'himalayas.com', 'otta.com', 'getro.com',
+  'wellfound.com', 'angel.co',
 ];
 
 const ATS_HOSTS = [
