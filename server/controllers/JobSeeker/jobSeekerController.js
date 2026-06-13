@@ -2613,11 +2613,21 @@ const INDEED_RE = /indeed|linkedin/i;
 const SALARY_NUM_RE = /\d/;
 const JUNK_SALARY_RE = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i;
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 const getFeaturedJobs = asyncHandler(async (req, res) => {
     const all = await getAllJobsPure();
+    const cutoff = Date.now() - THIRTY_DAYS_MS;
 
     const scored = [];
     for (const job of all) {
+        // Must be within the last 30 days
+        const raw = job.date_posted || job.datePosted || job.postedAt || job.postedDate;
+        if (raw) {
+            const ts = new Date(raw).getTime();
+            if (!Number.isNaN(ts) && ts < cutoff) continue;
+        }
+
         // Hard excludes: must have a real title, company, and URL
         const title = String(job.title || job.job_title || job.name || '').trim();
         const company = String(job.company || '').trim();
@@ -2644,8 +2654,7 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
     }
 
     scored.sort((a, b) => b.score - a.score);
-    const featured = scored.slice(0, 50).map(({ job }) => job);
-    res.json(featured);
+    res.json(scored.map(({ job }) => job));
 });
 
 module.exports =

@@ -692,6 +692,7 @@ function App() {
     if (_token) return
     const JUNK_SALARY = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i
     const EXCLUDE_SRC = /indeed|linkedin/i
+    const THIRTY_DAYS_AGO = Date.now() - 30 * 24 * 60 * 60 * 1000
     const mapJobs = (raw: any[]) => raw.map((j: any, i: number) => {
       const postedAt = j.date_posted || j.datePosted || j.postedAt || null
       const parsedDate = postedAt ? new Date(postedAt) : null
@@ -736,6 +737,11 @@ function App() {
               .filter(j => {
                 const src = String(j.source || '').toLowerCase()
                 if (EXCLUDE_SRC.test(src)) return false
+                const raw = j.date_posted || j.datePosted || j.postedAt
+                if (raw) {
+                  const ts = new Date(raw).getTime()
+                  if (!Number.isNaN(ts) && ts < THIRTY_DAYS_AGO) return false
+                }
                 const title = String(j.title || j.positionName || '').trim()
                 const company = String(j.company || '').trim()
                 return title && title !== 'Untitled' && company && company !== 'Unknown' && (j.url || j.apply_url)
@@ -753,7 +759,6 @@ function App() {
                 return { j, score }
               })
               .sort((a, b) => b.score - a.score)
-              .slice(0, 50)
               .map(({ j }) => j)
             setPublicJobs(mapJobs(filtered))
           })
