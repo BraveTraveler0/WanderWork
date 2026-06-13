@@ -58,7 +58,7 @@ async function cleanNewJobs() {
   console.log(`[CleanDesc] cleaned=${done} errors=${errors}`);
 }
 
-// Standalone one-time batch — no job cap, run from Render shell
+// Standalone one-time batch — paginates with fresh queries to avoid cursor timeout
 async function cleanAllJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   const total = await col.countDocuments({ desc_cleaned: { $ne: true }, description_short: { $exists: true, $ne: '' } });
@@ -66,22 +66,22 @@ async function cleanAllJobs() {
 
   let done = 0, errors = 0;
   const CONCURRENCY = 3;
-  let batch = [];
-  const cursor = col.find({ desc_cleaned: { $ne: true }, description_short: { $exists: true, $ne: '' } });
+  const PAGE = 30;
 
-  for await (const job of cursor) {
-    batch.push(job);
-    if (batch.length >= CONCURRENCY) {
-      const results = await Promise.all(batch.map(j => cleanJob(col, j)));
+  while (true) {
+    const page = await col
+      .find({ desc_cleaned: { $ne: true }, description_short: { $exists: true, $ne: '' } })
+      .limit(PAGE)
+      .toArray();
+    if (page.length === 0) break;
+
+    for (let i = 0; i < page.length; i += CONCURRENCY) {
+      const chunk = page.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(j => cleanJob(col, j)));
       results.forEach(ok => ok ? done++ : errors++);
       if (done % 30 === 0) console.log(`[CleanDesc] ${done}/${total}...`);
-      batch = [];
-      await new Promise(r => setTimeout(r, 300));
+      if (i + CONCURRENCY < page.length) await new Promise(r => setTimeout(r, 300));
     }
-  }
-  if (batch.length) {
-    const results = await Promise.all(batch.map(j => cleanJob(col, j)));
-    results.forEach(ok => ok ? done++ : errors++);
   }
   console.log(`[CleanDesc] Complete. cleaned=${done} errors=${errors}`);
 }
