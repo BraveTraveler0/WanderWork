@@ -648,7 +648,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Actions */}
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col xl:flex-row gap-3">
+                <div className="flex flex-col xl:flex-row xl:items-start gap-3">
                   <a
                     className="flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white xl:flex-1"
                     style={{
