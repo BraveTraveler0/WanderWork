@@ -496,7 +496,7 @@ function App() {
   const [showNewOnly, setShowNewOnly] = useState(false)
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>('dashboard')
   const [unseenAppCount, setUnseenAppCount] = useState(0)
-  const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade'>('personal')
+  const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade' | 'extension'>('personal')
   const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
   const [autoOpenCoverLetterJobId, setAutoOpenCoverLetterJobId] = useState<number | null>(null)
   const [showMenu, setShowMenu] = useState(false)

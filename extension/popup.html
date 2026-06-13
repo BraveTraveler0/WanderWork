@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wander/Work Autofill</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 300px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #fff;
+      color: #1a1a1a;
+    }
+    .header {
+      background: #306770;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+    .logo span { opacity: 0.7; font-weight: 400; }
+    .body { padding: 18px; }
+
+    /* disconnected state */
+    #state-disconnected { display: flex; flex-direction: column; gap: 12px; }
+    .desc { font-size: 12px; color: #666; line-height: 1.5; }
+    label { font-size: 12px; font-weight: 600; color: #333; display: block; margin-bottom: 4px; }
+    input[type="text"] {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1.5px solid #D1D9DB;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      color: #1a1a1a;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus { border-color: #306770; }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: #306770; color: #fff; }
+    .btn-primary:hover { background: #255860; }
+    .btn-secondary { background: #f0f4f5; color: #306770; }
+    .btn-secondary:hover { background: #e0ebec; }
+    .error { font-size: 12px; color: #c0392b; }
+
+    /* connected state */
+    #state-connected { display: none; flex-direction: column; gap: 12px; }
+    .connected-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #f0f9f0;
+      border-radius: 8px;
+      border: 1px solid #b8e0ba;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #27ae60; flex-shrink: 0; }
+    .connected-name { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+    .connected-sub { font-size: 11px; color: #666; }
+    .divider { height: 1px; background: #f0f0f0; }
+    .site-status { font-size: 12px; color: #666; }
+    .site-status b { color: #306770; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Wander/Work <span>Autofill</span></div>
+  </div>
+
+  <div class="body">
+    <!-- Disconnected -->
+    <div id="state-disconnected">
+      <p class="desc">Connect your Wander/Work Premium account to autofill job applications in seconds.</p>
+      <div>
+        <label for="key-input">Extension Key</label>
+        <input type="text" id="key-input" placeholder="Paste your key from Settings..." />
+      </div>
+      <p class="error" id="error-msg" style="display:none"></p>
+      <button class="btn btn-primary" id="connect-btn">Connect Account</button>
+      <p class="desc" style="text-align:center">Find your key in Wander/Work <b>Settings</b></p>
+    </div>
+
+    <!-- Connected -->
+    <div id="state-connected">
+      <div class="connected-badge">
+        <div class="dot"></div>
+        <div>
+          <div class="connected-name" id="connected-name">Connected</div>
+          <div class="connected-sub">Premium account active</div>
+        </div>
+      </div>
+      <p class="site-status" id="site-status">Open a job application to autofill.</p>
+      <div class="divider"></div>
+      <button class="btn btn-secondary" id="disconnect-btn">Disconnect</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -211,6 +211,10 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 1,
     },
+    extensionKey: {
+        type: String,
+        default: null
+    },
     isAdmin: {
         type: Boolean,
         default: false

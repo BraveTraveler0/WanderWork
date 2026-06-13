@@ -64,7 +64,7 @@ const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOr
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.has(origin) || /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin)) {
+    if (allowedOrigins.has(origin) || /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin) || /^chrome-extension:\/\//.test(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
@@ -176,7 +176,8 @@ const routes = {
   '/recruiter': './routes/JobSeeker/recruiterRoute',
   '/sync': './routes/sync',
   '/tally': './routes/tallyWebhook',
-  '/oauth': './routes/oauthRoutes'
+  '/oauth': './routes/oauthRoutes',
+  '/extension': './routes/extensionRoutes'
 };
 
 // Register routes

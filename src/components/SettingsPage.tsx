@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { changePassword, updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
+import { getExtensionKey, regenerateExtensionKey } from '../api/extension'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -63,8 +64,8 @@ function renderMarkdown(text: string) {
 
 interface SettingsPageProps {
   onBack: () => void
-  currentPage: 'account' | 'personal' | 'payment' | 'upgrade'
-  onPageChange: (page: 'account' | 'personal' | 'payment' | 'upgrade') => void
+  currentPage: 'account' | 'personal' | 'payment' | 'upgrade' | 'extension'
+  onPageChange: (page: 'account' | 'personal' | 'payment' | 'upgrade' | 'extension') => void
   data?: JobSeekerData
   onCandidateUpdate?: (patch: any) => void
   onDeleteAccount?: () => void
@@ -122,6 +123,33 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     return getSavedJson('wanderworkNotifications', { jobAlerts: true, weeklyDigest: true })
   })
   const [upgradeLoading, setUpgradeLoading] = useState<StripePlan | null>(null)
+  const [extKey, setExtKey] = useState<string | null>(null)
+  const [extKeyLoading, setExtKeyLoading] = useState(false)
+  const [extKeyError, setExtKeyError] = useState<string | null>(null)
+  const [extKeyCopied, setExtKeyCopied] = useState(false)
+
+  const loadExtKey = async () => {
+    setExtKeyLoading(true); setExtKeyError(null)
+    try { setExtKey(await getExtensionKey()) }
+    catch (e: any) { setExtKeyError(e?.message || 'Failed to load key') }
+    finally { setExtKeyLoading(false) }
+  }
+
+  const handleRegenKey = async () => {
+    setExtKeyLoading(true); setExtKeyError(null)
+    try { setExtKey(await regenerateExtensionKey()) }
+    catch (e: any) { setExtKeyError(e?.message || 'Failed to regenerate key') }
+    finally { setExtKeyLoading(false) }
+  }
+
+  const copyExtKey = () => {
+    if (!extKey) return
+    navigator.clipboard.writeText(extKey).then(() => {
+      setExtKeyCopied(true)
+      setTimeout(() => setExtKeyCopied(false), 2000)
+    })
+  }
+
   const handleUpgrade = async (plan: StripePlan) => {
     setUpgradeLoading(plan)
     try {
@@ -449,6 +477,17 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   }}
                 >
                   Upgrade Plan
+                </button>
+                <button
+                  onClick={() => { onPageChange('extension'); if (!extKey) loadExtKey() }}
+                  className="px-4 py-2 rounded-[10px] text-left text-[14px] transition-colors"
+                  style={{
+                    background: currentPage === 'extension' ? '#30677010' : 'transparent',
+                    color: '#306770',
+                    fontWeight: currentPage === 'extension' ? '600' : '400'
+                  }}
+                >
+                  Extension
                 </button>
               </nav>
             </div>
@@ -930,6 +969,89 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       Upgrade to Premium
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {currentPage === 'extension' && (
+              <div className="bg-white rounded-[15px] p-6 sm:p-8 flex flex-col gap-6" style={{ boxShadow: '0px 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <div>
+                  <h2 className="text-[24px] font-semibold mb-1" style={{ color: '#306770' }}>Autofill Extension</h2>
+                  <p className="text-[14px]" style={{ color: '#787878' }}>
+                    Install the Wander/Work Chrome extension to autofill job applications on Greenhouse, Lever, Ashby, Workday, and more.
+                  </p>
+                </div>
+
+                <div className="border rounded-[12px] p-5 flex flex-col gap-4" style={{ borderColor: '#E8EFF0' }}>
+                  <h3 className="text-[15px] font-semibold" style={{ color: '#306770' }}>Your Extension Key</h3>
+                  <p className="text-[13px]" style={{ color: '#787878' }}>
+                    Paste this key into the extension popup to connect your account. Keep it private.
+                  </p>
+
+                  {extKeyError && (
+                    <div className="rounded-[10px] px-4 py-3 text-[13px]" style={{ background: '#fff0f0', color: '#c0392b', border: '1px solid #fcc' }}>
+                      {extKeyError}
+                    </div>
+                  )}
+
+                  {extKey ? (
+                    <div className="flex gap-2">
+                      <div className="flex-1 px-4 py-3 rounded-[10px] text-[13px] select-all font-mono truncate" style={{ background: '#f4f8f9', border: '1.5px solid #D1D9DB', color: '#306770' }}>
+                        {extKey}
+                      </div>
+                      <button
+                        onClick={copyExtKey}
+                        className="px-4 py-2 rounded-[10px] text-[13px] font-semibold transition-colors"
+                        style={{ background: extKeyCopied ? '#27ae60' : '#306770', color: 'white', minWidth: 70 }}
+                      >
+                        {extKeyCopied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={loadExtKey}
+                      disabled={extKeyLoading}
+                      className="px-4 py-3 rounded-[10px] text-[14px] font-semibold text-white transition-colors"
+                      style={{ background: extKeyLoading ? '#a0b8bc' : '#306770' }}
+                    >
+                      {extKeyLoading ? 'Loading...' : 'Show My Key'}
+                    </button>
+                  )}
+
+                  {extKey && (
+                    <button
+                      onClick={handleRegenKey}
+                      disabled={extKeyLoading}
+                      className="text-[12px] text-left"
+                      style={{ color: '#787878', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      Regenerate key (invalidates the old one)
+                    </button>
+                  )}
+                </div>
+
+                <div className="border rounded-[12px] p-5 flex flex-col gap-3" style={{ borderColor: '#E8EFF0' }}>
+                  <h3 className="text-[15px] font-semibold" style={{ color: '#306770' }}>Supported Sites</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {['Greenhouse', 'Lever', 'Ashby', 'Workday', 'SmartRecruiters', 'Workable', 'Jobvite'].map(site => (
+                      <span key={site} className="px-3 py-1 rounded-full text-[12px]" style={{ background: '#f0f7f8', color: '#306770', border: '1px solid #C8DDE0' }}>{site}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border rounded-[12px] p-5 flex flex-col gap-2" style={{ borderColor: '#E8EFF0' }}>
+                  <h3 className="text-[15px] font-semibold mb-1" style={{ color: '#306770' }}>How to Install</h3>
+                  {[
+                    'Download the Wander/Work extension from the Chrome Web Store',
+                    'Click the extension icon and paste your key above',
+                    'Open any job application on a supported site',
+                    'Click the teal Autofill button to fill the form instantly',
+                  ].map((step, i) => (
+                    <div key={i} className="flex gap-3 items-start text-[13px]" style={{ color: '#444' }}>
+                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-0.5" style={{ background: '#306770', color: 'white' }}>{i + 1}</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Wander/Work Autofill",
+  "version": "1.0.0",
+  "description": "Autofill job applications instantly with your Wander/Work profile. Premium feature.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://boards.greenhouse.io/*",
+    "https://job-boards.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://careers.smartrecruiters.com/*",
+    "https://apply.workable.com/*",
+    "https://jobs.jobvite.com/*",
+    "https://*.greenhouse.io/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Wander/Work Autofill"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://careers.smartrecruiters.com/*",
+        "https://apply.workable.com/*",
+        "https://jobs.jobvite.com/*",
+        "https://*.greenhouse.io/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
