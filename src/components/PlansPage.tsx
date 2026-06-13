@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
-import { createCheckoutSession, type Plan as StripePlan } from '../api/stripe'
+import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
 
 const LS_URLS: Record<string, string> = {
   tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
@@ -358,12 +358,14 @@ const PlansPage = ({
     return () => cancelAnimationFrame(t)
   }, [])
 
-  const handleStripeCheckout = async (plan: StripePlan) => {
+  const handleStripeCheckout = async (plan: StripePlan | 'tokens') => {
     if (!userEmail && onSignUp) { onSignUp(); return }
     setCheckoutLoading(plan)
     setCheckoutError(null)
     try {
-      const url = await createCheckoutSession(plan, userEmail || '')
+      const url = plan === 'tokens'
+        ? await createTokenCheckoutSession(3, userEmail || '')
+        : await createCheckoutSession(plan, userEmail || '')
       window.location.href = url
     } catch (err: any) {
       setCheckoutError(err?.message || 'Could not start checkout. Please try again.')
@@ -645,9 +647,7 @@ const PlansPage = ({
       <PaymentModal
         planKey={paymentModal.planKey}
         onClose={() => setPaymentModal(null)}
-        onStripe={() => paymentModal!.stripePlan
-          ? handleStripeCheckout(paymentModal!.stripePlan!)
-          : undefined}
+        onStripe={() => handleStripeCheckout(paymentModal!.stripePlan ?? 'tokens')}
       />
     )}
     </>
