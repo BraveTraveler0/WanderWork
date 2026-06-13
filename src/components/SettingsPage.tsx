@@ -988,12 +988,6 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     Paste this key into the extension popup to connect your account. Keep it private.
                   </p>
 
-                  {extKeyError && (
-                    <div className="rounded-[10px] px-4 py-3 text-[13px]" style={{ background: '#fff0f0', color: '#c0392b', border: '1px solid #fcc' }}>
-                      {extKeyError}
-                    </div>
-                  )}
-
                   {extKey ? (
                     <div className="flex gap-2">
                       <div className="flex-1 px-4 py-3 rounded-[10px] text-[13px] select-all font-mono truncate" style={{ background: '#f4f8f9', border: '1.5px solid #D1D9DB', color: '#306770' }}>
@@ -1007,6 +1001,14 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                         {extKeyCopied ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
+                  ) : extKeyError ? (
+                    <button
+                      onClick={() => onPageChange('upgrade')}
+                      className="px-4 py-3 rounded-[10px] text-[14px] font-semibold text-white transition-colors"
+                      style={{ background: '#306770' }}
+                    >
+                      Upgrade to Premium to use Autofill
+                    </button>
                   ) : (
                     <button
                       onClick={loadExtKey}
