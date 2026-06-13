@@ -151,6 +151,7 @@ interface JobFeedProps {
   onToggleNewFilter: () => void
   loading?: boolean
   isAuthenticated?: boolean
+  onSignIn?: () => void
 }
 
 const BATCH = 15
@@ -244,7 +245,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -956,6 +957,30 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         ) : (
           <div ref={sentinelRef} />
         )}
+
+        {!isAuthenticated && (
+          <div className="flex flex-col items-center gap-3 py-10 px-6">
+            <p className="text-[13px] text-center" style={{ color: '#787878', fontFamily: 'Manrope' }}>
+              Sign in to see hundreds more remote jobs matched to your profile.
+            </p>
+            <button
+              onClick={() => onSignIn?.()}
+              style={{
+                background: '#306770',
+                color: 'white',
+                fontFamily: 'Manrope',
+                fontWeight: 600,
+                fontSize: 14,
+                borderRadius: 12,
+                padding: '10px 28px',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              View More Jobs
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1221,7 +1246,10 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
             <div className="text-left sm:text-right" style={{ color: '#787878' }}>
               <p className="text-[12px] mb-2">{formatPostedDate(postedAt ?? rawDate)}</p>
               <p className="text-[14px] sm:text-[16px] mb-2 line-clamp-1 max-w-[160px] sm:max-w-[180px] sm:ml-auto">{company}</p>
-              <p className="text-[10px] truncate max-w-[140px] sm:ml-auto">{location}</p>
+              {location && !/^remote$/i.test(location.trim()) && (
+                <p className="text-[10px] truncate max-w-[140px] sm:ml-auto">Based in {location}</p>
+              )}
+              <p className="text-[10px] sm:ml-auto" style={{ color: '#306770' }}>Remote</p>
             </div>
           </div>
 

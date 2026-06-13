@@ -610,7 +610,25 @@ const sendEmail = asyncHandler(async (req, res) => {
   const contactsRemaining = (prevCandidate.recruiterContactsLeft ?? 1) - 1
 
   // Resolve email body: generate on-demand, or fall back to a safe generic draft.
-  const { emailBody, source: emailBodySource } = await resolveRecruiterEmailBody(recruiter, prevCandidate)
+  let { emailBody, source: emailBodySource } = await resolveRecruiterEmailBody(recruiter, prevCandidate)
+
+  // Final guard: if body is somehow still empty, use a minimal safe fallback.
+  if (!emailBody || emailBody.trim().length < 30) {
+    const candidateName = [prevCandidate.firstName, prevCandidate.lastName].filter(Boolean).join(' ') || 'the candidate'
+    const recruiterFirstName = getFirstName(recruiter)
+    emailBody = [
+      recruiterFirstName ? `Hey ${recruiterFirstName},` : 'Hey,',
+      '',
+      `I wanted to reach out and introduce myself. My name is ${candidateName} and I am actively exploring new remote opportunities. I came across your profile and thought it would be worth connecting.`,
+      '',
+      'Are you currently hiring, or do you anticipate any freelance, contract, or full-time openings soon? If so, I would love to share more about my background.',
+      '',
+      'Thanks,',
+      candidateName,
+    ].join('\n')
+    emailBodySource = 'emergency-fallback'
+    console.warn(`[RecruiterEmail] Used emergency fallback body for candidate ${candidateId}`)
+  }
 
   // Send the generated draft only to the candidate's inbox. Do not contact the recruiter from WanderWork.
   const recruiterLabel = [
@@ -620,14 +638,47 @@ const sendEmail = asyncHandler(async (req, res) => {
   const subject = recruiterLabel
     ? `Your recruiter email draft for ${recruiterLabel}`
     : 'Your recruiter email draft'
-  const deliveredDraftBody = [
-    `Use this email address: ${recruiterEmail}. Delete this instruction block before sending. Good luck!`,
-    'Please do not reply to or forward this message. Copy the draft below into a new email before sending; it looks more professional and improves your chances of getting the job.',
-    '',
-    '------------------------------------------------------------',
-    '',
-    emailBody,
-  ].join('\n')
+
+  const instructionLines = [
+    `Send to: ${recruiterEmail}`,
+    'Remove this instruction block before sending. Copy the draft into a new email — it looks more professional and improves your chances.',
+  ]
+  const instructionText = instructionLines.join('\n')
+  const separator = '─'.repeat(60)
+
+  const deliveredDraftBody = [instructionText, '', separator, '', emailBody].join('\n')
+
+  const emailBodyHtml = emailBody
+    .split('\n')
+    .map((line) => line.trim() === '' ? '<br>' : `<p style="margin:0 0 10px 0;">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+    .join('\n')
+
+  const deliveredDraftHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f6f7;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f7;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr><td style="padding-bottom:16px;"><p style="margin:0;font-size:18px;font-weight:700;letter-spacing:3px;color:#306770;">WANDER<span style="opacity:0.45;">/</span>WORK</p></td></tr>
+        <tr><td style="background:#fff5e6;border-left:4px solid #d97706;border-radius:8px;padding:14px 18px;margin-bottom:16px;">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#92400e;">Instructions (remove before sending)</p>
+          <p style="margin:0;font-size:13px;color:#78350f;">Send to: <strong>${recruiterEmail}</strong></p>
+          <p style="margin:6px 0 0;font-size:12px;color:#92400e;">Copy this draft into a new email before sending. It looks more professional and improves your chances.</p>
+        </td></tr>
+        <tr><td style="height:16px;"></td></tr>
+        <tr><td style="background:#ffffff;border-radius:16px;padding:32px 36px;box-shadow:0 4px 16px rgba(0,0,0,0.07);">
+          <p style="margin:0 0 16px;font-size:13px;font-weight:600;letter-spacing:1.5px;color:#306770;text-transform:uppercase;">Your Draft</p>
+          <div style="font-size:15px;color:#1f2937;line-height:1.7;">${emailBodyHtml}</div>
+        </td></tr>
+        <tr><td style="padding:20px 0 0;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#c0c8cc;">Do not reply to or forward this message. This draft was prepared by Wander/Work.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
 
   const mailOptions = {
     from: draftMailer.sender,
@@ -635,6 +686,7 @@ const sendEmail = asyncHandler(async (req, res) => {
     replyTo: draftMailer.sender.email,
     subject,
     text: deliveredDraftBody,
+    html: deliveredDraftHtml,
   }
 
   try {

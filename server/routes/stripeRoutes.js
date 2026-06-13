@@ -84,7 +84,7 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Stripe checkout session error:', err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Could not start checkout. Please try again.' });
   }
 });
 
@@ -141,7 +141,7 @@ router.post('/create-token-checkout-session', requireAuth, async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Stripe token checkout session error:', err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Could not start checkout. Please try again.' });
   }
 });
 
@@ -151,14 +151,17 @@ router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+  if (!webhookSecret) {
+    console.error('[Stripe] STRIPE_WEBHOOK_SECRET is not set — webhook rejected for security');
+    return res.status(400).send('Webhook error: endpoint not configured');
+  }
+
   let event;
   try {
-    event = webhookSecret
-      ? stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
-      : JSON.parse(req.body.toString());
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
     console.error('Stripe webhook signature error:', err.message);
-    return res.status(400).send(`Webhook error: ${err.message}`);
+    return res.status(400).send('Webhook error: invalid signature');
   }
 
   try {
@@ -284,7 +287,7 @@ router.post('/create-payment-intent', requireAuth, async (req, res) => {
     res.send({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
     console.error('Error creating payment intent:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Payment could not be processed. Please try again.' });
   }
 });
 
@@ -304,7 +307,8 @@ router.post('/portal', requireAuth, async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Stripe portal error:', err.message);
+    res.status(500).json({ message: 'Could not open billing portal. Please try again.' });
   }
 });
 

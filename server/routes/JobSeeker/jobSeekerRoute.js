@@ -69,6 +69,9 @@ router.route('/pair-jobs')
 router.route('/custom-request')
     .post(requireAuth, jobSeekerController.submitCustomRequest)
 
+router.route('/featured-jobs')
+    .get(jobSeekerController.getFeaturedJobs)
+
 router.route('/job')
     .get(jobSeekerController.getAllJobs)
 

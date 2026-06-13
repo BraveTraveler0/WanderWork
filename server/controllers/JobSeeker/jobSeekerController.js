@@ -2608,11 +2608,55 @@ const sendPlanWelcomeEmail = asyncHandler(async (req, res) => {
     }
 });
 
+const INDEED_RE = /indeed|linkedin/i;
+const SALARY_NUM_RE = /\d/;
+const JUNK_SALARY_RE = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i;
+
+const getFeaturedJobs = asyncHandler(async (req, res) => {
+    const all = await getAllJobsPure();
+
+    const scored = [];
+    for (const job of all) {
+        const src = String(job.source || '').toLowerCase();
+        if (INDEED_RE.test(src)) continue;
+
+        const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
+        if (desc.length < 80) continue;
+
+        const title = String(job.title || job.job_title || job.name || '').trim();
+        const company = String(job.company || '').trim();
+        if (!title || !company || company === 'Unknown' || title === 'Untitled') continue;
+
+        if (!job.url && !job.apply_url && !job.applyUrl) continue;
+
+        const salary = String(job.salary || '').trim();
+        const hasSalary = salary && !JUNK_SALARY_RE.test(salary) && SALARY_NUM_RE.test(salary);
+
+        let score = 0;
+        if (hasSalary) score += 3;
+        if (desc.length >= 250) score += 2;
+        else if (desc.length >= 150) score += 1;
+        const skillCount = Array.isArray(job.skills) ? job.skills.length : 0;
+        if (skillCount >= 3) score += 1;
+        // Prefer well-known ATS sources
+        if (/greenhouse|lever|workday|linkedin|ashby|smartrecruiters|icims|jobvite|breezy/i.test(src)) score += 2;
+        // Small random tiebreaker so the 50 are shuffled among equals
+        score += Math.random() * 0.5;
+
+        scored.push({ job, score });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    const featured = scored.slice(0, 50).map(({ job }) => job);
+    res.json(featured);
+});
+
 module.exports =
 {
     getEverything,
     getAllCandidates,
     getAllJobs,
+    getFeaturedJobs,
     getAllApplications,
     getAllContacts,
     getAllCandidateJobPairings,

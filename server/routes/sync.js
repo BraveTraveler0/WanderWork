@@ -122,9 +122,14 @@ async function upsertJobs(records) {
         r.companyInfo?.companyDescription
       );
       const fallbackDescription = `${title} at ${company}. Full details are available through the job posting link.`;
-      const descriptionShort = stripHtml(descriptionRaw).slice(0, 500) ||
-        (process.env.OPENAI_API_KEY ? await aiCompanyDescription(company) : '') ||
-        fallbackDescription;
+      const descFull = stripHtml(descriptionRaw);
+      const descriptionShort = (() => {
+        if (!descFull) return (process.env.OPENAI_API_KEY ? null : '') || fallbackDescription;
+        if (descFull.length <= 500) return descFull;
+        const cut = descFull.slice(0, 500);
+        const lastSentence = cut.search(/[.!?][^.!?]*$/);
+        return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut;
+      })() || (process.env.OPENAI_API_KEY ? await aiCompanyDescription(company) : '') || fallbackDescription;
       const dateRaw = firstText(r.datePosted, r.date_posted, r.postedAt, r.postedDate, r.rawDate);
       const parsedDate = dateRaw ? new Date(dateRaw) : new Date();
       const providedJobCode = firstText(r.jobCode, r.job_code, r.code);

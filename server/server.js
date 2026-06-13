@@ -1,6 +1,8 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoose = require('mongoose'); // Add this import
 const connectDB = require("./config/dbConn");
@@ -24,6 +26,12 @@ const PORT = process.env.PORT || 8000;
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
 app.set('trust proxy', 1);
+
+app.use(compression());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
+}));
 
 // Connection check middleware
 const checkConnection = async (req, res, next) => {
@@ -73,6 +81,28 @@ const authLimiter = rateLimit({
   message: { message: 'Too many requests. Please try again later.' },
 });
 app.use(['/auth/login', '/auth/signup', '/auth/forgotPassword', '/auth/resetPassword', '/oauth/google'], authLimiter);
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health',
+  message: { message: 'Too many requests. Please try again shortly.' },
+});
+app.use('/jobseeker', apiLimiter);
+app.use('/recruiter', apiLimiter);
+
+// Tight rate limit for abuse-prone unauthenticated endpoints
+const claimLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
+app.use('/jobseeker/claim-weekly-token', claimLimiter);
+app.use('/stripe/redeem-code', claimLimiter);
 
 // UTF-8 Header Middleware
 app.use((req, res, next) => {

@@ -556,6 +556,22 @@ function App() {
       setOauthError('LinkedIn sign-in failed. Please try again.')
       window.history.replaceState({}, '', window.location.pathname)
       setTimeout(() => setOauthError(null), 6000)
+    } else if (params.get('checkout') === 'success') {
+      const plan = params.get('plan')
+      const type = params.get('type')
+      window.history.replaceState({}, '', window.location.pathname)
+      if (type === 'tokens') {
+        const qty = params.get('tokens')
+        setTokenClaimNotice({ text: qty ? `${qty} tokens added to your account!` : 'Tokens added to your account!', success: true })
+      } else if (plan) {
+        const planLabel = plan === 'pro' ? 'Pro' : plan === 'premium' ? 'Premium' : plan
+        setTokenClaimNotice({ text: `You're now on Wander/Work ${planLabel}. Welcome!`, success: true })
+      } else {
+        setTokenClaimNotice({ text: 'Payment successful. Your account has been upgraded!', success: true })
+      }
+      setTimeout(() => setTokenClaimNotice(null), 8000)
+    } else if (params.get('checkout') === 'cancelled') {
+      window.history.replaceState({}, '', window.location.pathname)
     } else if (params.get('upgrade') === '1') {
       setCurrentPage('plans')
       window.history.replaceState({}, '', window.location.pathname)
@@ -674,7 +690,7 @@ function App() {
 
   useEffect(() => {
     if (_token) return
-    fetch(`${API_BASE}/jobseeker/job?limit=200`)
+    fetch(`${API_BASE}/jobseeker/featured-jobs`)
       .then(r => r.json())
       .then(data => {
         const jobs = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
@@ -1343,6 +1359,7 @@ function App() {
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
                   loading={_token ? loading : publicJobsLoading}
                   isAuthenticated={!!_token}
+                  onSignIn={() => setShowLogin(true)}
                 />
               </div>
 
@@ -1448,7 +1465,7 @@ function WelcomeModal({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#306770]">Welcome to Wander/Work</p>
         <h2 id="wanderwork-welcome-title" className="text-2xl font-bold leading-tight text-[#1A1A2E] sm:text-3xl">
-          Thank you for testing!
+          You're in. Let's get started.
         </h2>
         <p className="mt-3 text-base font-semibold leading-7 text-[#306770]">
           Here is 100 tokens to get you started.

@@ -102,6 +102,19 @@ async function main() {
         const url = firstText(r.url, r.id, r.applyUrl, r.apply_url);
         if (!url) { skipped++; continue; }
 
+        // Skip jobs with no remote signal in location, title, or description
+        const includeNonRemote = process.argv.includes('--include-nonremote');
+        if (!includeNonRemote) {
+          const REMOTE_RE = /remote|worldwide|anywhere|work from home|\bwfh\b/i;
+          const rawLoc = String(r.location || '');
+          const locIsNonRemote = rawLoc && !REMOTE_RE.test(rawLoc);
+          if (locIsNonRemote) {
+            const titleText = String(r.positionName || r.title || r.jobTitle || '');
+            const descText = String(r.description || r.jobDescription || r.description_short || r.companyInfo?.companyDescription || '');
+            if (!REMOTE_RE.test(titleText) && !REMOTE_RE.test(descText)) { skipped++; continue; }
+          }
+        }
+
         const urlNormalized = url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
         const title = stripHtml(firstText(r.positionName, r.title, r.jobTitle, r.job_title, r.name));
         const company = stripHtml(firstText(r.company, r.companyName, r.employer, 'Unknown'));
@@ -114,7 +127,15 @@ async function main() {
           r.companyInfo?.companyDescription
         );
         const fallbackDescription = `${title} at ${company}. Full details are available through the job posting link.`;
-        const description_short = stripHtml(descriptionRaw).slice(0, 500) || fallbackDescription;
+        const descFull = stripHtml(descriptionRaw);
+        // Truncate at a sentence boundary within 500 chars
+        const description_short = (() => {
+          if (!descFull) return fallbackDescription;
+          if (descFull.length <= 500) return descFull;
+          const cut = descFull.slice(0, 500);
+          const lastSentence = cut.search(/[.!?][^.!?]*$/);
+          return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut;
+        })();
         const providedJobCode = firstText(r.jobCode, r.job_code, r.code);
 
         const doc = {
