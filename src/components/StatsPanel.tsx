@@ -10,6 +10,48 @@ function loadInterestedOverrides(): Record<number, boolean> {
 import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
 import RecruiterOutreach from './RecruiterOutreach'
 
+const NEW_JOB_WINDOW_DAYS = 30
+
+const parseJobDate = (value: unknown): Date | null => {
+  if (!value) return null
+  const parsed = new Date(value as any)
+  if (!Number.isNaN(parsed.getTime())) return parsed
+  if (typeof value === 'string') {
+    const withZ = new Date(`${value}Z`)
+    if (!Number.isNaN(withZ.getTime())) return withZ
+  }
+  if (!Number.isNaN(Number(value))) {
+    const numeric = new Date(Number(value))
+    if (!Number.isNaN(numeric.getTime())) return numeric
+  }
+  return null
+}
+
+const getObjectIdDate = (id: unknown): Date | null => {
+  if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
+    return new Date(parseInt(id.substring(0, 8), 16) * 1000)
+  }
+  return null
+}
+
+const getJobAddedDate = (job: any): Date | null => {
+  return (
+    parseJobDate(job?.createdAt) ||
+    parseJobDate(job?.addedAt) ||
+    parseJobDate(job?.importedAt) ||
+    getObjectIdDate(job?._id || job?.backendId) ||
+    parseJobDate(job?.postedAt || job?.rawDate || job?.datePosted || job?.date_posted || job?.preparedAt)
+  )
+}
+
+const isNewJob = (job: any): boolean => {
+  if (job?.hasNewBadge === true) return true
+  const added = getJobAddedDate(job)
+  if (!added) return false
+  const diffDays = (Date.now() - added.getTime()) / (1000 * 60 * 60 * 24)
+  return diffDays >= 0 && diffDays <= NEW_JOB_WINDOW_DAYS
+}
+
 interface StatsPanelProps {
   jobId: number | null
   onClose: () => void
@@ -26,7 +68,7 @@ interface StatsPanelProps {
 const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
-  const newJobsCount = allJobs.filter((j: any) => j.hasNewBadge === true).length
+  const newJobsCount = allJobs.filter(isNewJob).length
   const firstCandidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const tokensCount = (firstCandidate?.tokenBalance ?? firstCandidate?.tokens ?? 30)
   const recruiterContactsLeft: number = firstCandidate?.recruiterContactsLeft ?? 10

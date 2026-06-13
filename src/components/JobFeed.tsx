@@ -154,6 +154,39 @@ interface JobFeedProps {
 }
 
 const BATCH = 15
+const NEW_JOB_WINDOW_DAYS = 30
+
+const parseJobDate = (value: unknown): Date | null => {
+  if (!value) return null
+  const parsed = new Date(value as any)
+  if (!Number.isNaN(parsed.getTime())) return parsed
+  if (typeof value === 'string') {
+    const withZ = new Date(`${value}Z`)
+    if (!Number.isNaN(withZ.getTime())) return withZ
+  }
+  if (!Number.isNaN(Number(value))) {
+    const numeric = new Date(Number(value))
+    if (!Number.isNaN(numeric.getTime())) return numeric
+  }
+  return null
+}
+
+const getObjectIdDate = (id: unknown): Date | null => {
+  if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
+    return new Date(parseInt(id.substring(0, 8), 16) * 1000)
+  }
+  return null
+}
+
+const getJobAddedDate = (job: any): Date | null => {
+  return (
+    parseJobDate(job?.createdAt) ||
+    parseJobDate(job?.addedAt) ||
+    parseJobDate(job?.importedAt) ||
+    getObjectIdDate(job?._id || job?.backendId) ||
+    parseJobDate(job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt)
+  )
+}
 
 function getJobTime(job: any): number {
   const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt
@@ -309,11 +342,11 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
   const isNewJob = (job: any) => {
     if (job.hasNewBadge !== undefined) return job.hasNewBadge
-    if (!job.postedAt) return false
-    const posted = new Date(job.postedAt).getTime()
+    const added = getJobAddedDate(job)
+    if (!added) return false
     const now = Date.now()
-    const diffDays = (now - posted) / (1000 * 60 * 60 * 24)
-    return diffDays <= 7
+    const diffDays = (now - added.getTime()) / (1000 * 60 * 60 * 24)
+    return diffDays >= 0 && diffDays <= NEW_JOB_WINDOW_DAYS
   }
 
   const getJobPostedAt = (job: any) => {

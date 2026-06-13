@@ -32,6 +32,45 @@ import {
 import { deleteAccount } from './api/users'
 
 const API_BASE = API_BASE_URL
+const NEW_JOB_WINDOW_DAYS = 30
+
+const parseJobDate = (value: unknown): Date | null => {
+  if (!value) return null
+  const parsed = new Date(value as any)
+  if (!Number.isNaN(parsed.getTime())) return parsed
+  if (typeof value === 'string') {
+    const withZ = new Date(`${value}Z`)
+    if (!Number.isNaN(withZ.getTime())) return withZ
+  }
+  if (!Number.isNaN(Number(value))) {
+    const numeric = new Date(Number(value))
+    if (!Number.isNaN(numeric.getTime())) return numeric
+  }
+  return null
+}
+
+const getObjectIdDate = (id: unknown): Date | null => {
+  if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
+    return new Date(parseInt(id.substring(0, 8), 16) * 1000)
+  }
+  return null
+}
+
+const getJobAddedDate = (job: any): Date | null => {
+  return (
+    parseJobDate(job?.createdAt) ||
+    parseJobDate(job?.addedAt) ||
+    parseJobDate(job?.importedAt) ||
+    getObjectIdDate(job?._id || job?.backendId) ||
+    parseJobDate(job?.datePosted || job?.postedAt || job?.postedDate || job?.date_posted || job?.rawDate)
+  )
+}
+
+const isWithinNewJobWindow = (date: Date | null): boolean => {
+  if (!date) return false
+  const daysAgo = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
+  return daysAgo >= 0 && daysAgo <= NEW_JOB_WINDOW_DAYS
+}
 
 const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
   if (typeof window === 'undefined') return null
@@ -300,17 +339,10 @@ function transformJob(job: Job, index: number) {
   if (parsedDate && isNaN(parsedDate.getTime())) parsedDate = null
 
   // Fallback: extract creation timestamp from MongoDB ObjectId (first 4 bytes = unix seconds)
-  const objectIdDate = (() => {
-    const id = (job as any)._id
-    if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
-      return new Date(parseInt(id.substring(0, 8), 16) * 1000)
-    }
-    return null
-  })()
+  const objectIdDate = getObjectIdDate((job as any)._id)
 
   const dateStr = parsedDate ? parsedDate.toISOString() : (objectIdDate?.toISOString() ?? null)
-  const effectiveDate = parsedDate ?? objectIdDate
-  const daysAgo = effectiveDate ? Math.floor((Date.now() - effectiveDate.getTime()) / (1000 * 60 * 60 * 24)) : null
+  const addedDate = getJobAddedDate(job)
 
   const description = (() => {
     const isDateLike = (value: string) => {
@@ -414,7 +446,7 @@ function transformJob(job: Job, index: number) {
     description,
     location: locationString,
     skills: (job as any).tags || (job as any).skills || [],
-    hasNewBadge: daysAgo !== null && daysAgo <= 7,
+    hasNewBadge: isWithinNewJobWindow(addedDate),
     interested: false,
     showCoverLetter: false,
     postedAt: dateStr,
@@ -630,23 +662,31 @@ function App() {
       .then(r => r.json())
       .then(data => {
         const jobs = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
-        setPublicJobs(jobs.map((j: any, i: number) => ({
-          id: i + 1,
-          backendId: j._id,
-          title: j.title || j.positionName || 'Untitled',
-          company: j.company || 'Unknown',
-          description: j.description_short || j.shortDescription || '',
-          location: typeof j.location === 'string' ? j.location : 'Remote',
-          salary: j.salary || 'Not Listed',
-          url: j.url || '',
-          jobType: j.job_type || j.jobType || '',
-          source: j.source || '',
-          skills: [],
-          hasNewBadge: true,
-          interested: false,
-          showCoverLetter: false,
-          postedAt: j.date_posted || j.datePosted || new Date().toISOString(),
-        })))
+        setPublicJobs(jobs.map((j: any, i: number) => {
+          const postedAt = j.date_posted || j.datePosted || j.postedAt || null
+          const parsedDate = postedAt ? new Date(postedAt) : null
+          const validParsedDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
+          const objectIdDate = !validParsedDate ? getObjectIdDate(j._id) : null
+          const effectiveDate = validParsedDate || objectIdDate
+          const addedDate = getJobAddedDate(j)
+          return {
+            id: i + 1,
+            backendId: j._id,
+            title: j.title || j.positionName || 'Untitled',
+            company: j.company || 'Unknown',
+            description: j.description_short || j.shortDescription || '',
+            location: typeof j.location === 'string' ? j.location : 'Remote',
+            salary: j.salary || 'Not Listed',
+            url: j.url || '',
+            jobType: j.job_type || j.jobType || '',
+            source: j.source || '',
+            skills: [],
+            hasNewBadge: isWithinNewJobWindow(addedDate),
+            interested: false,
+            showCoverLetter: false,
+            postedAt: effectiveDate?.toISOString() || null,
+          }
+        }))
       })
       .catch(() => {})
       .finally(() => setPublicJobsLoading(false))
@@ -778,7 +818,7 @@ function App() {
       description: 'Stand out with AI-optimized resumes and personalized job matches. Create experiences that impact millions.',
       location: 'New York, NY',
       skills: ['UX Design', 'Art Direction', 'Marketing'],
-      hasNewBadge: false,
+      hasNewBadge: true,
       interested: false,
       showCoverLetter: false,
       postedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
@@ -790,7 +830,7 @@ function App() {
       description: 'Lead product strategy and development for our next-generation automotive technology platform.',
       location: 'Los Angeles, CA',
       skills: ['Product Strategy', 'Agile', 'Data Analysis'],
-      hasNewBadge: false,
+      hasNewBadge: true,
       interested: true,
       showCoverLetter: false,
       postedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
@@ -802,7 +842,7 @@ function App() {
       description: 'Join our design team to create innovative digital experiences used by millions worldwide. Shape the future of design.',
       location: 'San Francisco, CA',
       skills: ['Figma', 'User Research', 'Prototyping'],
-      hasNewBadge: false,
+      hasNewBadge: true,
       interested: false,
       showCoverLetter: false,
       postedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
