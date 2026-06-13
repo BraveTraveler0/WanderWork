@@ -21,13 +21,17 @@ function generateJobCode(str) {
   return 'jb_' + (hash >>> 0).toString(36);
 }
 
-const JUNK_LEAD_RE = /^(?:job\s+(?:overview|summary|description|details|brief|post)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description)\s*[:\-–—]\s*/i;
+const JUNK_LEAD_RE = /^(?:job\s+(?:overview|summary|description|details|brief|post|requirements|qualifications)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary|requirements)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description|requirements?\s*(?:minimum)?|qualifications?|educational?(?:\s*[\/&]\s*\w+)?|responsibilities|key\s+(?:responsibilities|qualifications|requirements)|duties|minimum\s+qualifications?)\s*[:\-–—]?\s*/i;
+
+function stripJunkLeads(text) {
+  let s = text, prev;
+  do { prev = s; s = s.replace(JUNK_LEAD_RE, '').trim(); } while (s !== prev);
+  return s;
+}
 
 function truncateDesc(text) {
   if (!text) return '';
-  const clean = JUNK_LEAD_RE.source
-    ? stripHtml(text).trim().replace(JUNK_LEAD_RE, '')
-    : stripHtml(text).trim();
+  const clean = stripJunkLeads(stripHtml(text).trim());
   if (clean.length <= 500) return clean;
   const cut = clean.slice(0, 500);
   const lastSentence = cut.search(/[.!?][^.!?]*$/);
