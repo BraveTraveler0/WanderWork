@@ -165,17 +165,31 @@ function detectUserCountry(loc: any): string | null {
   return null
 }
 
-// 2 = user's country, 1 = remote/neutral, 0 = different country
-function getJobCountryScore(jobLocation: string, userCountry: string): number {
-  if (!jobLocation) return 1
-  const loc = jobLocation.trim()
-  if (/^(remote|worldwide|global|anywhere|virtual|online)$/i.test(loc)) return 1
+const ENGLISH_COUNTRIES = new Set(['US', 'CA', 'UK', 'AU'])
+
+// 2 = user's country, 1 = remote/neutral, 0 = different country or non-English for English-speaking user
+function getJobCountryScore(job: any, userCountry: string): number {
+  // Non-English content always deprioritised for English-country users
+  if (job.lang && job.lang !== 'en' && ENGLISH_COUNTRIES.has(userCountry)) return 0
+  // Quick German-company heuristic for existing jobs without lang field
+  if (!job.lang && /\bgmbh\b|\bag\b/i.test((job.company || '') + ' ' + (job.title || '')) && ENGLISH_COUNTRIES.has(userCountry)) return 0
+  const loc = (job.location || '').trim()
+  if (!loc || /^(remote|worldwide|global|anywhere|virtual|online)$/i.test(loc)) return 1
   const userPat = COUNTRY_PATTERNS[userCountry]
   if (userPat?.test(loc)) return 2
   for (const [c, re] of Object.entries(COUNTRY_PATTERNS)) {
     if (c !== userCountry && re.test(loc)) return 0
   }
   return 1
+}
+
+// Strip mojibake (UTF-8 emoji read as Latin-1) and stray emoji from display text
+function cleanTitle(title: string): string {
+  if (!title) return title
+  return title
+    .replace(/[-ÿ]{2,}/g, '') // mojibake sequences
+    .replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27FF}]/gu, '') // actual emoji
+    .replace(/\s{2,}/g, ' ').trim()
 }
 
 const JUNK_LOCATION_RE = /^(remote|worldwide|global|anywhere|online|virtual|home|platform|product|engineering|marketing|sales|design|tech|media|data|software|hardware|mobile|web|cloud|human|devops|backend|frontend|fullstack|operations|finance|legal|hr|it|various|multiple|flexible|tbd|na|n\/a|unknown|all|any|other)\b/i
@@ -577,8 +591,8 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         const diff = titleScore(b) - titleScore(a)
         if (diff !== 0) return diff
       } else if (userCountry) {
-        // No search: show user's country first, then remote/neutral, then other countries
-        const diff = getJobCountryScore(b.location, userCountry) - getJobCountryScore(a.location, userCountry)
+        // No search: show user's country first, then remote/neutral, then other countries/languages
+        const diff = getJobCountryScore(b, userCountry) - getJobCountryScore(a, userCountry)
         if (diff !== 0) return diff
       }
       return getJobTime(b) - getJobTime(a)
@@ -924,7 +938,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
               return (
                 <div key={job.id} className="flex items-center justify-between bg-white p-3 rounded-[10px]" style={{ borderLeft: `3px solid ${isSoonPurge ? '#F59E0B' : '#306770'}` }}>
                   <div className="flex-1 min-w-0 mr-3">
-                    <p className="text-[14px] font-semibold text-black truncate">{job.title}</p>
+                    <p className="text-[14px] font-semibold text-black truncate">{cleanTitle(job.title)}</p>
                     <p className="text-[12px]" style={{ color: '#787878' }}>{job.company}</p>
                     {daysUntilPurge !== null && (
                       <p className="text-[11px] mt-0.5" style={{ color: isSoonPurge ? '#F59E0B' : '#AAAAAA' }}>
@@ -978,6 +992,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
             <JobCard
               key={job.id}
               {...job}
+              title={cleanTitle(job.title)}
               description={safeDescription}
               interested={isInterested}
               hasNewBadge={isNew}
