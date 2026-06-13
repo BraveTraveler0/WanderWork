@@ -288,15 +288,29 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const [keywords, setKeywords] = useState<string[]>([])
   const [keywordInput, setKeywordInput] = useState('')
   const [dateRange, setDateRange] = useState('all')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
     if (showNewOnly) setShowMatchedOnly(false)
   }, [showNewOnly])
 
+  // Debounce the search bar input
+  useEffect(() => {
+    if (searchInput === searchQuery) return
+    setSearchLoading(true)
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput)
+      setSearchLoading(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
   // Reset visible count whenever filters change
   useEffect(() => {
     setVisibleCount(BATCH)
-  }, [showMatchedOnly, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords.join(',')])
+  }, [showMatchedOnly, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords.join(','), searchQuery])
 
   // Load more as user scrolls to the sentinel
   useEffect(() => {
@@ -558,8 +572,14 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       if (!entry) return true
       return keywords.every((kw) => entry.txt.includes(kw.toLowerCase()))
     })
+    .filter((job: any) => {
+      if (!searchQuery.trim()) return true
+      const entry = jobSearchTexts.get(job.id)
+      const txt = entry ? entry.txt : _normSearch([job.title, job.company, job.description].filter(Boolean).join(' '))
+      return txt.includes(_normSearch(searchQuery))
+    })
     .sort((a: any, b: any) => getJobTime(b) - getJobTime(a))
-  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts])
+  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Process descriptions only for the jobs currently rendered — not the full list
@@ -666,6 +686,31 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       <p className="text-[24px] sm:text-[28px] lg:text-[32px]" style={{ color: '#787878' }}>
         Hey there, Let's get you hired.
       </p>
+
+      {/* Search bar */}
+      <div className="relative w-full max-w-[600px]">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder="Search jobs, companies, skills..."
+          className="w-full px-4 py-3 pr-10 rounded-[14px] text-[14px] outline-none"
+          style={{ border: '1.5px solid #D1D9DB', background: 'white', color: '#306770', fontFamily: 'Manrope' }}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5">
+          {searchLoading ? (
+            <div className="animate-spin rounded-full border-2 border-[#C8DDE0] border-t-[#306770]" style={{ width: 16, height: 16 }} />
+          ) : searchInput ? (
+            <button onClick={() => { setSearchInput(''); setSearchQuery('') }} style={{ color: '#9ca3af', lineHeight: 1 }}>
+              <X size={15} />
+            </button>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+          )}
+        </div>
+      </div>
 
       {loading && (
         <div className="flex items-center justify-center py-6">
