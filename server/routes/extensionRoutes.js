@@ -87,6 +87,8 @@ router.get('/profile', async (req, res) => {
     summary: candidate.summary || '',
     resumeLink: candidate.resumeLink || '',
     plan: user.plan,
+    tokens: candidate.tokenBalance ?? 0,
+    avatar: candidate.profileImage || '',
   });
 });
 

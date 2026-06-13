@@ -160,6 +160,58 @@ function injectWidget(profile) {
   jobInfo.textContent = jobTitle ? `${jobTitle}${company && !titleHasCompany ? ' at ' + company : ''}` : 'This job';
   Object.assign(jobInfo.style, { fontSize: '11px', color: '#888', margin: '0', lineHeight: '1.4' });
 
+  // ── User info row (avatar + name + token count) ──────────────────────────
+  const userInfoRow = document.createElement('div');
+  Object.assign(userInfoRow.style, {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    padding: '7px 9px', borderRadius: '8px', background: '#F4FAF9',
+  });
+  const userAvatar = document.createElement('div');
+  Object.assign(userAvatar.style, {
+    width: '26px', height: '26px', borderRadius: '50%', flexShrink: '0',
+    background: '#306770', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', fontSize: '10px', fontWeight: '700',
+    color: '#fff', overflow: 'hidden',
+  });
+  const userAvatarImg = document.createElement('img');
+  Object.assign(userAvatarImg.style, { width: '100%', height: '100%', objectFit: 'cover', display: 'none' });
+  const userAvatarInitials = document.createElement('span');
+  userAvatarInitials.textContent = '…';
+  userAvatar.append(userAvatarImg, userAvatarInitials);
+
+  const userName = document.createElement('span');
+  Object.assign(userName.style, { fontSize: '11px', fontWeight: '600', color: '#333', flex: '1', minWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+  userName.textContent = 'Loading…';
+
+  const tokenBadge = document.createElement('span');
+  Object.assign(tokenBadge.style, {
+    fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px',
+    background: '#306770', color: '#fff', flexShrink: '0', whiteSpace: 'nowrap',
+  });
+  tokenBadge.textContent = '…';
+
+  userInfoRow.append(userAvatar, userName, tokenBadge);
+
+  async function refreshUserInfo() {
+    try {
+      const extKey = await new Promise(r => chrome.storage.local.get(['extensionKey'], d => r(d.extensionKey)));
+      if (!extKey) return;
+      const res = await fetch(`${API}/extension/profile`, { headers: { 'x-extension-key': extKey } });
+      if (!res.ok) return;
+      const p = await res.json();
+      const initials = ((p.firstName || '')[0] || '') + ((p.lastName || '')[0] || '');
+      userAvatarInitials.textContent = initials.toUpperCase() || '?';
+      if (p.avatar) {
+        userAvatarImg.src = p.avatar;
+        userAvatarImg.onload = () => { userAvatarImg.style.display = 'block'; userAvatarInitials.style.display = 'none'; };
+      }
+      userName.textContent = [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email || 'You';
+      const t = Number(p.tokens ?? 0);
+      tokenBadge.textContent = `${t} token${t === 1 ? '' : 's'}`;
+      tokenBadge.style.background = t === 0 ? '#c0392b' : '#306770';
+    } catch {}
+  }
+
   const checkRow = (label, checked) => {
     const row = document.createElement('label');
     Object.assign(row.style, { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#333', cursor: 'pointer' });
@@ -173,6 +225,14 @@ function injectWidget(profile) {
 
   const { row: resumeRow, cb: resumeCb } = checkRow('Resume (1 token)', true);
   const { row: clRow, cb: clCb } = checkRow('Cover Letter (1 token)', false);
+
+  function resetSendBtn() {
+    sendBtn.textContent = 'Send to my email';
+    sendBtn.disabled = false;
+    statusMsg.style.display = 'none';
+  }
+  resumeCb.addEventListener('change', resetSendBtn);
+  clCb.addEventListener('change', resetSendBtn);
 
   // ── Format toggle ──────────────────────────────────────────────────────
   let fileFormat = 'pdf';
@@ -199,6 +259,7 @@ function injectWidget(profile) {
         b.style.background = sel ? '#306770' : '#fff';
         b.style.color = sel ? '#fff' : '#306770';
       });
+      resetSendBtn();
     });
     formatRow.appendChild(pill);
   });
@@ -249,7 +310,7 @@ function injectWidget(profile) {
     }
   });
 
-  panel.append(panelTitle, jobInfo, resumeRow, clRow, formatRow, statusMsg, sendBtn);
+  panel.append(panelTitle, jobInfo, userInfoRow, resumeRow, clRow, formatRow, statusMsg, sendBtn);
 
   // ── Recruiter panel ──────────────────────────────────────────────────────
   const USERS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
@@ -330,6 +391,7 @@ function injectWidget(profile) {
     e.stopPropagation();
     const open = panel.style.display === 'flex';
     panel.style.display = open ? 'none' : 'flex';
+    if (!open) refreshUserInfo();
   });
 
   document.addEventListener('click', (e) => {
