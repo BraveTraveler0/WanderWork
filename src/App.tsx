@@ -690,37 +690,75 @@ function App() {
 
   useEffect(() => {
     if (_token) return
+    const JUNK_SALARY = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i
+    const EXCLUDE_SRC = /indeed|linkedin/i
+    const mapJobs = (raw: any[]) => raw.map((j: any, i: number) => {
+      const postedAt = j.date_posted || j.datePosted || j.postedAt || null
+      const parsedDate = postedAt ? new Date(postedAt) : null
+      const validParsedDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
+      const objectIdDate = !validParsedDate ? getObjectIdDate(j._id) : null
+      const effectiveDate = validParsedDate || objectIdDate
+      const addedDate = getJobAddedDate(j)
+      return {
+        id: i + 1,
+        backendId: j._id,
+        title: j.title || j.positionName || 'Untitled',
+        company: j.company || 'Unknown',
+        description: j.description_short || j.shortDescription || '',
+        location: typeof j.location === 'string' ? j.location : 'Remote',
+        salary: j.salary || 'Not Listed',
+        url: j.url || '',
+        jobType: j.job_type || j.jobType || '',
+        source: j.source || '',
+        skills: [],
+        hasNewBadge: isWithinNewJobWindow(addedDate),
+        interested: false,
+        showCoverLetter: false,
+        postedAt: effectiveDate?.toISOString() || null,
+      }
+    })
+    // Try the curated endpoint first; fall back to full list with client-side filtering
     fetch(`${API_BASE}/jobseeker/featured-jobs`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error('featured-jobs not available')
+        return r.json()
+      })
       .then(data => {
         const jobs = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
-        setPublicJobs(jobs.map((j: any, i: number) => {
-          const postedAt = j.date_posted || j.datePosted || j.postedAt || null
-          const parsedDate = postedAt ? new Date(postedAt) : null
-          const validParsedDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-          const objectIdDate = !validParsedDate ? getObjectIdDate(j._id) : null
-          const effectiveDate = validParsedDate || objectIdDate
-          const addedDate = getJobAddedDate(j)
-          return {
-            id: i + 1,
-            backendId: j._id,
-            title: j.title || j.positionName || 'Untitled',
-            company: j.company || 'Unknown',
-            description: j.description_short || j.shortDescription || '',
-            location: typeof j.location === 'string' ? j.location : 'Remote',
-            salary: j.salary || 'Not Listed',
-            url: j.url || '',
-            jobType: j.job_type || j.jobType || '',
-            source: j.source || '',
-            skills: [],
-            hasNewBadge: isWithinNewJobWindow(addedDate),
-            interested: false,
-            showCoverLetter: false,
-            postedAt: effectiveDate?.toISOString() || null,
-          }
-        }))
+        setPublicJobs(mapJobs(jobs))
       })
-      .catch(() => {})
+      .catch(() =>
+        fetch(`${API_BASE}/jobseeker/job`)
+          .then(r => r.json())
+          .then(data => {
+            const all: any[] = Array.isArray(data) ? data : (data?.Jobs || data?.jobs || [])
+            const filtered = all
+              .filter(j => {
+                const src = String(j.source || '').toLowerCase()
+                if (EXCLUDE_SRC.test(src)) return false
+                const title = String(j.title || j.positionName || '').trim()
+                const company = String(j.company || '').trim()
+                return title && title !== 'Untitled' && company && company !== 'Unknown' && (j.url || j.apply_url)
+              })
+              .map(j => {
+                const salary = String(j.salary || '')
+                const hasSalary = salary && !JUNK_SALARY.test(salary) && /\d/.test(salary)
+                const desc = String(j.description_short || j.shortDescription || '')
+                let score = 0
+                if (hasSalary) score += 3
+                if (desc.length >= 250) score += 3
+                else if (desc.length >= 80) score += 2
+                else if (desc.length >= 20) score += 1
+                score += Math.random() * 0.5
+                return { j, score }
+              })
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 50)
+              .map(({ j }) => j)
+            setPublicJobs(mapJobs(filtered))
+          })
+          .catch(() => {})
+      )
       .finally(() => setPublicJobsLoading(false))
   }, [_token])
 
