@@ -71,6 +71,8 @@ async function fetchRemotive(category = null) {
     title: stripHtml(j.title),
     company: stripHtml(j.company_name),
     url: j.url,
+    // Remotive's url field already points to the company's ATS/careers page
+    apply_url: j.url,
     salary: j.salary ? stripHtml(j.salary) : 'Not Listed',
     location: normalizeLocation(j.candidate_required_location),
     job_type: j.job_type || 'Full-time',
@@ -88,6 +90,8 @@ async function fetchJobicyGeo(geo) {
     title: stripHtml(j.jobTitle),
     company: stripHtml(j.companyName),
     url: j.url,
+    // jobApplyURL points directly to the company's job listing, bypassing Jobicy
+    apply_url: j.jobApplyURL || j.url,
     salary: formatSalary(j.salaryMin, j.salaryMax, j.salaryCurrency, j.salaryPeriod),
     location: normalizeLocation(j.jobGeo),
     job_type: Array.isArray(j.jobType) ? j.jobType.join(', ') : (j.jobType || 'Full-time'),
@@ -105,6 +109,8 @@ async function fetchRemoteOK() {
     title: stripHtml(j.position),
     company: stripHtml(j.company),
     url: j.url || `https://remoteok.com/l/${j.slug}`,
+    // apply_url is the direct link to the company's job posting on their own site
+    apply_url: j.apply_url || null,
     salary: formatSalary(j.salary_min, j.salary_max),
     location: 'Remote',
     job_type: 'Full-time',

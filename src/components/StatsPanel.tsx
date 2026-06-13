@@ -478,7 +478,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           return fallbackMessage
         })()
         
-        const applyUrl = typeof (selectedJob as any).url === 'string' ? (selectedJob as any).url : ''
+        // Prefer apply_url (direct company listing) over url (aggregator page)
+        const applyUrl: string = (selectedJob as any).apply_url || (selectedJob as any).applyUrl || (selectedJob as any).url || ''
 
         // For Wellfound specific job URLs, show a fallback to the company jobs page in case the listing expired.
         // Only applies when the URL points at a specific job (has content after /jobs/),
@@ -649,7 +650,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col xl:flex-row gap-3">
                   <a
-                    className="flex items-center justify-center px-5 py-2 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white xl:flex-1"
+                    className="flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white xl:flex-1"
                     style={{
                       border: '1px solid #306770',
                       color: '#306770',
@@ -668,7 +669,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   </a>
                   <div className="flex flex-col xl:flex-1 min-w-0" style={{ gap: 4 }}>
                     <button
-                      className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}
+                      className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}
                       style={{ background: canOrder ? '#306770' : '#AAAAAA', cursor: canOrder ? 'pointer' : 'not-allowed' }}
                       disabled={!canOrder}
                       onClick={canOrder ? () => {
