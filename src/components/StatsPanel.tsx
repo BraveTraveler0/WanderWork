@@ -406,59 +406,18 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           }
 
           const addBreaks = (text: string) => {
-            const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-            const toTitle = (value: string) => value.replace(/\b\w/g, (m) => m.toUpperCase())
-            const sections = [
-              'company overview',
-              'key responsibilities',
-              'qualifications/skills',
-              'responsibilities',
-              'responsibility',
-              'requirements',
-              'qualifications',
-              'what you will do',
-              'what you ll do',
-              'what you\'ll do',
-              'what you will bring',
-              'what we are looking for',
-              'who you are',
-              'about the role',
-              'about the opportunity',
-              'benefits',
-              'compensation',
-              'skills',
-              'nice to have',
-              'preferred',
-              'position',
-              'job details'
-            ]
-            let withSections = text
-            for (const section of sections) {
-              const escaped = escapeRegExp(section)
-              const label = toTitle(section)
-              const re = new RegExp(`\\b${escaped}\\b`, 'ig')
-              withSections = withSections.replace(re, `\n\n${label}`)
-              const glued = new RegExp(`(${escaped})(?=[A-Z])`, 'ig')
-              withSections = withSections.replace(glued, `\n\n${label} `)
-            }
-
-            const sentenceBreak = withSections.replace(/([.!?])\s*(?=[A-Z0-9])/g, '$1\n')
-            const lines = sentenceBreak
+            const lines = text
+              .replace(/([.!?])\s*(?=[A-Z0-9])/g, '$1\n')
               .split('\n')
               .map((line) => line.trim())
               .filter(Boolean)
-
             const grouped: string[] = []
             let buffer: string[] = []
             for (const line of lines) {
               buffer.push(line)
-              if (buffer.length >= 2) {
-                grouped.push(buffer.join(' '))
-                buffer = []
-              }
+              if (buffer.length >= 2) { grouped.push(buffer.join(' ')); buffer = [] }
             }
             if (buffer.length) grouped.push(buffer.join(' '))
-
             return grouped.join('\n\n')
           }
 
@@ -492,34 +451,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               .trim()
           }
 
-          const stripDuplicateAboutHeading = (text: string) => {
-            return text
-              .replace(/^about\s+(.{2,80}?)\s+\1\b\s*/i, '$1 ')
-              .trim()
-          }
-
-          const stripLeadingPresentationLines = (text: string) => {
-            const presentationOnly =
-              /^(?:#{1,6}|[-*_]{3,}|(?:\*\*|__|\*|_)?\s*(?:about\s+(?:the\s+role|us|the\s+opportu?nity)|company\s+description|company|description|job\s+details|position|hiring)\s*:?\s*(?:\*\*|__|\*|_)?)$/i
-            const lines = text
-              .split(/\n+/)
-              .map((line) => line.trim())
-              .filter(Boolean)
-            while (lines.length && presentationOnly.test(lines[0])) {
-              lines.shift()
-            }
-            return lines.join('\n\n').trim()
-          }
-
-          const JUNK_LEAD_RE = /^(?:job\s+(?:overview|summary|description|details|brief|post|requirements|qualifications)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary|requirements)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description|requirements?\s*(?:minimum)?|qualifications?|educational?(?:\s*[\/&]\s*\w+)?|responsibilities|key\s+(?:responsibilities|qualifications|requirements)|duties|minimum\s+qualifications?)\s*[:\-–—]?\s*/i
-          const stripJunkLeadPrefix = (text: string): string => {
-            let s = text; let prev: string
-            do { prev = s; s = s.replace(JUNK_LEAD_RE, '').trim() } while (s !== prev)
-            return s
-          }
-
           const cleanDescriptionText = (value: string) =>
-            stripJunkLeadPrefix(stripLeadingPresentationLines(stripDuplicateAboutHeading(stripMarkdown(stripJunkMeta(stripHtml(value))))))
+            stripMarkdown(stripJunkMeta(stripHtml(value)))
 
           const fromValue = (value: any): string => {
             if (!value) return ''
@@ -534,12 +467,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
           const desc = fromValue((selectedJob as any).description)
           if (desc) {
-            const formatted = stripLeadingPresentationLines(addBreaks(desc))
+            const formatted = addBreaks(desc)
             return isTooShort(formatted) ? fallbackMessage : formatted
           }
           const summary = fromValue((selectedJob as any).summary)
           if (summary) {
-            const formatted = stripLeadingPresentationLines(addBreaks(summary))
+            const formatted = addBreaks(summary)
             return isTooShort(formatted) ? fallbackMessage : formatted
           }
           return fallbackMessage

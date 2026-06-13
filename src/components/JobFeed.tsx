@@ -44,88 +44,8 @@ const _stripMarkdown = (text: string): string => {
     .trim()
 }
 
-const _stripDuplicateAboutHeading = (text: string): string => {
-  return text
-    .replace(/^about\s+(.{2,80}?)\s+\1\b\s*/i, '$1 ')
-    .trim()
-}
-
-const _JUNK_LEAD_RE = /^(?:job\s+(?:overview|summary|description|details|brief|post|requirements|qualifications)|position\s+(?:overview|summary|description)|role\s+(?:overview|summary|requirements)|about\s+(?:the\s+)?(?:role|job|position|opportunity)|overview|summary|description|requirements?\s*(?:minimum)?|qualifications?|educational?(?:\s*[\/&]\s*\w+)?|responsibilities|key\s+(?:responsibilities|qualifications|requirements)|duties|minimum\s+qualifications?)\s*[:\-–—]?\s*/i
-
-const _stripJunkLeadPrefix = (text: string): string => {
-  let s = text
-  let prev: string
-  do { prev = s; s = s.replace(_JUNK_LEAD_RE, '').trim() } while (s !== prev)
-  return s
-}
-
-const _stripLeadingPresentationLines = (text: string): string => {
-  const presentationOnly =
-    /^(?:#{1,6}|[-*_]{3,}|(?:\*\*|__|\*|_)?\s*(?:about\s+(?:the\s+role|us|the\s+opportu?nity)|company\s+description|company|description|job\s+details|position|hiring)\s*:?\s*(?:\*\*|__|\*|_)?)$/i
-  const lines = text
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-  while (lines.length && presentationOnly.test(lines[0])) {
-    lines.shift()
-  }
-  return lines.join('\n\n').trim()
-}
-
-const LEAD_IN_PATTERNS: RegExp[] = [
-  /^company[:,\s-]*/i,
-  /^about\s+the\s+role[:,\s-]*/i,
-  /^about\s+us[:,\s-]*/i,
-  /^about\s+us":?,?\s*/i,
-  /^company\s+description[:,\s-]*/i,
-  /^join[:,\s-]*/i,
-  /^who\s+we\s+are[:,\s-]*/i,
-  /^open\s+to\s+applicants[:,\s-]*/i,
-  /^this\s+is\s+us[:,\s-]*/i,
-  /^description[:,\s-]*/i,
-  /^position[:,\s-]*/i,
-  /^hiring[:,\s-]*/i,
-  /^job\s+details[:,\s-]*/i,
-  /^about\s+the\s+opportu?nity[:,\s-]*/i,
-  /^about\s+[^.!?\n:]{2,80}[:\-]\s*/i,
-]
-
-const _stripLeadIns = (text: string): string => {
-  let cleaned = text.trim()
-  let replaced = true
-  while (replaced) {
-    replaced = false
-    for (const pattern of LEAD_IN_PATTERNS) {
-      if (pattern.test(cleaned)) {
-        cleaned = cleaned.replace(pattern, '').trim()
-        replaced = true
-      }
-    }
-  }
-  return cleaned
-}
-
-const SECTION_KEYWORDS = [
-  'responsibilities', 'responsibility', 'requirements', 'qualifications',
-  'what you will do', 'what you ll do', "what you'll do", 'what you will bring',
-  'what we are looking for', 'who you are', 'about the role', 'about the opportunity',
-  'benefits', 'compensation', 'skills', 'nice to have', 'preferred', 'position', 'job details',
-]
-
-const SECTION_ESCAPED = SECTION_KEYWORDS.map((s) => ({
-  raw: s,
-  title: s.replace(/\b\w/g, (m) => m.toUpperCase()),
-  re: new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'),
-  glued: new RegExp(`([a-z])(${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[A-Z])`, 'ig'),
-}))
-
 const _addBreaks = (text: string): string => {
-  let withSections = text
-  for (const { title, re, glued } of SECTION_ESCAPED) {
-    withSections = withSections.replace(glued, `$1\n\n${title} `)
-    withSections = withSections.replace(re, `\n\n${title}`)
-  }
-  const lines = withSections
+  const lines = text
     .replace(/([.!?])\s+(?=[A-Z0-9])/g, '$1\n')
     .split('\n')
     .map((l) => l.trim())
@@ -140,9 +60,7 @@ const _isTooShort = (value: string): boolean => {
 
 function processJobDescription(d: unknown): string {
   const run = (raw: string) => {
-    const formatted = _stripJunkLeadPrefix(_stripLeadingPresentationLines(
-      _addBreaks(_stripLeadIns(_stripDuplicateAboutHeading(_stripMarkdown(_stripJunkMeta(_stripHtml(raw))))))
-    ))
+    const formatted = _addBreaks(_stripMarkdown(_stripJunkMeta(_stripHtml(raw))))
     return !formatted || _isTooShort(formatted) ? FALLBACK_DESC : formatted
   }
   if (typeof d === 'string') return run(d)
