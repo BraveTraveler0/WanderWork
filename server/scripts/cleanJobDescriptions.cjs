@@ -9,10 +9,13 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 async function callGPT(description) {
   const res = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 350,
+    max_tokens: 200,
     messages: [{
+      role: 'system',
+      content: 'You rewrite job description excerpts into clean, professional 2-3 sentence summaries. Be concise and human. Never use bullet points, headers, emojis, or symbols. Never mention salary, benefits, or perks. Never include job IDs or internal codes. Output plain prose only.',
+    }, {
       role: 'user',
-      content: `Clean this job description excerpt. Remove section headers (like "Requirements:", "EDUCATIONAL/EXPERIENCE", "Job Summary:", "Qualifications:", "Responsibilities:", "Minimum Requirements:"), bullet markers, and any formatting labels. Keep all actual job content. Return only clean, readable prose. Return ONLY the cleaned text with no explanation.\n\n${description}`,
+      content: `Rewrite this into a clean 2-3 sentence description of the role and who they are looking for. Strip all formatting, emojis, section headers, codes, and junk. Output plain prose only.\n\n${description}`,
     }],
   });
   return res.choices?.[0]?.message?.content?.trim() || description;
