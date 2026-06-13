@@ -187,7 +187,6 @@ Object.entries(routes).forEach(([path, route]) => {
 // Initialize Airtable sync scheduler
 initScheduledSync();
 initJobDigestSchedule();
-initRemoteJobsImport();
 if (process.env.ENABLE_RECRUITER_COMPANY_PAIRING_SCHEDULE !== 'false') {
   scheduleRecruiterCompanyPairing({
     intervalMs: Number(process.env.RECRUITER_COMPANY_PAIR_INTERVAL_MS) || undefined,
@@ -223,6 +222,7 @@ const startServer = async () => {
     await connectDB();
     purgeJunkJobs(); // fire-and-forget: delete scraped search-result pages from the jobs collection
     backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
+    initRemoteJobsImport(); // after DB connects so the startup import has an active connection
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
