@@ -8,9 +8,9 @@ const FIELDS = [
   { key: 'fullName',  selectors: ['[name="name"]', '[name="full_name"]', '[autocomplete="name"]', '[placeholder*="Full name" i]'], getValue: (p) => `${p.firstName} ${p.lastName}`.trim() },
   { key: 'email',     selectors: ['#email', '[name="email"]', '[type="email"]', '[autocomplete="email"]'] },
   { key: 'phone',     selectors: ['#phone', '[name="phone"]', '[type="tel"]', '[autocomplete="tel"]', '[placeholder*="phone" i]'] },
-  { key: 'city',      selectors: ['#city', '[name="city"]', '[autocomplete="address-level2"]', '[placeholder*="city" i]'] },
-  { key: 'state',     selectors: ['[name="state"]', '[autocomplete="address-level1"]'] },
-  { key: 'postalCode',selectors: ['[name="zip"]', '[name="postalCode"]', '[name="postal_code"]', '[autocomplete="postal-code"]'] },
+  { key: 'city',      selectors: ['#city', '[name="city"]', '[autocomplete="address-level2"]', '[placeholder*="city" i]', '[name*="location" i]', '[placeholder*="location" i]', '[id*="location" i]'] },
+  { key: 'state',     selectors: ['[name="state"]', '[autocomplete="address-level1"]', '[name*="state" i]'] },
+  { key: 'postalCode',selectors: ['[name="zip"]', '[name="postalCode"]', '[name="postal_code"]', '[autocomplete="postal-code"]', '[placeholder*="zip" i]'] },
   { key: 'linkedin',  selectors: ['[name="urls[LinkedIn]"]', '[name="linkedin"]', '[placeholder*="linkedin" i]'] },
   { key: 'portfolio', selectors: ['[name="urls[Website]"]', '[name="portfolio"]', '[name="website"]', '[placeholder*="portfolio" i]', '[placeholder*="website" i]'] },
   { key: 'github',    selectors: ['[name="urls[Github]"]', '[name="github"]', '[placeholder*="github" i]'] },
@@ -153,7 +153,8 @@ function injectWidget(profile) {
   Object.assign(panelTitle.style, { fontSize: '13px', fontWeight: '700', color: '#306770', margin: '0' });
 
   const jobInfo = document.createElement('p');
-  jobInfo.textContent = jobTitle ? `${jobTitle}${company ? ' at ' + company : ''}` : 'This job';
+  const titleHasCompany = company && jobTitle.toLowerCase().includes(company.toLowerCase());
+  jobInfo.textContent = jobTitle ? `${jobTitle}${company && !titleHasCompany ? ' at ' + company : ''}` : 'This job';
   Object.assign(jobInfo.style, { fontSize: '11px', color: '#888', margin: '0', lineHeight: '1.4' });
 
   const checkRow = (label, checked) => {

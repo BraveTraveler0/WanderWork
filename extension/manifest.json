@@ -13,7 +13,8 @@
     "https://careers.smartrecruiters.com/*",
     "https://apply.workable.com/*",
     "https://jobs.jobvite.com/*",
-    "https://*.greenhouse.io/*"
+    "https://*.greenhouse.io/*",
+    "https://wanderwork-backend-server.onrender.com/*"
   ],
   "web_accessible_resources": [
     {
