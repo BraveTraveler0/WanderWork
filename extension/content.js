@@ -84,6 +84,7 @@ function injectWidget(profile) {
 
   // ── Minimize button (appears at top on hover) ────────────────────────────
   const minimizeBtn = document.createElement('button');
+  minimizeBtn.type = 'button';
   minimizeBtn.title = 'Minimize';
   minimizeBtn.textContent = '−';
   Object.assign(minimizeBtn.style, {
@@ -96,6 +97,7 @@ function injectWidget(profile) {
 
   // ── Logo ball (minimized state) ──────────────────────────────────────────
   const logoBall = document.createElement('button');
+  logoBall.type = 'button';
   logoBall.title = 'Wander/Work — click to expand';
   const logoImg = document.createElement('img');
   logoImg.src = LOGO_URL;
@@ -120,6 +122,7 @@ function injectWidget(profile) {
 
   // ── Autofill button ──────────────────────────────────────────────────────
   const autofillBtn = document.createElement('button');
+  autofillBtn.type = 'button';
   autofillBtn.id = 'ww-autofill-btn';
   autofillBtn.innerHTML = '⚡ Wander/Work Autofill';
   Object.assign(autofillBtn.style, {
@@ -178,6 +181,7 @@ function injectWidget(profile) {
 
   ['PDF', 'DOCX'].forEach(fmt => {
     const pill = document.createElement('button');
+    pill.type = 'button';
     pill.textContent = fmt;
     pill.dataset.fmt = fmt.toLowerCase();
     const active = fmt === 'PDF';
@@ -203,6 +207,7 @@ function injectWidget(profile) {
   Object.assign(statusMsg.style, { fontSize: '11px', margin: '0', display: 'none' });
 
   const sendBtn = document.createElement('button');
+  sendBtn.type = 'button';
   sendBtn.textContent = 'Send to my email';
   Object.assign(sendBtn.style, {
     background: '#306770', color: '#fff', border: 'none', borderRadius: '8px',
@@ -275,6 +280,7 @@ function injectWidget(profile) {
   recruiterPanel.append(recruiterPanelTitle, recruiterList, recruiterOpenLink);
 
   const recruiterBtn = document.createElement('button');
+  recruiterBtn.type = 'button';
   recruiterBtn.innerHTML = `${USERS_SVG}Contact Recruiter`;
   Object.assign(recruiterBtn.style, {
     background: 'linear-gradient(135deg, #e8f4f6 0%, #d0eaee 100%)',
@@ -309,6 +315,7 @@ function injectWidget(profile) {
 
   // ── Doc toggle button ────────────────────────────────────────────────────
   const docBtn = document.createElement('button');
+  docBtn.type = 'button';
   docBtn.innerHTML = `${SPARKLES_SVG}Get Resume / Cover Letter`;
   Object.assign(docBtn.style, {
     background: '#fff', color: '#306770', border: '1.5px solid #306770',
