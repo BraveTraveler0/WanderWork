@@ -171,6 +171,34 @@ function injectWidget(profile) {
   const { row: resumeRow, cb: resumeCb } = checkRow('Resume (1 token)', true);
   const { row: clRow, cb: clCb } = checkRow('Cover Letter (1 token)', false);
 
+  // ── Format toggle ──────────────────────────────────────────────────────
+  let fileFormat = 'pdf';
+  const formatRow = document.createElement('div');
+  Object.assign(formatRow.style, { display: 'flex', gap: '6px' });
+
+  ['PDF', 'DOCX'].forEach(fmt => {
+    const pill = document.createElement('button');
+    pill.textContent = fmt;
+    pill.dataset.fmt = fmt.toLowerCase();
+    const active = fmt === 'PDF';
+    Object.assign(pill.style, {
+      flex: '1', padding: '5px 0', fontSize: '11px', fontWeight: '700',
+      border: '1.5px solid #306770', borderRadius: '6px', cursor: 'pointer',
+      background: active ? '#306770' : '#fff',
+      color: active ? '#fff' : '#306770',
+      transition: 'background 0.15s, color 0.15s',
+    });
+    pill.addEventListener('click', () => {
+      fileFormat = pill.dataset.fmt;
+      formatRow.querySelectorAll('button').forEach(b => {
+        const sel = b.dataset.fmt === fileFormat;
+        b.style.background = sel ? '#306770' : '#fff';
+        b.style.color = sel ? '#fff' : '#306770';
+      });
+    });
+    formatRow.appendChild(pill);
+  });
+
   const statusMsg = document.createElement('p');
   Object.assign(statusMsg.style, { fontSize: '11px', margin: '0', display: 'none' });
 
@@ -199,7 +227,7 @@ function injectWidget(profile) {
       const res = await fetch(`${API}/extension/request-document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-extension-key': extKey },
-        body: JSON.stringify({ jobTitle, company, jobUrl, resume: resumeCb.checked, coverLetter: clCb.checked }),
+        body: JSON.stringify({ jobTitle, company, jobUrl, resume: resumeCb.checked, coverLetter: clCb.checked, fileFormat }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Request failed.');
@@ -216,7 +244,7 @@ function injectWidget(profile) {
     }
   });
 
-  panel.append(panelTitle, jobInfo, resumeRow, clRow, statusMsg, sendBtn);
+  panel.append(panelTitle, jobInfo, resumeRow, clRow, formatRow, statusMsg, sendBtn);
 
   // ── Doc toggle button ────────────────────────────────────────────────────
   const docBtn = document.createElement('button');

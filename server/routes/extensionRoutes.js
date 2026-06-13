@@ -81,7 +81,7 @@ router.post('/request-document', async (req, res) => {
       return res.status(403).json({ message: 'Pro or Premium plan required.' });
     }
 
-    const { jobTitle, company, jobUrl, resume = true, coverLetter = false } = req.body || {};
+    const { jobTitle, company, jobUrl, resume = true, coverLetter = false, fileFormat = 'pdf' } = req.body || {};
     const totalCost = (resume ? 1 : 0) + (coverLetter ? 1 : 0);
     if (totalCost === 0) return res.status(400).json({ message: 'Select at least one document.' });
 
@@ -98,7 +98,7 @@ router.post('/request-document', async (req, res) => {
       jobId: null,
       resume: !!resume,
       coverLetter: !!coverLetter,
-      fileFormat: 'pdf',
+      fileFormat: fileFormat || 'pdf',
     };
 
     return submitCustomRequest(req, res);
