@@ -655,10 +655,10 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
               {/* Actions */}
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col xl:flex-row xl:items-start gap-3">
+                <div className="flex flex-col xl:flex-row gap-3">
                   {applyUrl && (
                   <a
-                    className="w-full min-w-0 flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] border border-[#306770] text-[#306770] bg-white whitespace-nowrap transition-all duration-300 hover:bg-[#306770] hover:text-white hover:scale-[1.015] xl:flex-1"
+                    className="cta-glow w-full xl:flex-1 min-w-0 flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] font-semibold border border-[#306770] text-[#306770] bg-white whitespace-nowrap transition-all duration-300 hover:bg-[#306770] hover:text-white hover:scale-[1.015]"
                     href={applyUrl}
                     target="_blank"
                     rel="noreferrer"
@@ -666,24 +666,22 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                     {applyLabel}
                   </a>
                   )}
-                  <div className="flex flex-col xl:flex-1 min-w-0" style={{ gap: 4 }}>
-                    <button
-                      className="cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300 hover:scale-[1.015]"
-                      style={{ background: '#306770' }}
-                      onClick={() => {
-                        setInitialCustomRequest(null)
-                        setShowCustomRequestModal({
-                          jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
-                          jobTitle: asText(selectedJob.title, 'Job Title'),
-                          company: asText(selectedJob.company, 'Company'),
-                          job: selectedJob
-                        })
-                      }}
-                    >
-                      Get Resume or Cover Letter
-                      <span className="arrow-nudge"><ArrowRight size={14} /></span>
-                    </button>
-                  </div>
+                  <button
+                    className="cta-glow w-full xl:flex-1 min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] font-semibold text-white whitespace-nowrap transition-all duration-300 hover:scale-[1.015]"
+                    style={{ background: '#306770' }}
+                    onClick={() => {
+                      setInitialCustomRequest(null)
+                      setShowCustomRequestModal({
+                        jobId: selectedJob.backendId || selectedJob._id || selectedJob.job_code || selectedJob.id,
+                        jobTitle: asText(selectedJob.title, 'Job Title'),
+                        company: asText(selectedJob.company, 'Company'),
+                        job: selectedJob
+                      })
+                    }}
+                  >
+                    Get Resume or Cover Letter
+                    <span className="arrow-nudge"><ArrowRight size={14} /></span>
+                  </button>
                 </div>
                 {wellfoundCompanyUrl && (
                   <p className="text-[11px]" style={{ color: '#AAAAAA' }}>
