@@ -19,13 +19,19 @@
       align-items: center;
       gap: 10px;
     }
-    .logo {
+    .logo-img {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      filter: brightness(0) invert(1);
+    }
+    .logo-text {
       font-size: 15px;
       font-weight: 700;
       color: #fff;
       letter-spacing: -0.3px;
     }
-    .logo span { opacity: 0.7; font-weight: 400; }
+    .logo-text span { opacity: 0.7; font-weight: 400; }
     .body { padding: 18px; }
 
     /* disconnected state */
@@ -80,7 +86,8 @@
 </head>
 <body>
   <div class="header">
-    <div class="logo">Wander/Work <span>Autofill</span></div>
+    <img class="logo-img" src="logo.svg" alt="Wander/Work logo" />
+    <div class="logo-text">Wander/Work <span>Autofill</span></div>
   </div>
 
   <div class="body">
