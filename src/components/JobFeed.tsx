@@ -192,6 +192,13 @@ function cleanTitle(title: string): string {
     .replace(/\s{2,}/g, ' ').trim()
 }
 
+const AGGREGATOR_HOSTS_FEED = new Set(['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com'])
+const _isAggregatorUrl = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return AGGREGATOR_HOSTS_FEED.has(h) || [...AGGREGATOR_HOSTS_FEED].some(a => h.endsWith('.' + a)) } catch { return false } }
+const jobHasUsableUrl = (job: any): boolean => {
+  const raw = String(job.apply_url || job.applyUrl || job.url || '')
+  return !!(( raw && !_isAggregatorUrl(raw)) || job.company_url)
+}
+
 const JUNK_LOCATION_RE = /^(remote|worldwide|global|anywhere|online|virtual|home|platform|product|engineering|marketing|sales|design|tech|media|data|software|hardware|mobile|web|cloud|human|devops|backend|frontend|fullstack|operations|finance|legal|hr|it|various|multiple|flexible|tbd|na|n\/a|unknown|all|any|other)\b/i
 const isRealLocation = (loc: string): boolean => {
   if (!loc) return false
@@ -520,6 +527,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts, candidateLevel])
 
   const visibleJobs = useMemo(() => visibleJobsList
+    .filter(jobHasUsableUrl)
     .filter((job: any) => !discardedJobs.has(job.id))
     .filter((job: any) => !showMatchedOnly || matchedSet.has(job.id))
     .filter((job: any) => !showInterestedOnly || isJobInterested(job))

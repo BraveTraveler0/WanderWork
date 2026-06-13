@@ -480,11 +480,13 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         
         // Prefer apply_url (direct company listing) over url (aggregator page)
         const _rawApplyUrl: string = (selectedJob as any).apply_url || (selectedJob as any).applyUrl || (selectedJob as any).url || ''
-        const AGGREGATOR_HOSTS = ['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com']
+        const AGGREGATOR_HOSTS = ['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com']
         const isAggregator = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return AGGREGATOR_HOSTS.some(a => h === a || h.endsWith('.' + a)) } catch { return false } }
         const _directUrl = _rawApplyUrl && !isAggregator(_rawApplyUrl) ? _rawApplyUrl : ''
         const _companyUrl: string = (selectedJob as any).company_url || ''
         const applyUrl: string = _directUrl || _companyUrl
+        // Label reflects whether we have a direct job link or just the company homepage
+        const applyLabel: string = _directUrl ? 'Apply on site' : (_companyUrl ? 'Visit company' : 'Apply on site')
 
         // For Wellfound specific job URLs, show a fallback to the company jobs page in case the listing expired.
         // Only applies when the URL points at a specific job (has content after /jobs/),
@@ -654,24 +656,17 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               {/* Actions */}
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col xl:flex-row xl:items-start gap-3">
+                  {applyUrl && (
                   <a
-                    className="flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] bg-white whitespace-nowrap transition-all duration-500 hover:bg-[#306770] hover:border-[#306770] hover:text-white xl:flex-1"
-                    style={{
-                      border: '1px solid #306770',
-                      color: '#306770',
-                      minWidth: 0,
-                      transition: 'all 0.5s',
-                      opacity: applyUrl ? 1 : 0.5,
-                      pointerEvents: applyUrl ? 'auto' : 'none'
-                    }}
-                    href={applyUrl || undefined}
+                    className="flex items-center justify-center px-6 py-3 rounded-[10px] text-[12px] border border-[#306770] text-[#306770] bg-white whitespace-nowrap transition-all duration-300 hover:bg-[#306770] hover:text-white hover:scale-[1.015] xl:flex-1"
+                    style={{ minWidth: 0 }}
+                    href={applyUrl}
                     target="_blank"
                     rel="noreferrer"
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'white'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#306770'}
                   >
-                    Apply on site
+                    {applyLabel}
                   </a>
+                  )}
                   <div className="flex flex-col xl:flex-1 min-w-0" style={{ gap: 4 }}>
                     <button
                       className={`cta-glow w-full min-w-0 flex items-center justify-center gap-2 px-6 py-3 rounded-[10px] text-[12px] text-white whitespace-nowrap transition-all duration-300${canOrder ? ' hover:scale-[1.015]' : ''}`}

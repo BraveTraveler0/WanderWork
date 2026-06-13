@@ -45,18 +45,127 @@ function generateJobCode(str) {
 
 const REMOTE_RE = /remote|worldwide|anywhere|work.?from.?home|\bwfh\b/i;
 
-// ── Slug discovery ────────────────────────────────────────────────────────────
+// ── Seed lists ────────────────────────────────────────────────────────────────
+// Known remote-friendly companies on each ATS. Sitemaps are tried first;
+// seeds ensure coverage for platforms whose sitemaps are unavailable.
 
-const DISCOVER_RES = {
-  greenhouse:       /boards\.greenhouse\.io\/([a-z0-9_-]+)/i,
-  lever:            /jobs\.lever\.co\/([a-z0-9_-]+)/i,
-  ashby:            /jobs\.ashbyhq\.com\/([a-z0-9_-]+)/i,
-  smartrecruiters:  /jobs\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i,
+const SEEDS = {
+  greenhouse: [
+    'stripe', 'airbnb', 'snowflake', 'twilio', 'figma', 'hubspot', 'lyft', 'pinterest',
+    'zendesk', 'mongodb', 'elastic', 'hashicorp', 'datadog', 'confluent', 'segment',
+    'brex', 'rippling', 'checkr', 'lattice', 'loom', 'notion', 'retool', 'airtable',
+    'gusto', 'plaid', 'chime', 'carta', 'deel', 'remote', 'workos', 'squarespace',
+    'intercom', 'pagerduty', 'splunk', 'okta', 'cloudflare', 'fastly', 'asana',
+    'coinbase', 'doordash', 'instacart', 'etsy', 'eventbrite', 'glassdoor', 'spotify',
+    'adobe', 'canva', 'atlassian', 'gitlab', 'box', 'dropbox', 'slack', 'zoom',
+    'robinhood', 'faire', 'clearbit', 'sendgrid', 'postman', 'zapier', 'mixpanel',
+    'amplitude', 'contentful', 'algolia', 'grafana', 'netlify', 'sentry', 'tailscale',
+    'benchling', 'joinhomebase', 'klaviyo', 'affirm', 'nerdwallet', 'betterment',
+    'wealthfront', 'headspace', 'calm', 'duolingo', 'coursera', 'udemy', 'masterclass',
+    'lever', 'greenhouse', 'ashby', 'gem', 'teamtailor',
+  ],
+  lever: [
+    'reddit', 'discord', 'yelp', 'weebly', 'opendoor', 'cruise', 'scale', 'anduril',
+    'ramp', 'mercury', 'benchling', 'devoted', 'transcarent', 'waymo', 'nuro',
+    'flexport', 'shipbob', 'stord', 'project44', 'motive', 'samsara', 'verkada',
+    'vanta', 'drata', 'secureframe', 'tugboat', 'karat', 'andela', 'toptal',
+    'legalzoom', 'classy', 'givebutter', 'benevity', 'groundtruth', 'foursquare',
+    'yotpo', 'attentive', 'iterate', 'narvar', 'shipstation', 'shippo', 'easypost',
+    'gladly', 'kustomer', 'gorgias', 'recharge', 'rechargepayments',
+  ],
+  ashby: [
+    'anthropic', 'linear', 'vercel', 'supabase', 'neon', 'planetscale', 'turso',
+    'dbtlabs', 'getcensus', 'hightouch', 'polytomic', 'rudderstack', 'segment',
+    'airbyte', 'fivetran', 'starburst', 'trino', 'dremio', 'motherduck',
+    'qdrant', 'weaviate', 'chroma', 'pinecone', 'milvus',
+    'replit', 'codeium', 'tabnine', 'sourcegraph', 'swimm', 'graphite',
+    'posthog', 'june', 'heap', 'logrocket', 'highlight', 'openreplay',
+    'incident', 'rootly', 'firehydrant', 'blameless', 'opslevel', 'cortex',
+    'launchdarkly', 'unleash', 'statsig', 'eppo', 'split',
+    'merge', 'apideck', 'nango', 'kombo', 'knit',
+    'descript', 'runway', 'pika', 'krea', 'ideogram',
+    'resend', 'loops', 'postmark', 'sendgrid',
+  ],
+  smartrecruiters: [
+    'bosch', 'visa', 'linkedin', 'ericsson', 'koninklijke', 'sap',
+    'siemens', 'philips', 'klm', 'heineken', 'booking', 'takeaway',
+    'adyen', 'mollie', 'messagebird', 'sendcloud', 'picnic', 'coolblue',
+    'spotify', 'king', 'mojang', 'paradox', 'izettle', 'klarna',
+  ],
 };
 
-async function discoverSlugs(col) {
-  const slugs = { greenhouse: new Set(), lever: new Set(), ashby: new Set(), smartrecruiters: new Set() };
+// ── Sitemap discovery ─────────────────────────────────────────────────────────
 
+const SITEMAP_CONFIGS = {
+  greenhouse: {
+    url: 'https://boards.greenhouse.io/sitemap.xml',
+    extract: url => {
+      if (url.includes('/jobs/')) return null; // skip individual job pages
+      const m = url.match(/boards\.greenhouse\.io\/([a-z0-9_-]+)/i);
+      return m ? m[1].toLowerCase() : null;
+    },
+  },
+  lever: {
+    url: 'https://jobs.lever.co/sitemap.xml',
+    extract: url => {
+      // UUID in URL = individual job, not company board
+      if (/[0-9a-f]{8}-[0-9a-f]{4}/i.test(url)) return null;
+      const m = url.match(/jobs\.lever\.co\/([a-z0-9_-]+)/i);
+      return m ? m[1].toLowerCase() : null;
+    },
+  },
+  ashby: {
+    url: 'https://jobs.ashbyhq.com/sitemap.xml',
+    extract: url => {
+      if (/[0-9a-f]{8}-[0-9a-f]{4}/i.test(url)) return null;
+      const m = url.match(/jobs\.ashbyhq\.com\/([a-z0-9_-]+)/i);
+      return m ? m[1].toLowerCase() : null;
+    },
+  },
+};
+
+async function fetchSitemapSlugs(atsName) {
+  const cfg = SITEMAP_CONFIGS[atsName];
+  if (!cfg) return new Set();
+  try {
+    const res = await get(cfg.url, { timeout: 20000 });
+    const xml = String(res.data);
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].trim());
+
+    // Handle sitemap index (points to sub-sitemaps)
+    if (xml.includes('<sitemapindex')) {
+      const subUrls = locs.slice(0, 30); // cap at 30 sub-sitemaps
+      const subSlugs = new Set();
+      await Promise.all(subUrls.map(async subUrl => {
+        try {
+          const sub = await get(subUrl, { timeout: 15000 });
+          const subLocs = [...String(sub.data).matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1].trim());
+          for (const u of subLocs) { const s = cfg.extract(u); if (s) subSlugs.add(s); }
+        } catch {}
+      }));
+      return subSlugs;
+    }
+
+    const slugs = new Set();
+    for (const u of locs) { const s = cfg.extract(u); if (s) slugs.add(s); }
+    return slugs;
+  } catch (e) {
+    console.warn(`[importAtsJobs] ${atsName} sitemap failed: ${e.message}`);
+    return new Set();
+  }
+}
+
+// ── DB discovery ──────────────────────────────────────────────────────────────
+
+const DISCOVER_RES = {
+  greenhouse:      /boards\.greenhouse\.io\/([a-z0-9_-]+)/i,
+  lever:           /jobs\.lever\.co\/([a-z0-9_-]+)/i,
+  ashby:           /jobs\.ashbyhq\.com\/([a-z0-9_-]+)/i,
+  smartrecruiters: /jobs\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i,
+};
+
+async function discoverSlugsFromDb(col) {
+  const slugs = { greenhouse: new Set(), lever: new Set(), ashby: new Set(), smartrecruiters: new Set() };
   const jobs = await col.find(
     { $or: [
       { apply_url: { $regex: 'greenhouse\\.io|lever\\.co|ashbyhq\\.com|smartrecruiters\\.com', $options: 'i' } },
@@ -72,9 +181,29 @@ async function discoverSlugs(col) {
       if (m?.[1]) slugs[ats].add(m[1].toLowerCase());
     }
   }
-
   return slugs;
 }
+
+async function discoverAllSlugs(col) {
+  console.log('[importAtsJobs] Discovering slugs from sitemaps + DB...');
+  const [dbSlugs, ghSitemap, leverSitemap, ashbySitemap] = await Promise.all([
+    discoverSlugsFromDb(col),
+    fetchSitemapSlugs('greenhouse'),
+    fetchSitemapSlugs('lever'),
+    fetchSitemapSlugs('ashby'),
+  ]);
+
+  console.log(`[importAtsJobs] Sitemap slugs — Greenhouse: ${ghSitemap.size}, Lever: ${leverSitemap.size}, Ashby: ${ashbySitemap.size}`);
+
+  return {
+    greenhouse:      new Set([...ghSitemap,     ...SEEDS.greenhouse,      ...(dbSlugs.greenhouse || [])]),
+    lever:           new Set([...leverSitemap,  ...SEEDS.lever,           ...(dbSlugs.lever || [])]),
+    ashby:           new Set([...ashbySitemap,  ...SEEDS.ashby,           ...(dbSlugs.ashby || [])]),
+    smartrecruiters: new Set([...SEEDS.smartrecruiters, ...(dbSlugs.smartrecruiters || [])]),
+  };
+}
+
+// ── Company name resolution ───────────────────────────────────────────────────
 
 async function resolveCompanyName(col, urlFragment, slug) {
   try {
@@ -112,7 +241,6 @@ async function fetchGreenhouse(slug, company) {
 }
 
 async function fetchLever(slug, company) {
-  // ?remote=true filters to remote postings server-side
   const res = await get(`https://api.lever.co/v0/postings/${slug}?mode=json&remote=true`);
   const jobs = Array.isArray(res.data) ? res.data : [];
   return jobs.map(j => ({
@@ -179,26 +307,24 @@ async function fetchSmartRecruiters(slug, company) {
 }
 
 const ATS_FETCHERS = {
-  greenhouse:      { fetch: fetchGreenhouse, urlFragment: slug => `greenhouse.io/${slug}` },
-  lever:           { fetch: fetchLever,      urlFragment: slug => `lever.co/${slug}` },
-  ashby:           { fetch: fetchAshby,      urlFragment: slug => `ashbyhq.com/${slug}` },
-  smartrecruiters: { fetch: fetchSmartRecruiters, urlFragment: slug => `smartrecruiters.com/${slug}` },
+  greenhouse:      { fetch: fetchGreenhouse,      urlFragment: s => `greenhouse.io/${s}` },
+  lever:           { fetch: fetchLever,           urlFragment: s => `lever.co/${s}` },
+  ashby:           { fetch: fetchAshby,           urlFragment: s => `ashbyhq.com/${s}` },
+  smartrecruiters: { fetch: fetchSmartRecruiters, urlFragment: s => `smartrecruiters.com/${s}` },
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function importAtsJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
-
-  console.log('[importAtsJobs] Discovering ATS slugs from existing jobs...');
-  const slugsByAts = await discoverSlugs(col);
+  const slugsByAts = await discoverAllSlugs(col);
 
   let totalNew = 0, totalUpdated = 0, totalErrors = 0;
 
   for (const [atsName, slugSet] of Object.entries(slugsByAts)) {
     const slugs = [...slugSet];
     if (!slugs.length) continue;
-    console.log(`[importAtsJobs] ${atsName}: ${slugs.length} companies discovered`);
+    console.log(`[importAtsJobs] ${atsName}: ${slugs.length} companies to fetch`);
     const { fetch, urlFragment } = ATS_FETCHERS[atsName];
 
     for (const slug of slugs) {
@@ -206,9 +332,8 @@ async function importAtsJobs() {
       try {
         const company = await resolveCompanyName(col, urlFragment(slug), slug);
         jobs = await fetch(slug, company);
-        console.log(`  ${atsName}/${slug} (${company}): ${jobs.length} remote jobs`);
+        if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote jobs`);
       } catch (err) {
-        // 404 = private/removed board — skip silently
         if (err.response?.status !== 404) {
           console.warn(`  ${atsName}/${slug} failed: ${err.message}`);
         }
@@ -233,8 +358,7 @@ async function importAtsJobs() {
         } catch { totalErrors++; }
       }
 
-      // Small delay between companies to be a polite client
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 100));
     }
   }
 
