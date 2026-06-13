@@ -192,7 +192,7 @@ function cleanTitle(title: string): string {
     .replace(/\s{2,}/g, ' ').trim()
 }
 
-const AGGREGATOR_HOSTS_FEED = new Set(['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com'])
+const AGGREGATOR_HOSTS_FEED = new Set(['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com', 'smartremotejobs.com', 'remote.co', 'weworkremotely.com', 'jobboard.io'])
 const _isAggregatorUrl = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return AGGREGATOR_HOSTS_FEED.has(h) || [...AGGREGATOR_HOSTS_FEED].some(a => h.endsWith('.' + a)) } catch { return false } }
 const jobHasUsableUrl = (job: any): boolean => {
   const raw = String(job.apply_url || job.applyUrl || job.url || '')

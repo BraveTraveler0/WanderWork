@@ -480,7 +480,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         
         // Prefer apply_url (direct company listing) over url (aggregator page)
         const _rawApplyUrl: string = (selectedJob as any).apply_url || (selectedJob as any).applyUrl || (selectedJob as any).url || ''
-        const AGGREGATOR_HOSTS = ['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com']
+        const AGGREGATOR_HOSTS = ['jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com', 'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'simplyhired.com', 'smartremotejobs.com', 'remote.co', 'weworkremotely.com', 'jobboard.io']
         const isAggregator = (u: string) => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return AGGREGATOR_HOSTS.some(a => h === a || h.endsWith('.' + a)) } catch { return false } }
         const _directUrl = _rawApplyUrl && !isAggregator(_rawApplyUrl) ? _rawApplyUrl : ''
         const _companyUrl: string = (selectedJob as any).company_url || ''

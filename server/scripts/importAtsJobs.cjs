@@ -51,6 +51,7 @@ const REMOTE_RE = /remote|worldwide|anywhere|work.?from.?home|\bwfh\b/i;
 
 const SEEDS = {
   greenhouse: [
+    // Core tech / SaaS
     'stripe', 'airbnb', 'snowflake', 'twilio', 'figma', 'hubspot', 'lyft', 'pinterest',
     'zendesk', 'mongodb', 'elastic', 'hashicorp', 'datadog', 'confluent', 'segment',
     'brex', 'rippling', 'checkr', 'lattice', 'loom', 'notion', 'retool', 'airtable',
@@ -63,6 +64,39 @@ const SEEDS = {
     'benchling', 'joinhomebase', 'klaviyo', 'affirm', 'nerdwallet', 'betterment',
     'wealthfront', 'headspace', 'calm', 'duolingo', 'coursera', 'udemy', 'masterclass',
     'lever', 'greenhouse', 'ashby', 'gem', 'teamtailor',
+    // Fintech / payments
+    'adyen', 'marqeta', 'mambu', 'patreon', 'gocardless', 'checkout', 'spreedly',
+    'tabapay', 'finix', 'unit', 'moderntreasury', 'ramp', 'divvy', 'expensify',
+    // Infrastructure / DevOps / security
+    'lacework', 'wiz', 'orca', 'snyk', 'cyberark', 'illumio', 'exabeam',
+    'panw', 'sailpoint', 'drata', 'vanta', 'secureframe', 'anvilogic',
+    'honeycomb', 'observe', 'chronosphere', 'coralogix', 'logz',
+    // Data / AI / ML
+    'databricks', 'dbt', 'fivetran', 'airbyte', 'rudderstack', 'census',
+    'hightouch', 'hex', 'lightdash', 'preset', 'metabase', 'sigma', 'mode',
+    'cohere', 'scale', 'labelbox', 'weights-biases', 'huggingface', 'together',
+    // Product / design / marketing tools
+    'figma', 'invision', 'maze', 'usertesting', 'fullstory', 'hotjar', 'pendo',
+    'appcues', 'chameleon', 'intercom', 'customerio', 'braze', 'iterable',
+    'sprout', 'hootsuite', 'buffer', 'later', 'semrush', 'ahrefs',
+    // HR / Recruiting tools
+    'workday', 'rippling', 'gusto', 'bamboohr', 'namely', 'paylocity', 'paycom',
+    'lattice', 'culture-amp', 'leapsome', 'betterworks', '15five', 'reflektive',
+    // E-commerce / logistics
+    'shopify', 'bigcommerce', 'recharge', 'gorgias', 'gladly', 'kustomer',
+    'shipbob', 'shipstation', 'narvar', 'returnly', 'loop', 'aftership',
+    // Healthcare / biotech
+    'oscar', 'cityblock', 'color', 'nuvation', 'tempus', 'veracyte',
+    'recursion', 'insitro', 'relay', 'mammoth', 'arc-institute',
+    // Education / creator economy
+    'outschool', 'synthesis', 'bereal', 'patreon', 'substack', 'circle',
+    'teachable', 'thinkific', 'podia', 'kajabi', 'learnworlds',
+    // Climate / sustainability
+    'watershed', 'patch', 'arcadia', 'energyvault', 'form-energy',
+    'twelve', 'heirloom', 'charm', 'carboncure',
+    // Enterprise / CRM / ops
+    'salesforce', 'servicenow', 'veeva', 'medallia', 'qualtrics', 'sprinklr',
+    'gainsight', 'totango', 'churnzero', 'vitally',
   ],
   lever: [
     'reddit', 'discord', 'yelp', 'weebly', 'opendoor', 'cruise', 'scale', 'anduril',

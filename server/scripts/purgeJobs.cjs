@@ -39,6 +39,8 @@ const AGGREGATOR_HOSTS = [
   'jobicy.com', 'remoteok.com', 'arbeitnow.com', 'workingnomads.com',
   'linkedin.com', 'indeed.com', 'glassdoor.com', 'ziprecruiter.com',
   'simplyhired.com', 'careerjet.com', 'jooble.org', 'trovit.com',
+  'smartremotejobs.com', 'remote.co', 'weworkremotely.com',
+  'jobboard.io', 'remotejobs.world', 'nodesk.co',
 ];
 
 const ATS_HOSTS = [
@@ -167,8 +169,8 @@ async function purgeJobs() {
     }
     if (job.date_posted) {
       const ageDays = (Date.now() - new Date(job.date_posted).getTime()) / 86400000;
-      if (ageDays > 90) {
-        recordHard(job._id, 'stale_90d'); continue;
+      if (ageDays > 60) {
+        recordHard(job._id, 'stale_60d'); continue;
       }
     }
   }
@@ -247,7 +249,11 @@ async function purgeJobs() {
   console.log(`\n[purge] Complete. Removed ${deleted} total. DB now has ${finalCount} jobs.`);
 }
 
-mongoose.connect(process.env.DATABASE_URI)
-  .then(() => purgeJobs())
-  .then(() => mongoose.disconnect())
-  .catch(err => { console.error(err); process.exit(1); });
+if (require.main === module) {
+  mongoose.connect(process.env.DATABASE_URI)
+    .then(() => purgeJobs())
+    .then(() => mongoose.disconnect())
+    .catch(err => { console.error(err); process.exit(1); });
+}
+
+module.exports = { purgeJobs };

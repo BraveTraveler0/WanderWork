@@ -277,23 +277,6 @@ const SOURCES = [
   // RemoteOK — general remote board
   { name: 'RemoteOK',   fetch: fetchRemoteOK },
 
-  // Working Nomads — category-specific for non-tech roles
-  { name: 'WorkingNomads (dev)',         fetch: () => fetchWorkingNomads('back-end-programming') },
-  { name: 'WorkingNomads (frontend)',    fetch: () => fetchWorkingNomads('front-end-programming') },
-  { name: 'WorkingNomads (accounting)',  fetch: () => fetchWorkingNomads('accounting') },
-  { name: 'WorkingNomads (finance)',     fetch: () => fetchWorkingNomads('finance') },
-  { name: 'WorkingNomads (legal)',       fetch: () => fetchWorkingNomads('legal') },
-  { name: 'WorkingNomads (customer)',    fetch: () => fetchWorkingNomads('customer-support') },
-  { name: 'WorkingNomads (sales)',       fetch: () => fetchWorkingNomads('sales') },
-  { name: 'WorkingNomads (marketing)',   fetch: () => fetchWorkingNomads('marketing') },
-  { name: 'WorkingNomads (management)',  fetch: () => fetchWorkingNomads('management') },
-  { name: 'WorkingNomads (proj-mgmt)',   fetch: () => fetchWorkingNomads('project-management') },
-  { name: 'WorkingNomads (writing)',     fetch: () => fetchWorkingNomads('content') },
-  { name: 'WorkingNomads (design)',      fetch: () => fetchWorkingNomads('design') },
-  { name: 'WorkingNomads (ux)',          fetch: () => fetchWorkingNomads('ux') },
-  { name: 'WorkingNomads (seo)',         fetch: () => fetchWorkingNomads('seo') },
-  { name: 'WorkingNomads (qa)',          fetch: () => fetchWorkingNomads('qa') },
-  { name: 'WorkingNomads (mobile)',      fetch: () => fetchWorkingNomads('mobile-programming') },
 ];
 
 async function importRemoteJobs() {
