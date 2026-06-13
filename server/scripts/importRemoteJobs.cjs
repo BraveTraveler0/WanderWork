@@ -2,7 +2,10 @@
 const mongoose = require('mongoose');
 const axios = require('axios');
 const path = require('path');
+const { OpenAI } = require('openai');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +66,9 @@ function normalizeLocation(loc) {
   return l.replace(/\s+\d{5}(-\d{4})?$/, '').trim();
 }
 
-// Clearbit free autocomplete — resolves company names to their homepage domain.
+// Resolves company names to their homepage URL.
+// Step 1: Clearbit free autocomplete (fast, no cost).
+// Step 2: GPT-4o-mini for anything Clearbit misses (reliable, low cost).
 // Results cached per import run so each company is only looked up once.
 const _companyUrlCache = new Map();
 
@@ -71,23 +76,52 @@ async function resolveCompanyUrls(jobs) {
   const needLookup = new Set(
     jobs.filter(j => !j.apply_url).map(j => j.company).filter(Boolean)
   );
-  // Deduplicate against cache
   const toFetch = [...needLookup].filter(c => !_companyUrlCache.has(c.toLowerCase()));
-
-  if (toFetch.length) {
-    await Promise.all(toFetch.map(async company => {
-      const key = company.toLowerCase();
-      try {
-        const res = await get(
-          `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(company)}`,
-          { timeout: 5000 }
-        );
-        const domain = (Array.isArray(res.data) ? res.data : [])[0]?.domain || null;
-        _companyUrlCache.set(key, domain ? `https://${domain}` : null);
-      } catch {
-        _companyUrlCache.set(key, null);
-      }
+  if (!toFetch.length) {
+    return jobs.map(j => ({
+      ...j,
+      company_url: j.apply_url ? undefined : (_companyUrlCache.get((j.company || '').toLowerCase()) || null),
     }));
+  }
+
+  // Step 1 — Clearbit (parallel, free)
+  await Promise.all(toFetch.map(async company => {
+    const key = company.toLowerCase();
+    try {
+      const res = await get(
+        `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(company)}`,
+        { timeout: 5000 }
+      );
+      const domain = (Array.isArray(res.data) ? res.data : [])[0]?.domain || null;
+      _companyUrlCache.set(key, domain ? `https://${domain}` : null);
+    } catch {
+      _companyUrlCache.set(key, null);
+    }
+  }));
+
+  // Step 2 — GPT-4o-mini for companies Clearbit couldn't find
+  if (openai) {
+    const stillMissing = toFetch.filter(c => !_companyUrlCache.get(c.toLowerCase()));
+    if (stillMissing.length) {
+      try {
+        const prompt = `For each company below, return its official website URL (homepage only, no paths). Reply with a JSON object mapping company name to URL. If genuinely unknown reply null for that entry.\n\n${stillMissing.map((c, i) => `${i + 1}. ${c}`).join('\n')}`;
+        const res = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 500,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const raw = res.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(raw);
+        for (const company of stillMissing) {
+          const key = company.toLowerCase();
+          const url = parsed[company] || Object.entries(parsed).find(([k]) => k.toLowerCase() === key)?.[1] || null;
+          if (url && /^https?:\/\//.test(url)) _companyUrlCache.set(key, url);
+        }
+      } catch (e) {
+        console.warn('[resolveCompanyUrls] GPT fallback failed:', e.message);
+      }
+    }
   }
 
   return jobs.map(j => ({
