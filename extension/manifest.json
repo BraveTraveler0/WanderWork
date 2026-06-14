@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Wanderwork Autofill",
   "version": "1.0.0",
-  "description": "Autofill job applications instantly with your Wanderwork profile. Works on Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, and Jobvite.",
-  "permissions": ["storage", "activeTab"],
+  "description": "Autofill job applications instantly with your Wanderwork profile. Works on Greenhouse, Lever, Ashby, Workday, and more.",
+  "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
     "https://boards.greenhouse.io/*",
     "https://job-boards.greenhouse.io/*",

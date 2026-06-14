@@ -494,7 +494,13 @@ function App() {
   const [topVisibleJobId, setTopVisibleJobId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>('dashboard')
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>(() => {
+    const path = window.location.pathname
+    if (path === '/privacy') return 'privacy'
+    if (path === '/terms') return 'terms'
+    if (path === '/bug-report' || path === '/report-bug') return 'reportbug'
+    return 'dashboard'
+  })
   const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade' | 'extension'>('personal')
   const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
@@ -673,6 +679,18 @@ function App() {
     return () => clearInterval(interval)
   }, [_user?.email])
 
+  type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'
+  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report' }
+  const navigateTo = (page: Page) => {
+    const url = PAGE_URLS[page] ?? '/'
+    window.history.pushState({ wanderPage: page }, '', url)
+    setCurrentPage(page)
+  }
+  const navigateBack = () => {
+    window.history.pushState({ wanderPage: 'dashboard' }, '', '/')
+    setCurrentPage('dashboard')
+  }
+
   const clearLocalAuth = () => {
     localStorage.removeItem('wanderworkToken')
     localStorage.removeItem('wanderworkUser')
@@ -800,11 +818,21 @@ function App() {
   }, [_token])
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (e: PopStateEvent) => {
       setShowLogin(false)
       setShowSignup(false)
       setShowForgotPassword(false)
       if (!_token) setShowPlans(false)
+      const page = (e.state as any)?.wanderPage
+      if (page) {
+        setCurrentPage(page)
+      } else {
+        const path = window.location.pathname
+        if (path === '/privacy') setCurrentPage('privacy')
+        else if (path === '/terms') setCurrentPage('terms')
+        else if (path === '/bug-report' || path === '/report-bug') setCurrentPage('reportbug')
+        else setCurrentPage('dashboard')
+      }
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -1136,7 +1164,7 @@ function App() {
     { label: 'Messages',        action: () => { setCurrentPage('messages'); setUnseenAppCount(0); setShowMenu(false) } },
     { label: 'Settings',        action: () => { setCurrentPage('settings'); setSettingsTab('personal'); setShowMenu(false) } },
     { label: 'Upgrade',         action: () => { setCurrentPage('plans'); setShowMenu(false) } },
-    { label: 'Report a Bug',    action: () => { setCurrentPage('reportbug'); setShowMenu(false) } },
+    { label: 'Report a Bug',    action: () => { navigateTo('reportbug'); setShowMenu(false) } },
     { label: 'Join Our Team!',  action: () => { setCurrentPage('jointeam'); setShowMenu(false) } },
     { label: 'Sign Out',        action: () => {
       clearLocalAuth()
@@ -1242,7 +1270,7 @@ function App() {
   }
 
   if (currentPage === 'reportbug') {
-    return <ReportBugPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
+    return <ReportBugPage onBack={navigateBack} userEmail={_user?.email} />
   }
 
   if (currentPage === 'jointeam') {
@@ -1250,11 +1278,11 @@ function App() {
   }
 
   if (currentPage === 'privacy') {
-    return <PrivacyPolicyPage onBack={() => setCurrentPage('dashboard')} />
+    return <PrivacyPolicyPage onBack={navigateBack} />
   }
 
   if (currentPage === 'terms') {
-    return <TermsOfServicePage onBack={() => setCurrentPage('dashboard')} />
+    return <TermsOfServicePage onBack={navigateBack} />
   }
 
   if (currentPage === 'plans') {
@@ -1579,8 +1607,8 @@ function App() {
               <span>Designing better job matches</span>
             </div>
             <div className="flex items-center gap-4">
-              <button onClick={() => setCurrentPage('privacy')} className="transition-colors hover:text-black">Privacy</button>
-              <button onClick={() => setCurrentPage('terms')} className="transition-colors hover:text-black">Terms</button>
+              <button onClick={() => navigateTo('privacy')} className="transition-colors hover:text-black">Privacy</button>
+              <button onClick={() => navigateTo('terms')} className="transition-colors hover:text-black">Terms</button>
               <button className="transition-colors hover:text-black">Support</button>
             </div>
           </div>

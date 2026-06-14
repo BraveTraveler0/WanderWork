@@ -196,7 +196,7 @@ function injectWidget(profile) {
     try {
       const extKey = await new Promise(r => chrome.storage.local.get(['extensionKey'], d => r(d.extensionKey)));
       if (!extKey) return;
-      const res = await fetch(`${API}/extension/profile`, { headers: { 'x-extension-key': extKey } });
+      const res = await fetch(`${API}/extension/profile?key=${encodeURIComponent(extKey)}`);
       if (!res.ok) return;
       const p = await res.json();
       const initials = ((p.firstName || '')[0] || '') + ((p.lastName || '')[0] || '');
@@ -438,9 +438,7 @@ function injectWidget(profile) {
     chrome.storage.local.get(['extensionKey'], async ({ extensionKey }) => {
       if (!extensionKey) return;
       try {
-        const res = await fetch(`${API}/extension/recruiters?company=${encodeURIComponent(company)}`, {
-          headers: { 'x-extension-key': extensionKey },
-        });
+        const res = await fetch(`${API}/extension/recruiters?key=${encodeURIComponent(extensionKey)}&company=${encodeURIComponent(company)}`);
         const data = await res.json().catch(() => ({ recruiters: [] }));
         const recruiters = data.recruiters || [];
         if (!recruiters.length) return;

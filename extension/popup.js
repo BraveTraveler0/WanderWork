@@ -37,9 +37,7 @@ function showDisconnected() {
 }
 
 async function connect(key) {
-  const res = await fetch(`${API}/extension/profile`, {
-    headers: { 'x-extension-key': key },
-  });
+  const res = await fetch(`${API}/extension/profile?key=${encodeURIComponent(key)}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.message || 'Could not connect. Check your key.');

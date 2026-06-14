@@ -38,7 +38,7 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
 
         <div className="bg-white rounded-[15px] p-6 sm:p-10" style={{ boxShadow: '0px 4px 20px rgba(0,0,0,0.06)', fontFamily: 'Manrope', fontSize: '14px' }}>
 
-          <P><strong>Effective Date: January 3, 2026 &nbsp;|&nbsp; Last Updated: May 21, 2026</strong></P>
+          <P><strong>Effective Date: January 3, 2026 &nbsp;|&nbsp; Last Updated: June 14, 2026</strong></P>
 
           <P>
             Wander/Work, Inc. ("Wander/Work," "we," "our," or "us") operates the Wander/Work platform — including our website, mobile applications, and AI-assisted job-search tools (collectively, the "Services"). This Privacy Policy describes how we collect, use, store, share, and protect information about you when you use the Services, and explains the choices available to you regarding your information.
