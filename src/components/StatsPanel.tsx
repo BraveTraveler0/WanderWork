@@ -25,43 +25,14 @@ const asStringList = (value: unknown): string[] => {
 
 const NEW_JOB_WINDOW_DAYS = 3
 
-const parseJobDate = (value: unknown): Date | null => {
-  if (!value) return null
-  const parsed = new Date(value as any)
-  if (!Number.isNaN(parsed.getTime())) return parsed
-  if (typeof value === 'string') {
-    const withZ = new Date(`${value}Z`)
-    if (!Number.isNaN(withZ.getTime())) return withZ
-  }
-  if (!Number.isNaN(Number(value))) {
-    const numeric = new Date(Number(value))
-    if (!Number.isNaN(numeric.getTime())) return numeric
-  }
-  return null
-}
 
-const getObjectIdDate = (id: unknown): Date | null => {
-  if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
-    return new Date(parseInt(id.substring(0, 8), 16) * 1000)
-  }
-  return null
-}
-
-const getJobAddedDate = (job: any): Date | null => {
-  return (
-    parseJobDate(job?.createdAt) ||
-    parseJobDate(job?.addedAt) ||
-    parseJobDate(job?.importedAt) ||
-    getObjectIdDate(job?._id || job?.backendId) ||
-    parseJobDate(job?.postedAt || job?.rawDate || job?.datePosted || job?.date_posted || job?.preparedAt)
-  )
-}
 
 const isNewJob = (job: any): boolean => {
-  if (job?.hasNewBadge === true) return true
-  const added = getJobAddedDate(job)
-  if (!added) return false
-  const diffDays = (Date.now() - added.getTime()) / (1000 * 60 * 60 * 24)
+  const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.date_posted
+  if (!raw) return false
+  const posted = new Date(raw)
+  if (Number.isNaN(posted.getTime())) return false
+  const diffDays = (Date.now() - posted.getTime()) / (1000 * 60 * 60 * 24)
   return diffDays >= 0 && diffDays <= NEW_JOB_WINDOW_DAYS
 }
 
