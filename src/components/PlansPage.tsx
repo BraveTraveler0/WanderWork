@@ -150,6 +150,7 @@ function useInView(threshold = 0.15) {
   return { ref, visible }
 }
 
+const PRO_GRADIENT = 'linear-gradient(135deg, #1e5560 0%, #306770 100%)'
 const PREMIUM_GRADIENT = 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)'
 
 function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
@@ -161,6 +162,7 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
 }) {
   const [hovered, setHovered] = useState(false)
   const isPaid = Boolean(plan.stripePlan)
+  const cardGradient = plan.stripePlan === 'premium' ? PREMIUM_GRADIENT : PRO_GRADIENT
   const delay = 200 + index * 120
 
   return (
@@ -193,7 +195,7 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
       {isPaid ? (
         /* Paid plan — dark gradient header */
         <>
-          <div style={{ background: PREMIUM_GRADIENT, padding: '28px 28px 24px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ background: cardGradient, padding: '28px 28px 24px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -24, right: -24, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
             <div style={{ position: 'absolute', bottom: -12, left: 24, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
             {plan.badge && (
