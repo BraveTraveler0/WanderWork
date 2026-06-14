@@ -86,6 +86,7 @@ interface JobFeedProps {
   isAuthenticated?: boolean
   onSignIn?: () => void
   onTopJobChange?: (id: number | null) => void
+  onRecruiterContactsClick?: () => void
 }
 
 const BATCH = 15
@@ -1122,7 +1123,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -1686,6 +1687,11 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           currentCredits={currentCredits}
           isAuthenticated={isAuthenticated}
           onSignUp={onSignUp}
+          hasRecruiter={Boolean(showCustomRequestModal.job?.has_recruiter)}
+          onOpenRecruiter={() => {
+            setShowCustomRequestModal(null)
+            onRecruiterContactsClick?.()
+          }}
         />
       )}
 

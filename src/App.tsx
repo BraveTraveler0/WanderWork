@@ -1514,6 +1514,7 @@ function App() {
                   onSignIn={() => setShowLogin(true)}
                   onSignUp={() => setShowSignup(true)}
                   onTopJobChange={setTopVisibleJobId}
+                  onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                 />
               </div>
 

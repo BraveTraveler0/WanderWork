@@ -885,6 +885,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           initialCoverLetter={Boolean(initialCustomRequest?.coverLetter)}
           isAuthenticated={isAuthenticated}
           onSignUp={onSignUp}
+          hasRecruiter={Boolean(showCustomRequestModal.job?.has_recruiter)}
+          onOpenRecruiter={() => {
+            setShowCustomRequestModal(null)
+            setInitialCustomRequest(null)
+            onRecruiterContactsClick?.()
+          }}
         />
       )}
 
