@@ -69,6 +69,7 @@ interface SettingsPageProps {
   data?: JobSeekerData
   onCandidateUpdate?: (patch: any) => void
   onDeleteAccount?: () => void
+  onSaved?: () => void
 }
 
 type DocumentModalState = null | {
@@ -99,7 +100,7 @@ const getSavedJson = <T,>(key: string, fallback: T): T => {
   }
 }
 
-const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpdate, onDeleteAccount }: SettingsPageProps) => {
+const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpdate, onDeleteAccount, onSaved }: SettingsPageProps) => {
   const candidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const [profile, setProfile] = useState<any>(() => {
     return getSavedJson('wanderworkProfile', {
@@ -277,6 +278,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
             const patch = { _id: candidate._id, ...candidatePatch }
             await updateJobSeeker({ Candidates: [patch] })
             onCandidateUpdate?.(candidatePatch)
+            onSaved?.()
           }
         } catch (e) {
           console.warn('Failed to update profile field on server', field, e)
@@ -308,6 +310,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
         setProfile(updated)
         localStorage.setItem('wanderworkProfile', JSON.stringify(updated))
         if (result?.candidate) onCandidateUpdate?.(result.candidate)
+        onSaved?.()
       } catch (err: any) {
         console.warn('Resume upload failed', err)
         await showAlert('Upload Failed', err?.message || 'Resume upload failed. Please try again.')

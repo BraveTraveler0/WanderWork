@@ -212,7 +212,7 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-export default function ProfilePage({ candidate, onBack, onCandidateUpdate }: { candidate: Candidate | null | undefined; onBack?: () => void; onCandidateUpdate?: (patch: any) => void }) {
+export default function ProfilePage({ candidate, onBack, onCandidateUpdate, onSaved }: { candidate: Candidate | null | undefined; onBack?: () => void; onCandidateUpdate?: (patch: any) => void; onSaved?: () => void }) {
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [populatedFields, setPopulatedFields] = useState<string[]>([])
@@ -264,6 +264,7 @@ export default function ProfilePage({ candidate, onBack, onCandidateUpdate }: { 
           setPopulatedFields(['Resume uploaded'])
           setTimeout(() => setPopulatedFields([]), 4000)
         }
+        onSaved?.()
       }
     } catch (err: any) {
       setUploadError(err?.message || 'Upload failed. Please try again.')
@@ -743,8 +744,10 @@ export default function ProfilePage({ candidate, onBack, onCandidateUpdate }: { 
             setLocalOverride((prev: any) => ({ ...(prev ?? {}), skills: updated, skills_2: [] }))
             onCandidateUpdate?.({ skills: updated })
             if (candidateData._id) {
-              try { await updateCandidateSkills(candidateData._id, updated) }
-              catch (e) { console.warn('Failed to save skills', e) }
+              try {
+                await updateCandidateSkills(candidateData._id, updated)
+                onSaved?.()
+              } catch (e) { console.warn('Failed to save skills', e) }
             }
           }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
@@ -594,6 +594,8 @@ function App() {
     }
   }, [])
   const [showRecruiterNavModal, setShowRecruiterNavModal] = useState(false)
+  const [showAutoApplyPopover, setShowAutoApplyPopover] = useState(false)
+  const autoApplyBtnRef = useRef<HTMLButtonElement>(null)
   const [profileImage, setProfileImage] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkProfileImage', ['wanderHireProfileImage'])
   })
@@ -626,6 +628,18 @@ function App() {
     if (_user) localStorage.setItem(getWelcomeStorageKey(_user), 'true')
     setShowWelcomeModal(false)
   }
+
+  useEffect(() => {
+    if (!showAutoApplyPopover) return
+    const handler = (e: MouseEvent) => {
+      const anchor = autoApplyBtnRef.current?.closest('[data-auto-apply-anchor]')
+      if (!anchor || !anchor.contains(e.target as Node)) {
+        setShowAutoApplyPopover(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showAutoApplyPopover])
 
   useEffect(() => {
     if (!showWelcomeModal) return
@@ -870,6 +884,15 @@ function App() {
       const restCandidates = Array.isArray(base.Candidates) ? base.Candidates.slice(1) : []
       return { ...base, Candidates: [updated, ...restCandidates] }
     })
+  }
+
+  const refreshPairings = async () => {
+    try {
+      const pairings = await getCandidateJobPairings()
+      if (Array.isArray(pairings)) {
+        setData((prev) => prev ? { ...prev, CandidateJobPairing: pairings } : prev)
+      }
+    } catch (_) {}
   }
 
   // Defensive default to avoid null data usage
@@ -1215,7 +1238,7 @@ function App() {
 
   // Render different pages
   if (currentPage === 'settings') {
-    return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} />
+    return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} onSaved={refreshPairings} />
   }
 
   if (currentPage === 'reportbug') {
@@ -1263,7 +1286,7 @@ function App() {
         skills: [], urls: [], resume: {}, status: 'active',
         paidUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
       } : null))
-    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} />
+    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} onSaved={refreshPairings} />
   }
 
   return (
@@ -1312,16 +1335,52 @@ function App() {
               </>
             ) : (
               <>
-                {/* Auto Apply — coming soon */}
-                <button
-                  disabled
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium cursor-not-allowed"
-                  style={{ border: '1px solid #D0D0D0', color: '#B0B0B0', background: 'transparent' }}
-                  title="Coming Soon"
-                >
-                  <Zap size={13} />
-                  <span className="hidden sm:inline">Auto Apply — Coming Soon</span>
-                </button>
+                {/* Auto Apply — active button, coming soon label only inside the drawer */}
+                <div className="relative" data-auto-apply-anchor>
+                  <button
+                    ref={autoApplyBtnRef}
+                    onClick={() => setShowAutoApplyPopover(p => !p)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-all duration-200"
+                    style={{ border: '1px solid #C8DEDE', color: '#306770', background: 'transparent', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#EEF6F7' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    title="Auto Apply"
+                  >
+                    <Zap size={13} />
+                    <span className="hidden sm:inline">Auto Apply</span>
+                  </button>
+                  {showAutoApplyPopover && (
+                    <div
+                      className="absolute right-0 z-50 mt-2 w-72 rounded-xl shadow-xl overflow-hidden"
+                      style={{ background: '#fff', border: '1px solid #E5EEF0', top: '100%' }}
+                    >
+                      <div style={{ background: '#306770', padding: '16px 18px 12px' }}>
+                        <div className="flex items-center gap-2" style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>
+                          <Zap size={15} />
+                          Auto Apply
+                        </div>
+                        <p style={{ color: '#C8DEDE', fontSize: 12, marginTop: 4 }}>Coming soon to Wanderwork</p>
+                      </div>
+                      <div style={{ padding: '14px 18px 16px' }}>
+                        <p style={{ fontSize: 12.5, color: '#444', lineHeight: 1.6, margin: 0 }}>
+                          The Wanderwork Chrome extension will let you apply to jobs in seconds. It autofills your information on ATS pages and lets you apply while you wander — no copy-pasting, no switching tabs.
+                        </p>
+                        <ul style={{ fontSize: 12, color: '#555', marginTop: 10, paddingLeft: 16, lineHeight: 1.7 }}>
+                          <li>One-click autofill on Greenhouse, Lever, Ashby and more</li>
+                          <li>Apply from anywhere — phone, tablet, or desktop</li>
+                          <li>Track every application automatically</li>
+                        </ul>
+                        <button
+                          disabled
+                          className="w-full mt-3 py-2 rounded-[8px] text-[12px] font-semibold cursor-not-allowed"
+                          style={{ background: '#E5E5E5', color: '#999', border: 'none' }}
+                        >
+                          Get the Extension — Coming Soon
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={() => setShowRecruiterNavModal(true)}

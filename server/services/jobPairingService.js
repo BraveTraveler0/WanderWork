@@ -28,8 +28,8 @@ function detectSeniorityLevel(text) {
 function isLowLevelJob(job) {
   const text = normalizeText([
     job.title,
-    job.jobType,
-    job.shortDescription,
+    job.jobType || job.job_type,
+    job.shortDescription || job.description_short,
     job.summary,
     toArray(job.tags).join(' '),
   ].filter(Boolean).join(' '))
@@ -128,9 +128,9 @@ function jobText(job) {
   return normalizeText([
     job.title,
     job.company,
-    job.jobType,
+    job.jobType || job.job_type,
     locationText(job.location),
-    job.shortDescription,
+    job.shortDescription || job.description_short,
     job.description,
     job.summary,
     toArray(job.tags).join(' '),
@@ -273,11 +273,9 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
 
-  const scoredJobIds = scored.map((item) => item.job._id)
-  await CandidateJobPairings.deleteMany({
-    candidateId: candidate._id,
-    ...(scoredJobIds.length ? { jobId: { $nin: scoredJobIds } } : {}),
-  })
+  // Delete all existing pairings for this candidate, then rewrite only valid ones.
+  // Simpler and more reliable than a conditional $nin — avoids any stale pairing surviving.
+  await CandidateJobPairings.deleteMany({ candidateId: candidate._id })
 
   if (!scored.length) {
     return { candidateId, totalJobs: jobs.length, paired: 0, pairings: [] }

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Generate Icons</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 32px; background: #f5f5f5; color: #333; }
+    h2 { margin: 0 0 8px; }
+    p { margin: 0 0 20px; color: #666; font-size: 14px; }
+    #drop-zone {
+      border: 2px dashed #306770; border-radius: 12px; padding: 40px;
+      text-align: center; cursor: pointer; background: #fff;
+      transition: background 0.15s; font-size: 15px; color: #306770; font-weight: 600;
+    }
+    #drop-zone:hover, #drop-zone.over { background: #EEF6F7; }
+    #file-input { display: none; }
+    #previews { display: flex; gap: 24px; align-items: flex-end; margin-top: 28px; flex-wrap: wrap; }
+    .preview-wrap { text-align: center; }
+    .preview-wrap canvas { display: block; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .preview-wrap p { margin: 6px 0 0; font-size: 12px; color: #888; }
+    #download-all {
+      margin-top: 24px; padding: 12px 28px; background: #306770; color: #fff;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; display: none;
+    }
+    #download-all:hover { background: #255860; }
+    #status { margin-top: 12px; font-size: 13px; color: #27ae60; display: none; }
+  </style>
+</head>
+<body>
+  <h2>Wanderwork — Icon Generator</h2>
+  <p>Drop your logo PNG (or click to browse). Icons are exported on a teal circle background.</p>
+
+  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+    Drop logo PNG here or click to browse
+  </div>
+  <input type="file" id="file-input" accept="image/*">
+
+  <div id="previews"></div>
+  <button id="download-all">Download All Icons</button>
+  <div id="status">Icons saved to Downloads folder.</div>
+
+  <script>
+    const TEAL = '#306770';
+    const SIZES = [16, 48, 128];
+    let canvases = {};
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      if (file) processImage(file);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) processImage(fileInput.files[0]);
+    });
+
+    function processImage(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => renderAll(img);
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function renderAll(img) {
+      canvases = {};
+      const previews = document.getElementById('previews');
+      previews.innerHTML = '';
+
+      SIZES.forEach(size => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Teal circle background
+        ctx.fillStyle = TEAL;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw logo inverted (white) — compositing trick
+        // First draw the logo normally
+        const pad = size * 0.12;
+        const logoSize = size - pad * 2;
+
+        // Temp canvas for inversion
+        const tmp = document.createElement('canvas');
+        tmp.width = size;
+        tmp.height = size;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(img, pad, pad, logoSize, logoSize);
+
+        // Invert: draw white rect then use 'difference' to flip colors to white
+        tctx.globalCompositeOperation = 'difference';
+        tctx.fillStyle = 'white';
+        tctx.fillRect(0, 0, size, size);
+
+        // Composite the inverted logo onto the teal circle using destination-in to clip
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(tmp, 0, 0);
+
+        canvases[size] = canvas;
+
+        // Preview
+        const wrap = document.createElement('div');
+        wrap.className = 'preview-wrap';
+
+        // Show at 2× for small ones so they're visible
+        const display = document.createElement('canvas');
+        const displaySize = Math.max(size, size < 64 ? size * 3 : size);
+        display.width = displaySize;
+        display.height = displaySize;
+        display.getContext('2d').drawImage(canvas, 0, 0, displaySize, displaySize);
+
+        const label = document.createElement('p');
+        label.textContent = `${size}×${size}`;
+
+        wrap.appendChild(display);
+        wrap.appendChild(label);
+        previews.appendChild(wrap);
+      });
+
+      const btn = document.getElementById('download-all');
+      btn.style.display = 'inline-block';
+      btn.onclick = downloadAll;
+    }
+
+    function downloadAll() {
+      const status = document.getElementById('status');
+      SIZES.forEach((size, i) => {
+        setTimeout(() => {
+          const a = document.createElement('a');
+          a.href = canvases[size].toDataURL('image/png');
+          a.download = `icon${size}.png`;
+          a.click();
+        }, i * 400);
+      });
+      status.style.display = 'block';
+      setTimeout(() => status.style.display = 'none', 3000);
+    }
+  </script>
+</body>
+</html>

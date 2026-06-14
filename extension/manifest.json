@@ -1,43 +1,62 @@
 {
   "manifest_version": 3,
-  "name": "Wander/Work Autofill",
+  "name": "Wanderwork Autofill",
   "version": "1.0.0",
-  "description": "Autofill job applications instantly with your Wander/Work profile. Premium feature.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "description": "Autofill job applications instantly with your Wanderwork profile. Works on Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, and Jobvite.",
+  "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://boards.greenhouse.io/*",
     "https://job-boards.greenhouse.io/*",
+    "https://*.greenhouse.io/*",
     "https://jobs.lever.co/*",
     "https://jobs.ashbyhq.com/*",
     "https://*.myworkdayjobs.com/*",
     "https://careers.smartrecruiters.com/*",
     "https://apply.workable.com/*",
     "https://jobs.jobvite.com/*",
-    "https://*.greenhouse.io/*",
     "https://wanderwork-backend-server.onrender.com/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "web_accessible_resources": [
     {
       "resources": ["logo.svg"],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://*.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://careers.smartrecruiters.com/*",
+        "https://apply.workable.com/*",
+        "https://jobs.jobvite.com/*"
+      ]
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Wander/Work Autofill"
+    "default_title": "Wanderwork Autofill",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
   },
   "content_scripts": [
     {
       "matches": [
         "https://boards.greenhouse.io/*",
         "https://job-boards.greenhouse.io/*",
+        "https://*.greenhouse.io/*",
         "https://jobs.lever.co/*",
         "https://jobs.ashbyhq.com/*",
         "https://*.myworkdayjobs.com/*",
         "https://careers.smartrecruiters.com/*",
         "https://apply.workable.com/*",
-        "https://jobs.jobvite.com/*",
-        "https://*.greenhouse.io/*"
+        "https://jobs.jobvite.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
