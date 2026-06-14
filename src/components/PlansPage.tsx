@@ -150,6 +150,8 @@ function useInView(threshold = 0.15) {
   return { ref, visible }
 }
 
+const PREMIUM_GRADIENT = 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)'
+
 function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
   plan: Plan
   index: number
@@ -158,7 +160,7 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
   loading: boolean
 }) {
   const [hovered, setHovered] = useState(false)
-
+  const isPaid = Boolean(plan.stripePlan)
   const delay = 200 + index * 120
 
   return (
@@ -168,109 +170,119 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
       style={{
         opacity: pageVisible ? 1 : 0,
         transform: pageVisible
-          ? hovered ? 'translateY(-10px) scale(1.02)' : plan.popular ? 'translateY(-6px)' : 'translateY(0)'
+          ? hovered ? 'translateY(-8px) scale(1.01)' : isPaid ? 'translateY(-4px)' : 'translateY(0)'
           : 'translateY(32px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.4s cubic-bezier(0.34,1.56,0.64,1)`,
         background: '#FFFFFF',
-        border: hovered
-          ? `1.5px solid #63B08D`
-          : plan.popular
-          ? '1.5px solid #BFE3D2'
-          : '1.5px solid #E4E4E4',
+        border: isPaid ? 'none' : '1.5px solid #E4E4E4',
         borderRadius: 22,
+        overflow: 'hidden',
         boxShadow: hovered
-          ? '0 32px 72px rgba(48,103,112,0.18)'
-          : plan.popular
-          ? '0 25px 60px rgba(48,103,112,0.13)'
+          ? '0 32px 72px rgba(17,46,51,0.22)'
+          : isPaid
+          ? '0 20px 56px rgba(17,46,51,0.16)'
           : '0 12px 40px rgba(0,0,0,0.07)',
         flex: '1 1 0',
         minWidth: 0,
         maxWidth: 360,
-        padding: '36px 32px',
         display: 'flex',
         flexDirection: 'column' as const,
-        position: 'relative' as const,
         cursor: 'default',
       }}
     >
-      {plan.badge && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: hovered ? '#36BF8F' : '#63B08D',
-            color: '#fff',
-            borderRadius: 99,
-            padding: '4px 14px',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.5px',
-            marginBottom: 16,
-            transition: 'background 0.3s ease',
-            width: 'fit-content',
-          }}
-        >
-          {plan.badge}
+      {isPaid ? (
+        /* Paid plan — dark gradient header */
+        <>
+          <div style={{ background: PREMIUM_GRADIENT, padding: '28px 28px 24px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: -24, right: -24, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+            <div style={{ position: 'absolute', bottom: -12, left: 24, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+            {plan.badge && (
+              <div style={{ background: 'rgba(255,255,255,0.13)', color: '#9ecfd6', fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 20, letterSpacing: '0.6px', marginBottom: 14, width: 'fit-content', position: 'relative' }}>
+                {plan.badge}
+              </div>
+            )}
+            <h2 style={{ fontFamily: 'Manrope', fontWeight: 800, fontSize: 24, color: '#fff', marginBottom: 4, position: 'relative', letterSpacing: '-0.3px' }}>
+              {plan.name}
+            </h2>
+            <p style={{ fontSize: 12, color: 'rgba(180,215,220,0.85)', marginBottom: 18, position: 'relative', lineHeight: 1.5 }}>
+              {plan.description}
+            </p>
+            <div style={{ marginBottom: 20, position: 'relative' }}>
+              <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 44, color: '#fff', lineHeight: 1 }}>${plan.price}</span>
+              <span style={{ fontSize: 13, color: 'rgba(180,215,220,0.7)', marginLeft: 5 }}>{plan.period}</span>
+            </div>
+            <button
+              onClick={onCheckout}
+              disabled={loading}
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 11,
+                fontWeight: 700, fontSize: 14, fontFamily: 'Manrope',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                background: 'rgba(255,255,255,0.14)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.22)',
+                letterSpacing: '0.2px',
+                position: 'relative',
+                transition: 'background 0.2s ease',
+              }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'rgba(255,255,255,0.22)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)' }}
+            >
+              {loading ? 'Redirecting...' : plan.cta}
+            </button>
+          </div>
+          <div style={{ padding: '20px 28px 28px', flex: 1 }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {plan.features.map((feature) => (
+                <li key={feature} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: '#4B6A73' }}>
+                  <Check size={15} style={{ color: '#63B08D', flexShrink: 0, marginTop: 1 }} />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : (
+        /* Free plan — plain white card */
+        <div style={{ padding: '36px 32px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <h2 style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 26, color: '#306770', marginBottom: 6 }}>
+            {plan.name}
+          </h2>
+          <p style={{ fontSize: 13, color: '#7A7A7A', marginBottom: 24, minHeight: 20 }}>
+            {plan.description}
+          </p>
+          <div style={{ marginBottom: 28 }}>
+            <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 50, color: '#306770', lineHeight: 1 }}>${plan.price}</span>
+            <span style={{ fontSize: 13, color: '#7A7A7A', marginLeft: 4 }}>{plan.period}</span>
+          </div>
+          <button
+            onClick={onCheckout}
+            disabled={loading}
+            style={{
+              width: '100%', padding: '13px 0', borderRadius: 12,
+              fontWeight: 700, fontSize: 14, fontFamily: 'Manrope',
+              cursor: loading ? 'not-allowed' : 'pointer', marginBottom: 28,
+              opacity: loading ? 0.65 : 1,
+              background: '#FFFFFF', color: '#306770', border: '1.5px solid #BFC8CC',
+              letterSpacing: '0.3px', transition: 'all 0.25s ease',
+            }}
+            onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.borderColor = '#306770' } }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#BFC8CC' }}
+          >
+            {loading ? 'Redirecting...' : plan.cta}
+          </button>
+          <div style={{ height: 1, background: '#F0F0F0', marginBottom: 24 }} />
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {plan.features.map((feature) => (
+              <li key={feature} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: '#4B6A73' }}>
+                <Check size={15} style={{ color: '#63B08D', flexShrink: 0, marginTop: 1 }} />
+                {feature}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
-
-      <h2 style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 26, color: '#306770', marginBottom: 6 }}>
-        {plan.name}
-      </h2>
-
-      <p style={{ fontSize: 13, color: '#7A7A7A', marginBottom: 24, minHeight: 20 }}>
-        {plan.description}
-      </p>
-
-      <div style={{ marginBottom: 28 }}>
-        <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 50, color: '#306770', lineHeight: 1 }}>
-          ${plan.price}
-        </span>
-        <span style={{ fontSize: 13, color: '#7A7A7A', marginLeft: 4 }}>{plan.period}</span>
-      </div>
-
-      <button
-        onClick={onCheckout}
-        disabled={loading}
-        style={{
-          width: '100%',
-          padding: '13px 0',
-          borderRadius: 12,
-          fontWeight: 700,
-          fontSize: 14,
-          fontFamily: 'Manrope',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          marginBottom: 28,
-          transition: 'all 0.25s ease',
-          opacity: loading ? 0.65 : 1,
-          background: hovered && !loading ? '#36BF8F' : plan.popular ? '#306770' : '#FFFFFF',
-          color: hovered && !loading ? '#FFFFFF' : plan.popular ? '#FFFFFF' : '#306770',
-          border: hovered && !loading ? '1.5px solid #36BF8F' : plan.popular ? '1.5px solid #306770' : '1.5px solid #BFC8CC',
-          letterSpacing: '0.3px',
-        }}
-      >
-        {loading ? 'Redirecting...' : plan.cta}
-      </button>
-
-      <div style={{ height: 1, background: '#F0F0F0', marginBottom: 24 }} />
-
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {plan.features.map((feature) => (
-          <li key={feature} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: '#4B6A73' }}>
-            <Check
-              size={15}
-              style={{
-                color: hovered ? '#36BF8F' : '#63B08D',
-                flexShrink: 0,
-                marginTop: 1,
-                transition: 'color 0.25s ease',
-              }}
-            />
-            {feature}
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }

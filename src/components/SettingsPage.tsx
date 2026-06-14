@@ -908,7 +908,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Starter — current plan */}
-                  <div className="border-2 rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#306770', borderStyle: 'dashed' }}>
+                  <div className="border-2 rounded-[18px] p-6 flex flex-col" style={{ borderColor: '#306770', borderStyle: 'dashed' }}>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-[18px] font-semibold" style={{ color: '#306770' }}>Starter</h3>
                       <span className="px-2 py-1 rounded-[8px] text-[10px] font-semibold" style={{ color: '#306770', background: '#30677015', border: '1px solid #306770' }}>Current Plan</span>
@@ -920,57 +920,63 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       <li>✓ Basic resume upload</li>
                       <li>✓ Job bookmarks</li>
                     </ul>
-                    <button
-                      disabled
-                      className="w-full px-4 py-2 rounded-[10px] text-[12px]"
-                      style={{ border: '1px solid #DCDCDC', color: '#AAAAAA', background: '#F9F9F9', cursor: 'not-allowed' }}
-                    >
+                    <button disabled className="w-full px-4 py-2 rounded-[10px] text-[12px]" style={{ border: '1px solid #DCDCDC', color: '#AAAAAA', background: '#F9F9F9', cursor: 'not-allowed' }}>
                       Your Current Plan
                     </button>
                   </div>
 
-                  {/* Pro */}
-                  <div className="border rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#DCDCDC' }}>
-                    <h3 className="text-[18px] font-semibold mb-2" style={{ color: '#306770' }}>Pro</h3>
-                    <p className="text-[24px] font-bold mb-4" style={{ color: '#306770' }}>$19<span style={{ fontSize: '14px', fontWeight: 'normal' }}>/mo</span></p>
-                    <ul className="flex flex-col gap-2 mb-6 text-[12px] flex-1" style={{ color: '#787878' }}>
-                      <li>✓ Unlimited job matches</li>
-                      <li>✓ 100 tokens/month</li>
-                      <li>✓ 20 recruiter emails/day</li>
-                      <li>✓ Resume optimization</li>
-                    </ul>
-                    <button
-                      className="w-full px-4 py-2 rounded-[10px] text-[12px] transition-colors"
-                      style={{ border: '1px solid #306770', color: '#306770', background: 'white', opacity: upgradeLoading === 'pro' ? 0.6 : 1 }}
-                      disabled={!!upgradeLoading}
-                      onClick={() => handleUpgrade('pro')}
-                    >
-                      {upgradeLoading === 'pro' ? 'Redirecting...' : 'Upgrade to Pro'}
-                    </button>
+                  {/* Pro — premium gradient */}
+                  <div className="rounded-[18px] overflow-hidden flex flex-col" style={{ boxShadow: '0 16px 48px rgba(17,46,51,0.15)' }}>
+                    <div style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', padding: '22px 24px 20px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: -20, right: -20, width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+                      <h3 className="text-[18px] font-bold mb-1 relative" style={{ color: '#fff', fontFamily: 'Manrope' }}>Pro</h3>
+                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>$19<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
+                    </div>
+                    <div className="flex flex-col flex-1 p-6 bg-white">
+                      <ul className="flex flex-col gap-2 mb-5 text-[12px] flex-1" style={{ color: '#4B6A73' }}>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> Unlimited job matches</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> 100 tokens/month</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> 20 recruiter emails/day</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> Resume optimization</li>
+                      </ul>
+                      <button
+                        className="w-full px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all"
+                        style={{ background: 'linear-gradient(135deg, #112e33 0%, #306770 100%)', color: 'white', border: 'none', opacity: upgradeLoading === 'pro' ? 0.6 : 1, fontFamily: 'Manrope' }}
+                        disabled={!!upgradeLoading}
+                        onClick={() => handleUpgrade('pro')}
+                      >
+                        {upgradeLoading === 'pro' ? 'Redirecting...' : 'Upgrade to Pro'}
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Premium */}
-                  <div className="border-2 rounded-[15px] p-6 flex flex-col" style={{ borderColor: '#306770', background: '#30677010' }}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-[18px] font-semibold" style={{ color: '#306770' }}>Premium</h3>
-                      <span className="px-2 py-1 rounded-[8px] text-[10px] font-semibold" style={{ color: 'white', background: '#36BF8F' }}>Popular</span>
+                  {/* Premium — premium gradient */}
+                  <div className="rounded-[18px] overflow-hidden flex flex-col" style={{ boxShadow: '0 16px 48px rgba(17,46,51,0.18)' }}>
+                    <div style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', padding: '22px 24px 20px', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ position: 'absolute', top: -20, right: -20, width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+                      <div style={{ background: 'rgba(255,255,255,0.13)', color: '#9ecfd6', fontSize: 9.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, letterSpacing: '0.6px', marginBottom: 8, width: 'fit-content', position: 'relative' }}>
+                        POPULAR
+                      </div>
+                      <h3 className="text-[18px] font-bold mb-1 relative" style={{ color: '#fff', fontFamily: 'Manrope' }}>Premium</h3>
+                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>$49<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
                     </div>
-                    <p className="text-[24px] font-bold mb-4" style={{ color: '#306770' }}>$49<span style={{ fontSize: '14px', fontWeight: 'normal' }}>/mo</span></p>
-                    <ul className="flex flex-col gap-2 mb-6 text-[12px] flex-1" style={{ color: '#787878' }}>
-                      <li>✓ Everything in Pro</li>
-                      <li>✓ 200 tokens/month</li>
-                      <li>✓ 30 recruiter emails/day</li>
-                      <li>✓ Career coach access</li>
-                      <li>✓ Interview prep</li>
-                    </ul>
-                    <button
-                      className="w-full px-4 py-2 rounded-[10px] text-[12px] text-white transition-colors"
-                      style={{ background: '#306770', opacity: upgradeLoading === 'premium' ? 0.6 : 1 }}
-                      disabled={!!upgradeLoading}
-                      onClick={() => handleUpgrade('premium')}
-                    >
-                      Upgrade to Premium
-                    </button>
+                    <div className="flex flex-col flex-1 p-6 bg-white">
+                      <ul className="flex flex-col gap-2 mb-5 text-[12px] flex-1" style={{ color: '#4B6A73' }}>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> Everything in Pro</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> 200 tokens/month</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> 30 recruiter emails/day</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> Career coach access</li>
+                        <li className="flex items-center gap-2"><span style={{ color: '#63B08D' }}>✓</span> Interview prep</li>
+                      </ul>
+                      <button
+                        className="w-full px-4 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all"
+                        style={{ background: 'linear-gradient(135deg, #112e33 0%, #306770 100%)', color: 'white', border: 'none', opacity: upgradeLoading === 'premium' ? 0.6 : 1, fontFamily: 'Manrope' }}
+                        disabled={!!upgradeLoading}
+                        onClick={() => handleUpgrade('premium')}
+                      >
+                        {upgradeLoading === 'premium' ? 'Redirecting...' : 'Upgrade to Premium'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
