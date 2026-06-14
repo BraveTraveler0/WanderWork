@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, ArrowRight, Users, ChevronDown, Zap, X } from 'lucide-react'
+import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 
@@ -119,8 +119,6 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
   const [hasCompanyRecruiters, setHasCompanyRecruiters] = useState(false)
   const [showRecruiterModal, setShowRecruiterModal] = useState(false)
-  const [showAutoApplyPopover, setShowAutoApplyPopover] = useState(false)
-  const autoApplyBtnRef = useRef<HTMLButtonElement>(null)
   const [showTokensModal, setShowTokensModal] = useState(false)
   const [tokenQty, setTokenQty] = useState(10)
   const [currentTokens, setCurrentTokens] = useState(tokensCount)
@@ -258,21 +256,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   }, [baseCredits])
 
   useEffect(() => {
-    if (!showAutoApplyPopover) return
-    const handler = (e: MouseEvent) => {
-      if (autoApplyBtnRef.current && !autoApplyBtnRef.current.closest('.relative')?.contains(e.target as Node)) {
-        setShowAutoApplyPopover(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showAutoApplyPopover])
-
-  useEffect(() => {
     if (creditBalanceOverride !== null) setCurrentTokens(creditBalanceOverride)
   }, [creditBalanceOverride])
-
-  useEffect(() => { setShowAutoApplyPopover(false) }, [selectedCompany])
 
   useEffect(() => {
     if (!firstCandidate?._id || !selectedCompany) { setHasCompanyRecruiters(false); return }
@@ -712,89 +697,18 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                     .
                   </p>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {isAuthenticated && hasCompanyRecruiters && (
-                    <button
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
-                      style={{ border: '1px solid #306770', color: '#306770' }}
-                      onClick={() => setShowRecruiterModal(true)}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#306770'; e.currentTarget.style.color = 'white' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#306770' }}
-                    >
-                      <Users size={13} />
-                      Contact Recruiters
-                    </button>
-                  )}
-
-                  {/* Auto Apply button + popover */}
-                  <div className="relative">
-                    <button
-                      ref={autoApplyBtnRef}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-200"
-                      style={{ border: '1px solid #36BF8F', color: '#36BF8F', background: 'transparent' }}
-                      onClick={() => setShowAutoApplyPopover(v => !v)}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#36BF8F'; e.currentTarget.style.color = 'white' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#36BF8F' }}
-                    >
-                      <Zap size={13} />
-                      Activate Auto Apply
-                    </button>
-
-                    {showAutoApplyPopover && (
-                      <div
-                        className="absolute z-50 bottom-[calc(100%+10px)] left-0 w-[300px] rounded-[16px] p-5 shadow-[0_12px_40px_rgba(0,0,0,0.14)]"
-                        style={{ background: '#fff', border: '1px solid #E0EFEF', fontFamily: 'Manrope' }}
-                      >
-                        {/* close */}
-                        <button
-                          onClick={() => setShowAutoApplyPopover(false)}
-                          className="absolute top-3 right-3 flex items-center justify-center w-6 h-6 rounded-full transition-colors"
-                          style={{ color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F0F0F0' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                        >
-                          <X size={13} />
-                        </button>
-
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-[10px]" style={{ background: 'linear-gradient(135deg, #36BF8F, #306770)' }}>
-                            <Zap size={15} color="white" fill="white" />
-                          </div>
-                          <p className="font-bold text-[14px]" style={{ color: '#1a1a1a' }}>Auto Apply Extension</p>
-                        </div>
-
-                        <p className="text-[12.5px] leading-[1.6] mb-4" style={{ color: '#555' }}>
-                          Apply to jobs in seconds. The Wander/Work Chrome extension autofills your name, contact info, and links directly into any application form. Apply while you browse, commute, or wander.
-                        </p>
-
-                        <ul className="mb-4 flex flex-col gap-1.5">
-                          {['Instant autofill on Greenhouse, Lever, Ashby and more', 'One click to request your AI resume or cover letter', 'Apply from anywhere, on any device'].map(item => (
-                            <li key={item} className="flex items-start gap-2 text-[12px]" style={{ color: '#444' }}>
-                              <span className="mt-[3px] flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#E8F8F2' }}>
-                                <Check size={9} color="#36BF8F" strokeWidth={3} />
-                              </span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-
-                        <a
-                          href="https://chrome.google.com/webstore"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-[10px] text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                          style={{ background: 'linear-gradient(135deg, #36BF8F, #306770)', textDecoration: 'none' }}
-                        >
-                          <Zap size={13} fill="white" />
-                          Get the Chrome Extension
-                        </a>
-
-                        {/* arrow pointer */}
-                        <div className="absolute -bottom-[7px] left-6 w-3 h-3 rotate-45" style={{ background: '#fff', borderRight: '1px solid #E0EFEF', borderBottom: '1px solid #E0EFEF' }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {isAuthenticated && hasCompanyRecruiters && (
+                  <button
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-[10px] text-[12px] whitespace-nowrap flex-shrink-0 transition-all duration-300 hover:scale-105"
+                    style={{ border: '1px solid #306770', color: '#306770' }}
+                    onClick={() => setShowRecruiterModal(true)}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#306770'; e.currentTarget.style.color = 'white' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#306770' }}
+                  >
+                    <Users size={13} />
+                    Contact Recruiters
+                  </button>
+                )}
               </div>
               </div>
             </div>
