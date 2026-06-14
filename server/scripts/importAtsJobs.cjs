@@ -97,6 +97,23 @@ const SEEDS = {
     // Enterprise / CRM / ops
     'salesforce', 'servicenow', 'veeva', 'medallia', 'qualtrics', 'sprinklr',
     'gainsight', 'totango', 'churnzero', 'vitally',
+    // Design-focused companies
+    'figma', 'invision', 'canva', 'sketch', 'zeplin', 'marvel', 'framer',
+    'abstract', 'maze', 'useberry', 'lyssna', 'sprig', 'usertesting',
+    'airbnb', 'pinterest', 'etsy', 'squarespace', 'wix', 'webflow', 'cargo',
+    'adobe', 'shutterstock', 'getty', 'unsplash', 'noun-project',
+    // PR, comms & media agencies / companies
+    'businesswire', 'prnewswire', 'cision', 'meltwater', 'mention',
+    'brandwatch', 'talkwalker', 'prowly', 'prezly', 'coveragebook',
+    'voxmedia', 'buzzfeed', 'vice', 'refinery29', 'theatlantic', 'vox',
+    'axios', 'politico', 'thehill', 'rollcall',
+    // Finance / accounting / fintech
+    'pilot', 'bench', 'botkeeper', 'taxjar', 'avalara', 'vertex', 'sovos',
+    'brex', 'ramp', 'expensify', 'concur', 'coupa', 'tipalti', 'airbase',
+    'bill', 'melio', 'routable', 'stampli', 'lightyear', 'spendesk',
+    'freshbooks', 'wave', 'xero', 'quickbooks', 'sage',
+    'plaid', 'yodlee', 'finicity', 'mx', 'akoya',
+    'carta', 'capdesk', 'pulley', 'angellist',
   ],
   lever: [
     'reddit', 'discord', 'yelp', 'weebly', 'opendoor', 'cruise', 'scale', 'anduril',
@@ -106,6 +123,15 @@ const SEEDS = {
     'legalzoom', 'classy', 'givebutter', 'benevity', 'groundtruth', 'foursquare',
     'yotpo', 'attentive', 'iterate', 'narvar', 'shipstation', 'shippo', 'easypost',
     'gladly', 'kustomer', 'gorgias', 'recharge', 'rechargepayments',
+    // Design / creative agencies on Lever
+    'huge', 'razorfish', 'sapient', 'ideo', 'frog', 'thoughtworks',
+    'designit', 'fjord', 'ustwo', 'werk', 'instrument',
+    // PR / communications on Lever
+    'edelman', 'webershandwick', 'ketchum', 'flieshman-hillard', 'bcw',
+    'porternovelli', 'golin', 'hs2', 'praytell', 'coyne', 'shift',
+    // Finance on Lever
+    'chime', 'varo', 'current', 'dave', 'albert', 'brigit', 'moneylion',
+    'greenlight', 'copper', 'step', 'gohenry',
   ],
   ashby: [
     'anthropic', 'linear', 'vercel', 'supabase', 'neon', 'planetscale', 'turso',
@@ -119,6 +145,12 @@ const SEEDS = {
     'merge', 'apideck', 'nango', 'kombo', 'knit',
     'descript', 'runway', 'pika', 'krea', 'ideogram',
     'resend', 'loops', 'postmark', 'sendgrid',
+    // Design tools / creative on Ashby
+    'loom', 'pitch', 'mmhmm', 'miro', 'whimsical', 'lucid', 'mural',
+    'passionfroot', 'beehiiv', 'ghost', 'substack',
+    // Finance / accounting on Ashby
+    'deel', 'remote', 'rippling', 'sequoia', 'mercury', 'rho', 'found',
+    'onelane', 'ampla', 'settle', 'clearco', 'capchase', 'pipe',
   ],
   smartrecruiters: [
     'bosch', 'visa', 'linkedin', 'ericsson', 'koninklijke', 'sap',

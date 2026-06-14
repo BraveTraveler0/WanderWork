@@ -1,5 +1,4 @@
 const cron = require('node-cron');
-const { importRemoteJobs } = require('../scripts/importRemoteJobs.cjs');
 const { importAtsJobs } = require('../scripts/importAtsJobs.cjs');
 const { cleanNewJobs } = require('../scripts/cleanJobDescriptions.cjs');
 const { tagRecruiterJobs } = require('../scripts/tagRecruiterJobs.cjs');
@@ -11,27 +10,26 @@ const SCHEDULE = '0 0,6,12,18 * * *';
 let running = false;
 
 async function runImport() {
-  if (running) { console.log('[RemoteJobs] Import already in progress, skipping.'); return; }
+  if (running) { console.log('[Import] Already in progress, skipping.'); return; }
   running = true;
   try {
-    console.log('[RemoteJobs] Starting scheduled import...');
-    const result = await importRemoteJobs();
-    console.log('[RemoteJobs] Import complete:', result);
-    // Direct ATS import — runs after so slugs discovered from remoteJobs are available
-    try { await importAtsJobs(); } catch (e) { console.warn('[RemoteJobs] ATS import error:', e.message); }
+    console.log('[Import] Starting ATS import cycle...');
+    // ATS-direct only: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Jobvite
+    try { await importAtsJobs(); } catch (e) { console.warn('[Import] ATS error:', e.message); }
     // Clean descriptions for any newly added jobs
-    try { await cleanNewJobs(); } catch (e) { console.warn('[RemoteJobs] Clean error:', e.message); }
+    try { await cleanNewJobs(); } catch (e) { console.warn('[Import] Clean error:', e.message); }
     // Re-pair recruiter companies with jobs so new jobs get tagged immediately
-    try { await tagRecruiterJobs(); } catch (e) { console.warn('[RemoteJobs] Recruiter tag error:', e.message); }
+    try { await tagRecruiterJobs(); } catch (e) { console.warn('[Import] Recruiter tag error:', e.message); }
     // Purge zombie/low-quality jobs after every import cycle
-    try { await purgeJobs(); } catch (e) { console.warn('[RemoteJobs] Purge error:', e.message); }
+    try { await purgeJobs(); } catch (e) { console.warn('[Import] Purge error:', e.message); }
     // Bust the in-memory job cache so new jobs show within the next request
     try {
       const ctrl = require('../controllers/JobSeeker/jobSeekerController');
       if (typeof ctrl._invalidateJobsCache === 'function') ctrl._invalidateJobsCache();
     } catch (_) {}
+    console.log('[Import] Cycle complete.');
   } catch (err) {
-    console.error('[RemoteJobs] Import error:', err.message);
+    console.error('[Import] Cycle error:', err.message);
   } finally {
     running = false;
   }

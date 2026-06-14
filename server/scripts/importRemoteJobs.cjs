@@ -244,6 +244,50 @@ async function fetchRemoteOK() {
   });
 }
 
+// The Muse — free public API, great category coverage for design, finance, PR
+async function fetchTheMuse(category, pages = 3) {
+  const allJobs = [];
+  for (let page = 0; page < pages; page++) {
+    try {
+      const res = await get('https://www.themuse.com/api/public/jobs', {
+        params: { category, page, descending: true },
+        timeout: 15000,
+      });
+      const jobs = (res.data?.results || []).flatMap(j => {
+        const rawDesc = j.contents || j.description || '';
+        const desc = truncateDesc(rawDesc);
+        if (!desc || detectLang(desc) !== 'en') return [];
+        const title = stripEmoji(String(j.name || '').trim());
+        const company = String(j.company?.name || '').trim();
+        const location = j.locations?.[0]?.name || 'Remote';
+        if (!title || !company) return [];
+        return [{
+          title,
+          company,
+          url: j.refs?.landing_page || '',
+          apply_url: null,    // themuse.com is an aggregator landing page
+          company_url: null,  // resolved later by resolveCompanyUrls
+          salary: 'Not Listed',
+          location: /remote/i.test(location) ? 'Remote' : normalizeLocation(location),
+          job_type: 'Full-time',
+          date_posted: j.publication_date ? new Date(j.publication_date) : new Date(),
+          description_short: desc,
+          lang: 'en',
+          source: 'TheMuse',
+          ats_direct: false,
+          tags: (j.categories || []).map(c => c.name).filter(Boolean).slice(0, 5),
+        }];
+      });
+      allJobs.push(...jobs);
+      if ((res.data?.results || []).length < 20) break; // no more pages
+    } catch (err) {
+      console.warn(`[TheMuse] ${category} page ${page} failed:`, err.message);
+      break;
+    }
+  }
+  return allJobs;
+}
+
 
 async function fetchWorkingNomads(category = null) {
   const params = { limit: 50 };
@@ -301,7 +345,7 @@ const SOURCES = [
   { name: 'Jobicy (Australia)', fetch: () => fetchJobicyGeo('australia') },
 
   // RemoteOK — general remote board
-  { name: 'RemoteOK',   fetch: fetchRemoteOK },
+  { name: 'RemoteOK',   fetch: () => fetchRemoteOK() },
 
 ];
 
