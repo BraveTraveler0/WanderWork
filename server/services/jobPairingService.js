@@ -79,6 +79,85 @@ const SYNONYMS = {
   webflow: ['framer', 'no-code', 'nocode'],
 }
 
+// Role family detection — jobs in a different family than the candidate are hard-excluded.
+// Design is checked first so "UX Engineer" classifies as design, not engineering.
+const ROLE_FAMILIES = [
+  {
+    name: 'design',
+    keywords: [
+      'ux designer', 'ui designer', 'product designer', 'visual designer', 'graphic designer',
+      'brand designer', 'interaction designer', 'experience designer', 'motion designer',
+      'creative designer', 'web designer', 'digital designer', 'ux engineer', 'design engineer',
+      'design lead', 'design manager', 'creative director', 'art director', 'head of design',
+      'vp of design', 'chief design', 'designer',
+    ],
+  },
+  {
+    name: 'engineering',
+    keywords: [
+      'software engineer', 'software developer', 'forward deployed engineer',
+      'engineering manager', 'frontend engineer', 'backend engineer', 'full stack engineer',
+      'fullstack engineer', 'data engineer', 'ml engineer', 'machine learning engineer',
+      'devops engineer', 'platform engineer', 'infrastructure engineer', 'solutions engineer',
+      'mobile engineer', 'ios engineer', 'android engineer', 'firmware engineer',
+      'systems engineer', 'staff engineer', 'principal engineer', 'solutions architect',
+      'engineer', 'developer', 'architect',
+    ],
+  },
+  {
+    name: 'sales',
+    keywords: [
+      'account executive', 'account manager', 'sales manager', 'sales director',
+      'sales representative', 'sales engineer', 'business development representative',
+      'business development manager', 'enterprise sales', 'inside sales', 'outside sales',
+      'bdr', 'sdr',
+    ],
+  },
+  {
+    name: 'legal',
+    keywords: [
+      'attorney', 'counsel', 'paralegal', 'legal assistant', 'legal coordinator',
+      'legal analyst', 'compliance officer',
+    ],
+  },
+  {
+    name: 'operations',
+    keywords: [
+      'executive assistant', 'administrative assistant', 'office manager',
+      'office coordinator', 'office assistant', 'operations coordinator',
+    ],
+  },
+]
+
+// Equivalent titles within the design family — broadens title-role matching
+// so a "product designer" posting matches a "ux designer" candidate.
+const DESIGN_ROLE_SYNONYMS = {
+  'ux designer': ['product designer', 'ui designer', 'experience designer', 'interaction designer', 'digital designer', 'ux ui designer', 'ui ux designer'],
+  'product designer': ['ux designer', 'ui designer', 'visual designer', 'experience designer', 'digital designer'],
+  'ui designer': ['ux designer', 'product designer', 'visual designer', 'interface designer', 'digital designer'],
+  'visual designer': ['graphic designer', 'brand designer', 'product designer', 'ui designer'],
+  'graphic designer': ['visual designer', 'brand designer', 'creative designer'],
+  'brand designer': ['visual designer', 'graphic designer', 'creative designer'],
+  'designer': ['product designer', 'ux designer', 'ui designer', 'visual designer'],
+}
+
+function detectFamily(text) {
+  const t = normalizeText(text)
+  for (const { name, keywords } of ROLE_FAMILIES) {
+    if (keywords.some(k => t.includes(normalizeText(k)))) return name
+  }
+  return null
+}
+
+function expandRoles(roles) {
+  const expanded = [...roles]
+  for (const role of roles) {
+    const extras = DESIGN_ROLE_SYNONYMS[role] || []
+    expanded.push(...extras)
+  }
+  return unique(expanded)
+}
+
 function normalizeText(value) {
   return String(value || '')
     .toLowerCase()
@@ -173,6 +252,22 @@ function scoreJob(candidate, job, keywords, candSeniority) {
     }
   }
 
+  // Hard role-family gate: if the candidate's target roles belong to a known family
+  // (e.g. design) and the job title belongs to a DIFFERENT family (e.g. engineering,
+  // sales, legal), exclude immediately — no amount of keyword overlap should override this.
+  if (candidateRoles.length > 0) {
+    const candFamily = detectFamily(candidateRoles.join(' '))
+    const jobFamily = detectFamily(job.title)
+    if (candFamily && jobFamily && candFamily !== jobFamily) {
+      return {
+        score: 0,
+        matchedSkills: [],
+        excluded: true,
+        reason: `Role family mismatch: candidate=${candFamily}, job=${jobFamily}`,
+      }
+    }
+  }
+
   // Seniority match/mismatch
   const jobSeniority = detectSeniorityLevel(title)
   const seniorityDiff = candSeniority - jobSeniority
@@ -189,7 +284,8 @@ function scoreJob(candidate, job, keywords, candSeniority) {
     score += containsPhrase(title, keyword) ? 12 : 6
   }
 
-  for (const role of candidateRoles) {
+  const rolesExpanded = expandRoles(candidateRoles)
+  for (const role of rolesExpanded) {
     if (!role) continue
     if (containsPhrase(title, role)) score += 24
     else if (containsPhrase(text, role)) score += 10
@@ -240,12 +336,11 @@ function scoreJob(candidate, job, keywords, candSeniority) {
     if (!hasDomainHit) score -= 25
   }
 
-  // Hard title-role gate: if none of the candidate's target roles appear
-  // anywhere in the job title, apply an additional penalty. A UX Designer
-  // should never match "Data Scientist" or "Account Executive" because their
-  // role keywords simply don't appear in those titles.
-  const titleRoleMatch = candidateRoles.some(r => r && containsPhrase(title, r))
-  if (!titleRoleMatch && candidateRoles.length > 0) score -= 25
+  // Title-role gate: if none of the candidate's target roles (or their synonyms)
+  // appear in the job title, apply a strong penalty. The hard family exclusion above
+  // catches the obvious cross-family mismatches; this handles subtler same-family misses.
+  const titleRoleMatch = rolesExpanded.some(r => r && containsPhrase(title, r))
+  if (!titleRoleMatch && candidateRoles.length > 0) score -= 35
 
   const cappedScore = Math.max(0, Math.min(100, Math.round(score)))
   return {
