@@ -88,7 +88,7 @@ interface JobFeedProps {
 }
 
 const BATCH = 15
-const NEW_JOB_WINDOW_DAYS = 30
+const NEW_JOB_WINDOW_DAYS = 3
 
 const parseJobDate = (value: unknown): Date | null => {
   if (!value) return null
@@ -2214,8 +2214,8 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-[20px] sm:text-[24px] text-black line-clamp-2 min-w-0 break-words">{title}</h3>
             <div className="flex items-center gap-3 flex-shrink-0 justify-end">
-              {hasNewBadge && (
-                <div 
+              {hasNewBadge && expiringDays == null && (
+                <div
                   className="px-4 py-1 rounded-[10px] text-[12px] text-white text-center"
                   style={{ background: '#36BF8F' }}
                 >
@@ -2227,7 +2227,7 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
                   className="px-4 py-1 rounded-[10px] text-[12px] text-white text-center"
                   style={{ background: '#F59E0B' }}
                 >
-                  {`Expiring in ${expiringDays} day${expiringDays === 1 ? '' : 's'}`}
+                  {`Expires in ${expiringDays} day${expiringDays === 1 ? '' : 's'}`}
                 </div>
               )}
               {interested ? (

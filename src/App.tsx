@@ -33,7 +33,7 @@ import {
 import { deleteAccount } from './api/users'
 
 const API_BASE = API_BASE_URL
-const NEW_JOB_WINDOW_DAYS = 30
+const NEW_JOB_WINDOW_DAYS = 3
 
 const NON_ENGLISH_CHARS = /[äöüßéèêëàâçñïîùûœæøåãõ]/i
 const NON_ENGLISH_WORDS = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|bewirb|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|cargo|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|lavoro|siamo|cerchiamo|offerta)\b/i

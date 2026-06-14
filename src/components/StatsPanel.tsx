@@ -23,7 +23,7 @@ const asStringList = (value: unknown): string[] => {
   return []
 }
 
-const NEW_JOB_WINDOW_DAYS = 30
+const NEW_JOB_WINDOW_DAYS = 3
 
 const parseJobDate = (value: unknown): Date | null => {
   if (!value) return null
