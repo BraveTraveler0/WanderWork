@@ -6,19 +6,27 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const GPT_TIMEOUT_MS = 12000  // abort a hung OpenAI call after 12 seconds
+
 async function callGPT(description) {
-  const res = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    max_tokens: 200,
-    messages: [{
-      role: 'system',
-      content: 'You rewrite job description excerpts into clean, professional 2-3 sentence summaries. Be concise and human. Never use bullet points, headers, emojis, or symbols. Never mention salary, benefits, or perks. Never include job IDs or internal codes. Output plain prose only.',
-    }, {
-      role: 'user',
-      content: `Rewrite this into a clean 2-3 sentence description of the role and who they are looking for. Strip all formatting, emojis, section headers, codes, and junk. Output plain prose only.\n\n${description}`,
-    }],
-  });
-  return res.choices?.[0]?.message?.content?.trim() || description;
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), GPT_TIMEOUT_MS)
+  try {
+    const res = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      messages: [{
+        role: 'system',
+        content: 'You rewrite job description excerpts into clean, professional 2-3 sentence summaries. Be concise and human. Never use bullet points, headers, emojis, or symbols. Never mention salary, benefits, or perks. Never include job IDs or internal codes. Output plain prose only.',
+      }, {
+        role: 'user',
+        content: `Rewrite this into a clean 2-3 sentence description of the role and who they are looking for. Strip all formatting, emojis, section headers, codes, and junk. Output plain prose only.\n\n${description}`,
+      }],
+    }, { signal: controller.signal })
+    return res.choices?.[0]?.message?.content?.trim() || description
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function cleanJob(col, job) {

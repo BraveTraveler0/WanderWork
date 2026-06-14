@@ -35,19 +35,18 @@ async function runImport() {
       }
     } catch (e) { console.warn('[Import] Remotive fallback error:', e.message); }
 
-    // Clean descriptions for any newly added jobs
-    try { await cleanNewJobs(); } catch (e) { console.warn('[Import] Clean error:', e.message); }
-    // Re-pair recruiter companies with jobs so new jobs get tagged immediately
+    // Tag recruiter jobs and purge stale ones before pairing
     try { await tagRecruiterJobs(); } catch (e) { console.warn('[Import] Recruiter tag error:', e.message); }
-    // Purge zombie/low-quality jobs after every import cycle
     try { await purgeJobs(); } catch (e) { console.warn('[Import] Purge error:', e.message); }
-    // Re-pair all candidates so matches reflect new jobs + latest algorithm
+    // Re-pair all candidates — runs BEFORE cleanNewJobs so an OpenAI hang never blocks it
     try {
       console.log('[Import] Re-pairing all candidates...');
       const pairResults = await pairAllCandidates();
       const paired = pairResults.reduce((s, r) => s + (r.paired || 0), 0);
       console.log(`[Import] Paired ${paired} jobs across ${pairResults.length} candidates`);
     } catch (e) { console.warn('[Import] Pairing error:', e.message); }
+    // Clean descriptions last — OpenAI calls can hang; doesn't block anything critical above
+    try { await cleanNewJobs(); } catch (e) { console.warn('[Import] Clean error:', e.message); }
     // Bust the in-memory job cache so new jobs show within the next request
     try {
       const ctrl = require('../controllers/JobSeeker/jobSeekerController');
