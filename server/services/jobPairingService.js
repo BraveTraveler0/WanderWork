@@ -79,8 +79,12 @@ const SYNONYMS = {
   webflow: ['framer', 'no-code', 'nocode'],
 }
 
-// Role family detection — jobs in a different family than the candidate are hard-excluded.
-// Design is checked first so "UX Engineer" classifies as design, not engineering.
+// Role families with explicit compatibility.
+// Families are checked in order — more specific entries come first so
+// "frontend engineer" resolves to 'frontend' before "engineer" resolves to 'backend'.
+// compatibleWith: families that should NOT be excluded when paired with this family.
+//   e.g. design <-> frontend <-> creative are all adjacent and can cross-match.
+//   backend, sales, legal, admin are isolated — incompatible with everything else.
 const ROLE_FAMILIES = [
   {
     name: 'design',
@@ -89,43 +93,84 @@ const ROLE_FAMILIES = [
       'brand designer', 'interaction designer', 'experience designer', 'motion designer',
       'creative designer', 'web designer', 'digital designer', 'ux engineer', 'design engineer',
       'design lead', 'design manager', 'creative director', 'art director', 'head of design',
-      'vp of design', 'chief design', 'designer',
+      'vp of design', 'chief design officer', 'designer',
     ],
+    compatibleWith: ['frontend', 'creative'],
   },
   {
-    name: 'engineering',
+    // Frontend/web roles — same skillset overlap as design; product designers often
+    // hold or are interested in these titles. CSS, JS, React, Figma-to-code, etc.
+    name: 'frontend',
+    keywords: [
+      'frontend engineer', 'front end engineer', 'frontend developer', 'front end developer',
+      'ui engineer', 'web developer', 'react developer', 'javascript developer',
+      'typescript developer', 'vue developer', 'angular developer', 'next.js developer',
+      'creative technologist', 'interactive developer', 'web engineer',
+    ],
+    compatibleWith: ['design', 'creative'],
+  },
+  {
+    // Creative/art — illustrators, animators, art directors for film/marketing/brand.
+    // Often the same person or team as design; shares tools and workflows.
+    name: 'creative',
+    keywords: [
+      'illustrator', 'animator', 'motion graphic', 'video editor', 'filmmaker',
+      'photographer', 'visual artist', '3d artist', 'concept artist', 'storyboard artist',
+      'content creator', 'art lead',
+    ],
+    compatibleWith: ['design', 'frontend'],
+  },
+  {
+    // Backend/infra/data engineering — distinct skillset, no meaningful overlap with design.
+    name: 'backend',
     keywords: [
       'software engineer', 'software developer', 'forward deployed engineer',
-      'engineering manager', 'frontend engineer', 'backend engineer', 'full stack engineer',
-      'fullstack engineer', 'data engineer', 'ml engineer', 'machine learning engineer',
-      'devops engineer', 'platform engineer', 'infrastructure engineer', 'solutions engineer',
-      'mobile engineer', 'ios engineer', 'android engineer', 'firmware engineer',
-      'systems engineer', 'staff engineer', 'principal engineer', 'solutions architect',
-      'engineer', 'developer', 'architect',
+      'engineering manager', 'backend engineer', 'back end engineer', 'full stack engineer',
+      'fullstack engineer', 'full stack developer', 'fullstack developer',
+      'data engineer', 'ml engineer', 'machine learning engineer', 'ai engineer',
+      'data scientist', 'research scientist', 'devops engineer', 'site reliability engineer',
+      'platform engineer', 'infrastructure engineer', 'solutions engineer',
+      'mobile engineer', 'ios engineer', 'android engineer', 'mobile developer',
+      'ios developer', 'android developer', 'firmware engineer', 'embedded engineer',
+      'systems engineer', 'backend developer', 'python developer', 'java developer',
+      'ruby developer', 'go developer', 'rust developer', 'c++ developer',
+      'staff engineer', 'principal engineer', 'solutions architect', 'cloud architect',
+      'network engineer', 'security engineer',
     ],
+    compatibleWith: [],
   },
   {
+    // Sales — "Account Executive" is a sales title, NOT a leadership/executive title.
+    // SDR, BDR, AE, AM are quota-carrying roles with no design overlap.
     name: 'sales',
     keywords: [
       'account executive', 'account manager', 'sales manager', 'sales director',
-      'sales representative', 'sales engineer', 'business development representative',
-      'business development manager', 'enterprise sales', 'inside sales', 'outside sales',
-      'bdr', 'sdr',
+      'sales representative', 'sales development representative', 'enterprise sales',
+      'inside sales', 'outside sales', 'bdr', 'sdr', 'business development representative',
+      'business development manager', 'revenue manager',
     ],
+    compatibleWith: [],
   },
   {
+    // Legal — attorneys, paralegals, legal assistants. Paralegal is admin-adjacent
+    // but still firmly in the legal domain, not design.
     name: 'legal',
     keywords: [
       'attorney', 'counsel', 'paralegal', 'legal assistant', 'legal coordinator',
       'legal analyst', 'compliance officer',
     ],
+    compatibleWith: [],
   },
   {
-    name: 'operations',
+    // Admin/ops — office managers, admins, executive assistants.
+    // "Executive Assistant" is admin support; distinct from VP/executive leadership.
+    name: 'admin',
     keywords: [
       'executive assistant', 'administrative assistant', 'office manager',
       'office coordinator', 'office assistant', 'operations coordinator',
+      'administrative coordinator',
     ],
+    compatibleWith: [],
   },
 ]
 
@@ -141,12 +186,17 @@ const DESIGN_ROLE_SYNONYMS = {
   'designer': ['product designer', 'ux designer', 'ui designer', 'visual designer'],
 }
 
-function detectFamily(text) {
+function detectFamilyObj(text) {
   const t = normalizeText(text)
-  for (const { name, keywords } of ROLE_FAMILIES) {
-    if (keywords.some(k => t.includes(normalizeText(k)))) return name
+  for (const family of ROLE_FAMILIES) {
+    if (family.keywords.some(k => t.includes(normalizeText(k)))) return family
   }
   return null
+}
+
+function detectFamily(text) {
+  const obj = detectFamilyObj(text)
+  return obj ? obj.name : null
 }
 
 function expandRoles(roles) {
@@ -252,18 +302,22 @@ function scoreJob(candidate, job, keywords, candSeniority) {
     }
   }
 
-  // Hard role-family gate: if the candidate's target roles belong to a known family
-  // (e.g. design) and the job title belongs to a DIFFERENT family (e.g. engineering,
-  // sales, legal), exclude immediately — no amount of keyword overlap should override this.
+  // Hard role-family gate: exclude jobs from incompatible families.
+  // e.g. design candidates skip backend/sales/legal/admin jobs, but still see
+  // frontend and creative jobs (which are in design's compatibleWith list).
+  // If either side is unclassified (null), we allow it through — no false exclusions.
   if (candidateRoles.length > 0) {
-    const candFamily = detectFamily(candidateRoles.join(' '))
-    const jobFamily = detectFamily(job.title)
-    if (candFamily && jobFamily && candFamily !== jobFamily) {
-      return {
-        score: 0,
-        matchedSkills: [],
-        excluded: true,
-        reason: `Role family mismatch: candidate=${candFamily}, job=${jobFamily}`,
+    const candFamilyObj = detectFamilyObj(candidateRoles.join(' '))
+    const jobFamilyObj = detectFamilyObj(job.title)
+    if (candFamilyObj && jobFamilyObj && candFamilyObj.name !== jobFamilyObj.name) {
+      const isCompatible = candFamilyObj.compatibleWith.includes(jobFamilyObj.name)
+      if (!isCompatible) {
+        return {
+          score: 0,
+          matchedSkills: [],
+          excluded: true,
+          reason: `Role family mismatch: candidate=${candFamilyObj.name}, job=${jobFamilyObj.name}`,
+        }
       }
     }
   }
