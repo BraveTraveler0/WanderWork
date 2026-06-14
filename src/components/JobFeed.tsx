@@ -2,6 +2,7 @@ import { Trash2, Filter, X, RotateCcw, Sparkles } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { submitCustomRequest, updateJobSeeker } from '../api/jobseeker.ts'
 import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
+import { getJobDate, isNewJob, JOB_PURGE_DAYS, MS_PER_DAY } from '../utils/jobUtils'
 
 // ─── Module-level description processing ─────────────────────────────────────
 // Defined outside the component so they are never recreated on re-render.
@@ -88,24 +89,9 @@ interface JobFeedProps {
 }
 
 const BATCH = 15
-const NEW_JOB_WINDOW_DAYS = 3
-
-
 
 function getJobTime(job: any): number {
-  const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt
-  if (!raw) return 0
-  const parsed = new Date(raw)
-  if (!Number.isNaN(parsed.getTime())) return parsed.getTime()
-  if (typeof raw === 'string') {
-    const withZ = new Date(`${raw}Z`)
-    if (!Number.isNaN(withZ.getTime())) return withZ.getTime()
-  }
-  if (!Number.isNaN(Number(raw))) {
-    const asNum = new Date(Number(raw))
-    if (!Number.isNaN(asNum.getTime())) return asNum.getTime()
-  }
-  return 0
+  return getJobDate(job)?.getTime() ?? 0
 }
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -1269,31 +1255,6 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
   }
 
-  const isNewJob = (job: any) => {
-    const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.date_posted
-    if (!raw) return false
-    const posted = new Date(raw)
-    if (Number.isNaN(posted.getTime())) return false
-    const daysAgo = (Date.now() - posted.getTime()) / (1000 * 60 * 60 * 24)
-    return daysAgo >= 0 && daysAgo <= NEW_JOB_WINDOW_DAYS
-  }
-
-  const getJobPostedAt = (job: any) => {
-    const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.preparedAt
-    if (!raw) return null
-    const parsed = new Date(raw)
-    if (!Number.isNaN(parsed.getTime())) return parsed
-    if (typeof raw === 'string') {
-      const withZ = new Date(`${raw}Z`)
-      if (!Number.isNaN(withZ.getTime())) return withZ
-    }
-    if (!Number.isNaN(Number(raw))) {
-      const asNum = new Date(Number(raw))
-      if (!Number.isNaN(asNum.getTime())) return asNum
-    }
-    return null
-  }
-
   const isJobInterested = (job: any) => {
     const override = interestedOverrides[job.id]
     if (override !== undefined) return override
@@ -1898,12 +1859,12 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       {showDiscarded && discardedJobsList.length > 0 && (
         <div className="bg-gray-50 rounded-[15px] p-4 border" style={{ borderColor: '#DCDCDC' }}>
           <h3 className="text-[16px] font-semibold mb-1" style={{ color: '#306770' }}>Not Interested ({discardedJobsList.length})</h3>
-          <p className="text-[11px] mb-3" style={{ color: '#A0A0A0' }}>Jobs are removed from the database after 60 days.</p>
+          <p className="text-[11px] mb-3" style={{ color: '#A0A0A0' }}>Jobs are removed from the database after {JOB_PURGE_DAYS} days.</p>
           <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto">
             {discardedJobsList.map((job: any) => {
-              const posted = getJobPostedAt(job)
+              const posted = getJobDate(job)
               const daysUntilPurge = posted
-                ? Math.max(0, 60 - Math.floor((Date.now() - posted.getTime()) / (1000 * 60 * 60 * 24)))
+                ? Math.max(0, JOB_PURGE_DAYS - Math.floor((Date.now() - posted.getTime()) / MS_PER_DAY))
                 : null
               const isSoonPurge = daysUntilPurge !== null && daysUntilPurge <= 7
               return (
@@ -1951,10 +1912,10 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           const isInterested = isJobInterested(job)
           const isNew = isNewJob(job)
           const expiringDays = (() => {
-            const posted = getJobPostedAt(job)
+            const posted = getJobDate(job)
             if (!posted) return null
-            const ageDays = Math.floor((Date.now() - posted.getTime()) / (1000 * 60 * 60 * 24))
-            const remaining = 60 - ageDays
+            const ageDays = Math.floor((Date.now() - posted.getTime()) / MS_PER_DAY)
+            const remaining = JOB_PURGE_DAYS - ageDays
             if (remaining < 0 || remaining > 7) return null
             return remaining
           })()

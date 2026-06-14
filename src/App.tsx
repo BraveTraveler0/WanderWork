@@ -31,9 +31,9 @@ import {
   type Location,
 } from './api/jobseeker.ts'
 import { deleteAccount } from './api/users'
+import { isNewJob } from './utils/jobUtils'
 
 const API_BASE = API_BASE_URL
-const NEW_JOB_WINDOW_DAYS = 3
 
 const NON_ENGLISH_CHARS = /[äöüßéèêëàâçñïîùûœæøåãõ]/i
 const NON_ENGLISH_WORDS = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|bewirb|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|cargo|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|lavoro|siamo|cerchiamo|offerta)\b/i
@@ -44,21 +44,6 @@ const isLikelyEnglish = (text: string) => {
   return true
 }
 
-const parseJobDate = (value: unknown): Date | null => {
-  if (!value) return null
-  const parsed = new Date(value as any)
-  if (!Number.isNaN(parsed.getTime())) return parsed
-  if (typeof value === 'string') {
-    const withZ = new Date(`${value}Z`)
-    if (!Number.isNaN(withZ.getTime())) return withZ
-  }
-  if (!Number.isNaN(Number(value))) {
-    const numeric = new Date(Number(value))
-    if (!Number.isNaN(numeric.getTime())) return numeric
-  }
-  return null
-}
-
 const getObjectIdDate = (id: unknown): Date | null => {
   if (typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) {
     return new Date(parseInt(id.substring(0, 8), 16) * 1000)
@@ -66,21 +51,6 @@ const getObjectIdDate = (id: unknown): Date | null => {
   return null
 }
 
-const getJobAddedDate = (job: any): Date | null => {
-  return (
-    parseJobDate(job?.createdAt) ||
-    parseJobDate(job?.addedAt) ||
-    parseJobDate(job?.importedAt) ||
-    getObjectIdDate(job?._id || job?.backendId) ||
-    parseJobDate(job?.datePosted || job?.postedAt || job?.postedDate || job?.date_posted || job?.rawDate)
-  )
-}
-
-const isWithinNewJobWindow = (date: Date | null): boolean => {
-  if (!date) return false
-  const daysAgo = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
-  return daysAgo >= 0 && daysAgo <= NEW_JOB_WINDOW_DAYS
-}
 
 const getMigratedStorageItem = (key: string, oldKeys: string[] = []) => {
   if (typeof window === 'undefined') return null
@@ -367,7 +337,6 @@ function transformJob(job: Job, index: number) {
   const objectIdDate = getObjectIdDate((job as any)._id)
 
   const dateStr = parsedDate ? parsedDate.toISOString() : (objectIdDate?.toISOString() ?? null)
-  const addedDate = getJobAddedDate(job)
 
   const description = (() => {
     const isDateLike = (value: string) => {
@@ -472,7 +441,7 @@ function transformJob(job: Job, index: number) {
     description,
     location: locationString,
     skills: (job as any).tags || (job as any).skills || [],
-    hasNewBadge: isWithinNewJobWindow(addedDate),
+    hasNewBadge: isNewJob({ postedAt: dateStr }),
     interested: false,
     showCoverLetter: false,
     postedAt: dateStr,
@@ -743,7 +712,6 @@ function App() {
       const validParsedDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
       const objectIdDate = !validParsedDate ? getObjectIdDate(j._id) : null
       const effectiveDate = validParsedDate || objectIdDate
-      const addedDate = getJobAddedDate(j)
       return {
         id: i + 1,
         backendId: j._id,
@@ -756,7 +724,7 @@ function App() {
         jobType: j.job_type || j.jobType || '',
         source: j.source || '',
         skills: [],
-        hasNewBadge: isWithinNewJobWindow(addedDate),
+        hasNewBadge: isNewJob(j),
         interested: false,
         showCoverLetter: false,
         postedAt: effectiveDate?.toISOString() || null,

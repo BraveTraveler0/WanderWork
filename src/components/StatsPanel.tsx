@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
+import { isNewJob } from '../utils/jobUtils'
 
 const INTERESTED_KEY = 'wanderworkInterestedJobs'
 function loadInterestedOverrides(): Record<number, boolean> {
@@ -23,18 +24,6 @@ const asStringList = (value: unknown): string[] => {
   return []
 }
 
-const NEW_JOB_WINDOW_DAYS = 3
-
-
-
-const isNewJob = (job: any): boolean => {
-  const raw = job?.postedAt || job?.rawDate || job?.datePosted || job?.date_posted
-  if (!raw) return false
-  const posted = new Date(raw)
-  if (Number.isNaN(posted.getTime())) return false
-  const diffDays = (Date.now() - posted.getTime()) / (1000 * 60 * 60 * 24)
-  return diffDays >= 0 && diffDays <= NEW_JOB_WINDOW_DAYS
-}
 
 interface StatsPanelProps {
   jobId: number | null
