@@ -17,11 +17,21 @@ const jobSeekerCandidateJobPairingSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    matchType: {
+        type: String,
+        enum: ['direct', 'adjacent', 'stretch'],
+        required: false
+    },
     matchedSkills: [String],
+    reasons: [String],
+    warnings: [String],
     reason: {
         type: String,
         required: false
     },
+    roleScore: { type: Number, required: false },
+    skillScore: { type: Number, required: false },
+    bridgeScore: { type: Number, required: false },
     pairedAt: {
         type: Date,
         required: false
