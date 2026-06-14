@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { X, Check, Zap, ChevronDown } from 'lucide-react'
+import { X, Check, Zap, ChevronDown, Mail } from 'lucide-react'
 import { getPairedRecruiters, sendRecruiterDraft, getRecruiterContactHistory, RecruiterRecord } from '../api/jobseeker.ts'
 
 interface Props {
@@ -249,39 +249,54 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4" onClick={onClose}>
       <div
-        className="bg-white rounded-[20px] w-full max-w-[580px] shadow-[0_30px_90px_rgba(0,0,0,0.18)] flex flex-col"
+        className="bg-white rounded-[20px] w-full max-w-[580px] shadow-[0_30px_90px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden"
         style={{ fontFamily: 'Manrope', maxHeight: '88vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-5 border-b flex-shrink-0" style={{ borderColor: '#F0F0F0' }}>
-          <div>
-            <h2 className="text-[18px] font-semibold text-black mb-1">Recruiter Email Drafts</h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              {specialties.map((s) => {
-                const sc = SPECIALTY_COLORS[s] ?? SPECIALTY_COLORS.general
-                return (
-                  <span key={s} className="text-[11px] font-medium px-2.5 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text }}>
-                    {SPECIALTY_LABELS[s] ?? s}
-                  </span>
-                )
-              })}
-              <span className="text-[12px]" style={{ color: '#787878' }}>matched to your profile</span>
+        {/* Hero header */}
+        <div style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', padding: '22px 24px 20px', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+          {/* Decorative orbs */}
+          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+          <div style={{ position: 'absolute', bottom: -20, left: 50, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+
+          {/* Title row */}
+          <div className="flex items-center justify-between" style={{ marginBottom: 10, position: 'relative' }}>
+            <div className="flex items-center gap-2.5">
+              <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 8, padding: '5px 6px', display: 'flex' }}>
+                <Mail size={15} color="#fff" />
+              </div>
+              <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.3px', fontFamily: 'Manrope, sans-serif' }}>Recruiter Email Drafts</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <Zap size={13} color="#9ecfd6" fill="#9ecfd6" />
+                <span style={{ color: '#9ecfd6', fontSize: 12, fontWeight: 700 }}>{tokens} tokens</span>
+              </div>
+              <button
+                aria-label="Close"
+                onClick={onClose}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+              >
+                <X size={15} />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <Zap size={14} style={{ color: '#306770' }} />
-              <span className="text-[13px] font-semibold" style={{ color: '#306770' }}>{tokens} tokens</span>
-            </div>
-            <button aria-label="Close" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors" style={{ color: '#787878' }}>
-              <X size={18} />
-            </button>
+
+          {/* Specialty tags + tagline */}
+          <div className="flex items-center gap-2 flex-wrap" style={{ position: 'relative' }}>
+            {specialties.map((s) => (
+              <span key={s} style={{ fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: 'rgba(255,255,255,0.12)', color: '#9ecfd6', letterSpacing: '0.4px' }}>
+                {SPECIALTY_LABELS[s] ?? s}
+              </span>
+            ))}
+            <span style={{ color: 'rgba(180,215,220,0.75)', fontSize: 11 }}>matched to your profile</span>
           </div>
         </div>
 
         {/* Intro */}
-        <div className="px-7 pt-5 pb-4 flex-shrink-0">
+        <div className="px-7 pt-6 pb-4 flex-shrink-0">
           <p className="text-[13px] leading-[1.65]" style={{ color: '#555' }}>
             Select recruiters below and we will send personalized draft emails to your inbox. Nothing is sent to recruiters from WanderWork.
           </p>
