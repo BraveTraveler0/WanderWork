@@ -31,9 +31,13 @@ const _stripMarkdown = (text: string): string => {
     .replace(/(^|\n)\s{0,3}[-*_]{3,}\s*(?=\n|$)/g, '$1')
     .replace(/(^|\n)\s{0,3}(\*\*|__)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
     .replace(/(^|\n)\s{0,3}(\*|_)\s*about\s+[^*\n_:]{2,80}\s*:?\s*\2\s*/gi, '$1')
-    .replace(/(^|\n)\s{0,3}(\*\*|__)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
-    .replace(/(^|\n)\s{0,3}(\*|_)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
-    .replace(/(^|\n)\s{0,3}(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|company\s+description|company|description)\s*:?\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(\*\*|__)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|role\s+description|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(\*|_)\s*(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|role\s+description|company\s+description|company|description)\s*:?\s*\2\s*:?\s*/gi, '$1')
+    .replace(/(^|\n)\s{0,3}(about\s+us|about\s+the\s+role|about\s+the\s+opportu?nity|about\s+the\s+company|about\s+our\s+company|role\s+description|company\s+description|company|description)\s*:?\s*/gi, '$1')
+    // "About [Company Name]" — catches "About Gusto", "About Toptal", etc. on their own line
+    .replace(/(^|\n)\s{0,3}about\s+[\w&.'-]{2,}(?:\s+[\w&.'-]{2,}){0,3}\s*:?\s*(?=\n|$)/gi, '$1')
+    // Strip leading alphanumeric job/req codes like "CSQ327R46" — caps+digits mixed, standalone at start
+    .replace(/^\s*[A-Z][A-Z0-9]*\d[A-Z0-9]*\s*\n/, '')
     .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
     .replace(/\*\*([^*\n]+)\*\*/g, '$1')
     .replace(/\*([^*\n]+)\*/g, '$1')
@@ -135,6 +139,79 @@ function getJobTime(job: any): number {
 }
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+// Semantic expansion: maps a search term to related terms that broaden the result set.
+// Exact matches always surface first; these populate the "Related results" section.
+const SEARCH_EXPANSION: Record<string, string[]> = {
+  // Design
+  ux: ['user experience', 'product design', 'ui design', 'interaction design', 'visual design', 'design systems', 'ux research', 'usability', 'wireframing', 'prototyping', 'figma', 'information architecture', 'service design'],
+  ui: ['user interface', 'visual design', 'design systems', 'figma', 'interaction design', 'product design', 'ux design', 'frontend design'],
+  design: ['ux design', 'ui design', 'product design', 'graphic design', 'visual design', 'brand design', 'figma', 'creative direction', 'art direction', 'motion design'],
+  'product design': ['ux', 'ui', 'user research', 'prototyping', 'figma', 'design thinking', 'interaction design'],
+  'graphic design': ['visual design', 'brand', 'illustration', 'typography', 'adobe', 'photoshop', 'illustrator'],
+  'visual design': ['graphic design', 'ui design', 'brand design', 'figma', 'motion design'],
+
+  // Finance
+  finance: ['accounting', 'accounts payable', 'accounts receivable', 'bookkeeping', 'financial analysis', 'financial planning', 'investment', 'investing', 'portfolio management', 'audit', 'tax', 'treasury', 'cpa', 'cfa', 'banking', 'controller', 'fp and a', 'budgeting', 'forecasting', 'corporate finance', 'private equity', 'venture capital', 'financial reporting'],
+  accounting: ['accounts payable', 'accounts receivable', 'bookkeeping', 'audit', 'tax', 'cpa', 'gaap', 'financial reporting', 'controller', 'general ledger', 'reconciliation', 'finance', 'cost accounting'],
+  investing: ['investment', 'portfolio', 'asset management', 'private equity', 'venture capital', 'equities', 'fixed income', 'hedge fund', 'financial analysis', 'valuation', 'finance', 'capital markets'],
+  investment: ['investing', 'portfolio management', 'asset management', 'private equity', 'venture capital', 'equities', 'finance', 'valuation', 'capital markets'],
+  banking: ['finance', 'investment banking', 'commercial banking', 'credit', 'lending', 'loans', 'financial services', 'wealth management'],
+  'financial analyst': ['finance', 'financial analysis', 'fp and a', 'accounting', 'investment', 'valuation', 'modeling'],
+  treasury: ['finance', 'cash management', 'liquidity', 'risk management', 'banking', 'financial operations'],
+
+  // Frontend / Web
+  frontend: ['react', 'vue', 'angular', 'javascript', 'typescript', 'css', 'html', 'web development', 'ui development', 'next js', 'svelte'],
+  'front end': ['react', 'vue', 'angular', 'javascript', 'typescript', 'css', 'html', 'web development', 'ui development'],
+  react: ['frontend', 'javascript', 'typescript', 'next js', 'web development', 'ui engineering'],
+  javascript: ['frontend', 'web development', 'react', 'vue', 'angular', 'node', 'typescript', 'fullstack'],
+  typescript: ['javascript', 'frontend', 'react', 'node', 'web development'],
+
+  // Backend / Infrastructure
+  backend: ['node', 'python', 'java', 'ruby', 'rails', 'django', 'flask', 'api', 'database', 'microservices', 'server side', 'rest api', 'graphql'],
+  'back end': ['node', 'python', 'java', 'ruby', 'api', 'database', 'microservices'],
+  fullstack: ['frontend', 'backend', 'react', 'node', 'python', 'javascript', 'typescript', 'web development'],
+  'full stack': ['frontend', 'backend', 'react', 'node', 'python', 'javascript', 'web development'],
+  devops: ['infrastructure', 'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'ci cd', 'platform engineering', 'site reliability', 'sre', 'cloud', 'terraform', 'ansible'],
+  infrastructure: ['devops', 'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'cloud', 'platform', 'networking', 'sre'],
+  sre: ['site reliability', 'devops', 'infrastructure', 'kubernetes', 'monitoring', 'aws', 'on call'],
+  cloud: ['aws', 'gcp', 'azure', 'devops', 'infrastructure', 'kubernetes', 'terraform'],
+  python: ['backend', 'data science', 'machine learning', 'django', 'flask', 'scripting', 'automation'],
+
+  // Data / AI / ML
+  'machine learning': ['ml', 'ai', 'deep learning', 'nlp', 'neural network', 'pytorch', 'tensorflow', 'data science', 'computer vision', 'llm', 'generative ai'],
+  ml: ['machine learning', 'ai', 'deep learning', 'nlp', 'data science', 'pytorch', 'tensorflow', 'llm'],
+  ai: ['machine learning', 'ml', 'deep learning', 'nlp', 'llm', 'generative ai', 'computer vision', 'data science', 'artificial intelligence'],
+  'data science': ['machine learning', 'ml', 'python', 'statistics', 'analytics', 'modeling', 'research scientist', 'data analysis', 'ai'],
+  'data engineering': ['etl', 'data pipeline', 'spark', 'airflow', 'dbt', 'data warehouse', 'snowflake', 'bigquery', 'kafka', 'data infrastructure'],
+  analytics: ['data analysis', 'business intelligence', 'bi', 'tableau', 'sql', 'metrics', 'reporting', 'dashboards', 'data analytics'],
+  'business intelligence': ['analytics', 'bi', 'tableau', 'power bi', 'sql', 'reporting', 'dashboards', 'data visualization'],
+
+  // Product
+  'product manager': ['product management', 'pm', 'roadmap', 'product owner', 'technical pm', 'agile', 'scrum', 'go to market'],
+  'product management': ['product manager', 'pm', 'roadmap', 'product owner', 'agile', 'go to market', 'product strategy'],
+  pm: ['product manager', 'product management', 'roadmap', 'agile', 'scrum'],
+
+  // Sales & Growth
+  sales: ['account executive', 'ae', 'business development', 'bdr', 'sdr', 'account management', 'revenue', 'quota', 'closing', 'saas sales', 'enterprise sales'],
+  'account executive': ['sales', 'ae', 'quota', 'closing', 'saas sales', 'enterprise sales', 'business development'],
+  'business development': ['sales', 'partnerships', 'biz dev', 'account executive', 'revenue', 'growth'],
+  marketing: ['growth', 'demand generation', 'content marketing', 'seo', 'sem', 'paid media', 'brand', 'communications', 'social media', 'campaign management', 'digital marketing'],
+  growth: ['growth hacking', 'growth marketing', 'acquisition', 'retention', 'conversion', 'demand generation', 'product led growth', 'marketing'],
+  seo: ['search engine optimization', 'organic growth', 'content strategy', 'keyword research', 'digital marketing'],
+
+  // Operations & Support
+  operations: ['ops', 'process improvement', 'efficiency', 'project management', 'program management', 'supply chain', 'logistics', 'biz ops', 'revenue operations'],
+  'customer success': ['csm', 'customer success manager', 'account management', 'client success', 'customer support', 'renewals', 'churn', 'onboarding'],
+  'customer support': ['customer success', 'support engineer', 'technical support', 'help desk', 'customer service'],
+  'human resources': ['hr', 'people ops', 'talent acquisition', 'recruiting', 'hrbp', 'compensation', 'benefits', 'employee relations', 'people operations'],
+  hr: ['human resources', 'people ops', 'talent acquisition', 'recruiting', 'hrbp', 'people operations'],
+  recruiting: ['talent acquisition', 'sourcing', 'hr', 'people ops', 'technical recruiting', 'staffing'],
+
+  // Security
+  security: ['cybersecurity', 'information security', 'infosec', 'penetration testing', 'appsec', 'network security', 'soc', 'compliance', 'grc', 'devsecops'],
+  cybersecurity: ['security', 'information security', 'infosec', 'penetration testing', 'appsec', 'network security', 'soc'],
+}
 
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'])
 const CA_PROVINCES = new Set(['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'])
@@ -526,8 +603,12 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     return set
   }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts, candidateLevel])
 
-  const visibleJobs = useMemo(() => visibleJobsList
-    .filter(jobHasUsableUrl)
+  const { visibleJobs, exactSearchCount } = useMemo(() => {
+    const searchTerms = searchQuery.trim() ? _normSearch(searchQuery).split(' ').filter(Boolean) : []
+    const exactIds = new Set<number>()
+
+    const jobs = visibleJobsList
+      .filter(jobHasUsableUrl)
     .filter((job: any) => !discardedJobs.has(job.id))
     .filter((job: any) => !showMatchedOnly || matchedSet.has(job.id))
     .filter((job: any) => !showInterestedOnly || isJobInterested(job))
@@ -576,36 +657,47 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       return keywords.every((kw) => entry.txt.includes(kw.toLowerCase()))
     })
     .filter((job: any) => {
-      if (!searchQuery.trim()) return true
-      const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
-      if (terms.length === 0) return true
+      if (searchTerms.length === 0) return true
       const entry = jobSearchTexts.get(job.id)
-      const tokens = entry?.tokens ?? new Set(_normSearch([job.title, job.company, job.description].filter(Boolean).join(' ')).split(' ').filter(Boolean))
-      // Every search term must match as a whole word token, or as a prefix for terms ≥3 chars
-      return terms.every(term =>
+      const tokens: Set<string> = entry?.tokens ?? new Set(_normSearch([job.title, job.company, job.description].filter(Boolean).join(' ')).split(' ').filter(Boolean))
+      const txt = entry?.txt ?? ''
+
+      // Exact: every search term appears as a token or prefix
+      const isExact = searchTerms.every(term =>
         tokens.has(term) || (term.length >= 3 && Array.from(tokens).some(t => t.startsWith(term)))
       )
+      if (isExact) { exactIds.add(job.id); return true }
+
+      // Related: any semantically expanded term appears in the job text
+      return searchTerms.some(term => {
+        const expansion = (SEARCH_EXPANSION[term] ?? []).map(_normSearch)
+        return expansion.some(rt => {
+          const parts = rt.split(' ').filter(Boolean)
+          return parts.length === 1 ? tokens.has(rt) : txt.includes(rt)
+        })
+      })
     })
     .sort((a: any, b: any) => {
-      // Composite quality score used in both search and default modes
       const qualityScore = (job: any) => (job.has_recruiter ? 2 : 0) + (job.ats_direct ? 1 : 0)
 
-      if (searchQuery.trim()) {
-        // When searching: title match first, then quality score, then recency
-        const terms = _normSearch(searchQuery).split(' ').filter(Boolean)
+      if (searchTerms.length > 0) {
+        // Exact matches always before related
+        const aExact = exactIds.has(a.id) ? 1 : 0
+        const bExact = exactIds.has(b.id) ? 1 : 0
+        if (bExact !== aExact) return bExact - aExact
+
+        // Within tier: title match first, then quality, then recency
         const titleScore = (job: any) => {
           const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
-          const allInTitle = terms.every(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
-          const anyInTitle = terms.some(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
+          const allInTitle = searchTerms.every(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
+          const anyInTitle = searchTerms.some(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
           return allInTitle ? 2 : anyInTitle ? 1 : 0
         }
         const titleDiff = titleScore(b) - titleScore(a)
         if (titleDiff !== 0) return titleDiff
-        // Within same title-match tier, recruiter-linked and ATS-direct rise
         const qDiff = qualityScore(b) - qualityScore(a)
         if (qDiff !== 0) return qDiff
       } else {
-        // Default: recruiter-linked jobs first, then ATS-direct, then country score
         const qDiff = qualityScore(b) - qualityScore(a)
         if (qDiff !== 0) return qDiff
         if (userCountry) {
@@ -615,7 +707,9 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       }
       return getJobTime(b) - getJobTime(a)
     })
-  , [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry])
+
+    return { visibleJobs: jobs, exactSearchCount: searchTerms.length > 0 ? exactIds.size : jobs.length }
+  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Report the top visible job to the parent whenever the list changes
@@ -994,7 +1088,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
             </p>
           </div>
         )}
-        {visibleJobs.slice(0, visibleCount).map((job: any, _jobIndex: number) => {
+        {visibleJobs.slice(0, visibleCount).flatMap((job: any, _jobIndex: number) => {
           const isInterested = isJobInterested(job)
           const isNew = isNewJob(job)
           const expiringDays = (() => {
@@ -1006,7 +1100,9 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
             return remaining
           })()
           const safeDescription = jobDescriptions.get(job.id) ?? FALLBACK_DESC
-          return (
+          const showDivider = searchQuery.trim() && _jobIndex === exactSearchCount && exactSearchCount < visibleJobs.length
+
+          const card = (
             <JobCard
               key={job.id}
               {...job}
@@ -1029,6 +1125,18 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
               cardIndex={_jobIndex}
             />
           )
+
+          if (!showDivider) return [card]
+          return [
+            <div key="related-divider" className="flex items-center gap-3 pt-2 pb-1">
+              <div className="flex-1 border-t" style={{ borderColor: '#E5E7EB' }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider px-2" style={{ color: '#ABABAB', fontFamily: 'Manrope' }}>
+                Related results
+              </span>
+              <div className="flex-1 border-t" style={{ borderColor: '#E5E7EB' }} />
+            </div>,
+            card,
+          ]
         })}
         {visibleCount < visibleJobs.length ? (
           <div ref={sentinelRef} className="flex justify-center py-6">
