@@ -484,7 +484,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         .filter((app: any) => app?.jobId && app?.status !== 'not_interested')
         .map((app: any) => String(app.jobId)),
       ...pairingMatches
-        .filter((pairing: any) => pairing?.jobId && Number(pairing?.score || 0) >= 28 && pairing?.algorithmVersion === 'deterministic-v2')
+        .filter((pairing: any) => pairing?.jobId && Number(pairing?.score || 0) >= 10)
         .map((pairing: any) => String(pairing.jobId)),
     ])
   }, [data?.Applications, data?.CandidateJobPairing, candidateId])

@@ -1,7 +1,14 @@
 const mongoose = require('mongoose')
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
-const Jobs = require('../models/JobSeeker/jobSeeker.Job')
 const CandidateJobPairings = require('../models/JobSeeker/jobSeeker.CandidateJobPairing')
+
+// Use explicit collection name — same as getAllJobsPure() in the controller — to guarantee
+// we read from 'jobseeker.jobs' regardless of how Mongoose derives the collection name
+// from the 'JobSeeker.Jobs' model name with dot notation.
+function getJobsModel() {
+  return mongoose.models.JobDynamic ||
+    mongoose.model('JobDynamic', new mongoose.Schema({}, { strict: false, collection: 'jobseeker.jobs' }))
+}
 
 const DEFAULT_LIMIT = 250
 const DEFAULT_MIN_SCORE = 28
@@ -230,7 +237,7 @@ function scoreJob(candidate, job, keywords, candSeniority) {
       if (GENERIC_WORDS.has(skill)) return containsPhrase(title, skill)
       return containsPhrase(text, skill)
     })
-    if (!hasDomainHit) score -= 60
+    if (!hasDomainHit) score -= 25
   }
 
   // Hard title-role gate: if none of the candidate's target roles appear
@@ -315,14 +322,14 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
 }
 
 async function pairCandidateJobs(candidateId, options = {}) {
-  const jobs = await Jobs.find({}).lean()
+  const jobs = await getJobsModel().find({}).lean()
   return _pairCandidateWithJobs(candidateId, jobs, options)
 }
 
 async function pairAllCandidates(options = {}) {
   const candidates = await Candidates.find({}).select('_id').lean()
   // Load jobs once and reuse — avoids N full table scans
-  const jobs = await Jobs.find({}).lean()
+  const jobs = await getJobsModel().find({}).lean()
   const results = []
   for (const candidate of candidates) {
     try {
