@@ -1351,32 +1351,52 @@ function App() {
                   </button>
                   {showAutoApplyPopover && (
                     <div
-                      className="absolute right-0 z-50 mt-2 w-72 rounded-xl shadow-xl overflow-hidden"
-                      style={{ background: '#fff', border: '1px solid #E5EEF0', top: '100%' }}
+                      className="absolute right-0 z-50 mt-2 rounded-2xl overflow-hidden"
+                      style={{ width: 308, top: '100%', background: '#fff', border: '1px solid rgba(48,103,112,0.1)', boxShadow: '0 24px 64px rgba(48,103,112,0.18), 0 4px 16px rgba(0,0,0,0.06)' }}
                     >
-                      <div style={{ background: '#306770', padding: '16px 18px 12px' }}>
-                        <div className="flex items-center gap-2" style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>
-                          <Zap size={15} />
-                          Auto Apply
+                      {/* Hero */}
+                      <div style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', padding: '20px 20px 18px', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', top: -24, right: -24, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+                        <div style={{ position: 'absolute', bottom: -14, left: 30, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+                        <div className="flex items-center gap-2" style={{ marginBottom: 10, position: 'relative' }}>
+                          <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 8, padding: '5px 6px', display: 'flex' }}>
+                            <Zap size={15} color="#fff" fill="#fff" />
+                          </div>
+                          <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.3px', fontFamily: 'Manrope, sans-serif' }}>Auto Apply</span>
+                          <span style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', color: '#9ecfd6', fontSize: 9.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, letterSpacing: '0.6px', flexShrink: 0 }}>COMING SOON</span>
                         </div>
-                        <p style={{ color: '#C8DEDE', fontSize: 12, marginTop: 4 }}>Coming soon to Wanderwork</p>
-                      </div>
-                      <div style={{ padding: '14px 18px 16px' }}>
-                        <p style={{ fontSize: 12.5, color: '#444', lineHeight: 1.6, margin: 0 }}>
-                          The Wanderwork Chrome extension will let you apply to jobs in seconds. It autofills your information on ATS pages and lets you apply while you wander — no copy-pasting, no switching tabs.
+                        <p style={{ color: 'rgba(180,215,220,0.88)', fontSize: 12, margin: 0, lineHeight: 1.6, position: 'relative' }}>
+                          Apply to jobs in seconds with your Wanderwork profile. No retyping, no tab switching.
                         </p>
-                        <ul style={{ fontSize: 12, color: '#555', marginTop: 10, paddingLeft: 16, lineHeight: 1.7 }}>
-                          <li>One-click autofill on Greenhouse, Lever, Ashby and more</li>
-                          <li>Apply from anywhere — phone, tablet, or desktop</li>
-                          <li>Track every application automatically</li>
-                        </ul>
-                        <button
-                          disabled
-                          className="w-full mt-3 py-2 rounded-[8px] text-[12px] font-semibold cursor-not-allowed"
-                          style={{ background: '#E5E5E5', color: '#999', border: 'none' }}
-                        >
-                          Get the Extension — Coming Soon
-                        </button>
+                      </div>
+
+                      {/* Features */}
+                      <div style={{ padding: '16px 18px 4px' }}>
+                        {([
+                          { icon: <Zap size={12} />, bg: '#EEF6F7', color: '#306770', label: 'One-click autofill on Greenhouse, Lever, Ashby and more' },
+                          { icon: <Sparkles size={12} />, bg: '#F3EEFF', color: '#7B5EA7', label: 'AI tailors your resume and cover letter per job' },
+                          { icon: <Briefcase size={12} />, bg: '#FFF4EE', color: '#B06A1A', label: 'Track every application automatically as you go' },
+                        ] as { icon: React.ReactNode; bg: string; color: string; label: string }[]).map((f, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 11 }}>
+                            <div style={{ background: f.bg, color: f.color, borderRadius: 7, padding: '5px 6px', display: 'flex', flexShrink: 0, marginTop: 1 }}>
+                              {f.icon}
+                            </div>
+                            <p style={{ fontSize: 12, color: '#4a4a4a', margin: 0, lineHeight: 1.55 }}>{f.label}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* CTA */}
+                      <div style={{ padding: '4px 18px 18px' }}>
+                        <div style={{ borderTop: '1px solid #F0F2F4', paddingTop: 14 }}>
+                          <button
+                            disabled
+                            style={{ width: '100%', padding: '10px 0', background: 'linear-gradient(135deg, #1a3d42, #306770)', color: 'rgba(255,255,255,0.45)', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'not-allowed', letterSpacing: '0.2px', fontFamily: 'Manrope, sans-serif' }}
+                          >
+                            Get the Chrome Extension
+                          </button>
+                          <p style={{ textAlign: 'center', fontSize: 11, color: '#b0b8bb', margin: '8px 0 0', fontFamily: 'Manrope, sans-serif' }}>Available soon on the Chrome Web Store</p>
+                        </div>
                       </div>
                     </div>
                   )}
