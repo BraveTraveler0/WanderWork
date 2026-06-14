@@ -82,9 +82,10 @@ const SYNONYMS = {
 // Role families with explicit compatibility.
 // Families are checked in order — more specific entries come first so
 // "frontend engineer" resolves to 'frontend' before "engineer" resolves to 'backend'.
-// compatibleWith: families that should NOT be excluded when paired with this family.
-//   e.g. design <-> frontend <-> creative are all adjacent and can cross-match.
-//   backend, sales, legal, admin are isolated — incompatible with everything else.
+// compatibleWith: families whose jobs should NOT be excluded for this candidate.
+//   e.g. design sees frontend and creative; backend sees frontend (fullstack bridge);
+//   writing sees marketing and pr; accounting sees finance.
+//   Unclassified jobs (null family) always pass through — no false exclusions.
 const ROLE_FAMILIES = [
   {
     name: 'design',
@@ -95,11 +96,10 @@ const ROLE_FAMILIES = [
       'design lead', 'design manager', 'creative director', 'art director', 'head of design',
       'vp of design', 'chief design officer', 'designer',
     ],
-    compatibleWith: ['frontend', 'creative'],
+    compatibleWith: ['frontend', 'creative', 'marketing'],
   },
   {
-    // Frontend/web roles — same skillset overlap as design; product designers often
-    // hold or are interested in these titles. CSS, JS, React, Figma-to-code, etc.
+    // Frontend/web — same skill overlap as design; product designers often hold these titles.
     name: 'frontend',
     keywords: [
       'frontend engineer', 'front end engineer', 'frontend developer', 'front end developer',
@@ -107,21 +107,45 @@ const ROLE_FAMILIES = [
       'typescript developer', 'vue developer', 'angular developer', 'next.js developer',
       'creative technologist', 'interactive developer', 'web engineer',
     ],
-    compatibleWith: ['design', 'creative'],
+    compatibleWith: ['design', 'creative', 'backend'],
   },
   {
     // Creative/art — illustrators, animators, art directors for film/marketing/brand.
-    // Often the same person or team as design; shares tools and workflows.
     name: 'creative',
     keywords: [
       'illustrator', 'animator', 'motion graphic', 'video editor', 'filmmaker',
       'photographer', 'visual artist', '3d artist', 'concept artist', 'storyboard artist',
       'content creator', 'art lead',
     ],
-    compatibleWith: ['design', 'frontend'],
+    compatibleWith: ['design', 'frontend', 'marketing'],
   },
   {
-    // Backend/infra/data engineering — distinct skillset, no meaningful overlap with design.
+    // Marketing/brand — overlaps with design (marketing designers) and writing (content marketing).
+    name: 'marketing',
+    keywords: [
+      'marketing manager', 'marketing director', 'brand manager', 'brand strategist',
+      'growth marketer', 'digital marketer', 'performance marketer', 'demand generation',
+      'seo specialist', 'sem specialist', 'email marketer', 'social media manager',
+      'marketing analyst', 'marketing coordinator', 'paid media', 'marketing lead',
+    ],
+    compatibleWith: ['design', 'creative', 'writing'],
+  },
+  {
+    // Writing/communications — content writers, editors, journalists, PR specialists.
+    // PR, journalism, and corporate communications are the same core skill (written communication).
+    name: 'writing',
+    keywords: [
+      'content writer', 'copywriter', 'journalist', 'reporter', 'editor', 'staff writer',
+      'technical writer', 'content strategist', 'content manager', 'editorial director',
+      'pr specialist', 'public relations', 'communications manager', 'communications director',
+      'publicist', 'media relations', 'corporate communications', 'speechwriter',
+    ],
+    compatibleWith: ['marketing'],
+  },
+  {
+    // Backend/infra/data — distinct from design/frontend; no meaningful crossover.
+    // Fullstack is listed here but backend candidates can also see frontend roles
+    // via the 'frontend' entry in compatibleWith.
     name: 'backend',
     keywords: [
       'software engineer', 'software developer', 'forward deployed engineer',
@@ -137,11 +161,37 @@ const ROLE_FAMILIES = [
       'staff engineer', 'principal engineer', 'solutions architect', 'cloud architect',
       'network engineer', 'security engineer',
     ],
-    compatibleWith: [],
+    compatibleWith: ['frontend'],
   },
   {
-    // Sales — "Account Executive" is a sales title, NOT a leadership/executive title.
-    // SDR, BDR, AE, AM are quota-carrying roles with no design overlap.
+    // Accounting — AP/AR clerks, CPAs, controllers, actuaries, tax specialists.
+    // Actuary is math-heavy but lives in the same accounting/insurance/finance ecosystem.
+    name: 'accounting',
+    keywords: [
+      'accountant', 'cpa', 'accounts payable', 'accounts receivable', 'bookkeeper',
+      'controller', 'comptroller', 'auditor', 'tax specialist', 'tax analyst', 'tax manager',
+      'actuary', 'actuarial analyst', 'actuarial associate', 'budget analyst', 'cost analyst',
+      'accounting manager', 'accounting director', 'staff accountant', 'senior accountant',
+      'payroll specialist', 'payroll manager',
+    ],
+    compatibleWith: ['finance'],
+  },
+  {
+    // Finance — investment, FP&A, treasury, quantitative analysis.
+    // Closely related to accounting; quants and actuaries share statistical skills.
+    name: 'finance',
+    keywords: [
+      'financial analyst', 'financial planner', 'financial advisor', 'finance manager',
+      'vp of finance', 'chief financial officer', 'cfo', 'investment analyst',
+      'investment banker', 'portfolio manager', 'equity analyst', 'quantitative analyst',
+      'quant', 'trader', 'asset manager', 'wealth manager', 'fp&a',
+      'corporate finance', 'treasury analyst', 'risk analyst', 'credit analyst',
+    ],
+    compatibleWith: ['accounting'],
+  },
+  {
+    // Sales — "Account Executive" is a quota-carrying sales title, not a leadership role.
+    // SDR/BDR/AE/AM are distinct from design, engineering, writing, and accounting.
     name: 'sales',
     keywords: [
       'account executive', 'account manager', 'sales manager', 'sales director',
@@ -153,7 +203,7 @@ const ROLE_FAMILIES = [
   },
   {
     // Legal — attorneys, paralegals, legal assistants. Paralegal is admin-adjacent
-    // but still firmly in the legal domain, not design.
+    // but still in the legal domain, not design or writing.
     name: 'legal',
     keywords: [
       'attorney', 'counsel', 'paralegal', 'legal assistant', 'legal coordinator',
@@ -162,8 +212,8 @@ const ROLE_FAMILIES = [
     compatibleWith: [],
   },
   {
-    // Admin/ops — office managers, admins, executive assistants.
-    // "Executive Assistant" is admin support; distinct from VP/executive leadership.
+    // Admin/ops — office managers, assistants, coordinators.
+    // "Executive Assistant" is admin support; distinct from VP/C-suite executives.
     name: 'admin',
     keywords: [
       'executive assistant', 'administrative assistant', 'office manager',
