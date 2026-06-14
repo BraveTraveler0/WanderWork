@@ -1515,6 +1515,7 @@ function App() {
                   onSignUp={() => setShowSignup(true)}
                   onTopJobChange={setTopVisibleJobId}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
+                  onBuyCredits={() => setCurrentPage('plans')}
                 />
               </div>
 

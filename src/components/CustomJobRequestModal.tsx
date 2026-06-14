@@ -21,6 +21,7 @@ interface CustomJobRequestModalProps {
   onSignUp?: () => void
   hasRecruiter?: boolean
   onOpenRecruiter?: () => void
+  onBuyCredits?: () => void
 }
 
 export default function CustomJobRequestModal({
@@ -35,6 +36,7 @@ export default function CustomJobRequestModal({
   onSignUp,
   hasRecruiter = false,
   onOpenRecruiter,
+  onBuyCredits,
 }: CustomJobRequestModalProps) {
   const [selectedResume, setSelectedResume] = useState(initialResume)
   const [selectedCoverLetter, setSelectedCoverLetter] = useState(initialCoverLetter)
@@ -53,7 +55,6 @@ export default function CustomJobRequestModal({
     if (!hasSelection) return
     if (hasDocs && !canAfford) return
 
-    // If recruiter selected (with or without docs), open recruiter flow after docs
     if (hasDocs) {
       setSubmitting(true)
       setError(null)
@@ -87,7 +88,6 @@ export default function CustomJobRequestModal({
     label,
     description,
     cost,
-    disabled = false,
   }: {
     selected: boolean
     onToggle: () => void
@@ -95,16 +95,13 @@ export default function CustomJobRequestModal({
     label: string
     description: string
     cost: string
-    disabled?: boolean
   }) => (
     <button
       onClick={onToggle}
-      disabled={disabled}
       className="w-full text-left rounded-[14px] border transition-all"
       style={{
         borderColor: selected ? '#306770' : '#EFEFEF',
         background: selected ? '#F0F8FA' : 'white',
-        cursor: disabled ? 'default' : 'pointer',
         outline: 'none',
       }}
     >
@@ -158,41 +155,53 @@ export default function CustomJobRequestModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[20px] w-full max-w-[480px] max-h-[calc(100vh-32px)] overflow-y-auto shadow-[0_30px_90px_rgba(0,0,0,0.16)] relative"
+        className="bg-white rounded-[20px] w-full max-w-[480px] max-h-[calc(100vh-32px)] overflow-y-auto shadow-[0_30px_90px_rgba(0,0,0,0.18)] relative"
         style={{ fontFamily: 'Manrope' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4">
-          <div className="flex-1 pr-3">
-            <h2 className="text-[20px] font-semibold text-black leading-tight mb-1">
-              Application Materials
-            </h2>
-            <p className="text-[13px]" style={{ color: '#787878' }}>
-              {jobTitle} at {company}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0 pt-0.5">
-            <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-              style={{ background: '#F0F8FA' }}
-            >
-              <span className="text-[11px] font-medium" style={{ color: '#306770' }}>Credits</span>
-              <span className="text-[13px] font-semibold" style={{ color: '#306770' }}>{currentCredits}</span>
+        {/* Premium gradient header */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)',
+            padding: '24px 24px 22px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ position: 'absolute', top: -28, right: -28, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+          <div style={{ position: 'absolute', bottom: -16, left: 32, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+
+          <div className="flex items-start justify-between relative">
+            <div className="flex-1 pr-3">
+              <h2 style={{ fontFamily: 'Manrope', fontWeight: 800, fontSize: 20, color: '#fff', letterSpacing: '-0.3px', marginBottom: 8, lineHeight: 1.2 }}>
+                Customize your Resume + Cover Letter
+              </h2>
+              <p style={{ fontSize: 12.5, color: 'rgba(180,215,220,0.88)', lineHeight: 1.6, margin: 0 }}>
+                Get a customized version of your resume and cover letter for <strong style={{ color: 'rgba(220,240,244,0.95)' }}>{jobTitle}</strong> at <strong style={{ color: 'rgba(220,240,244,0.95)' }}>{company}</strong>. Use this in your application to beat the ATS and stand out against all the other candidates.
+              </p>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0"
-              style={{ background: '#F5F5F5' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E5E5' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#F5F5F5' }}
-            >
-              <X size={16} style={{ color: '#787878' }} />
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)' }}
+              >
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: 'rgba(180,215,220,0.9)' }}>Credits</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{currentCredits}</span>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.15)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
+              >
+                <X size={15} color="rgba(255,255,255,0.85)" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-6 py-5">
           {error && (
             <div className="mb-4 rounded-[10px] border px-3 py-2 text-[12px]" style={{ borderColor: '#FCA5A5', color: '#B91C1C', background: '#FEF2F2' }}>
               {error}
@@ -264,8 +273,8 @@ export default function CustomJobRequestModal({
                       key={fmt}
                       className="flex items-center gap-3 rounded-[10px] border px-4 py-2.5 cursor-pointer transition-all"
                       style={{
-                        borderColor: checked ? '#306770' : '#E5E7EB',
-                        background: checked ? '#F0F8FA' : 'white',
+                        borderColor: checked ? '#306770' : '#D1D5DB',
+                        background: 'white',
                       }}
                     >
                       <input
@@ -296,9 +305,9 @@ export default function CustomJobRequestModal({
             </div>
           )}
 
-          {/* Cost row */}
+          {/* Cost + add credits */}
           {hasDocs && (
-            <div className="flex items-center justify-between mb-4 px-1">
+            <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-[13px]" style={{ color: '#787878' }}>Document cost</span>
               <div className="flex items-center gap-2">
                 <span className="text-[15px] font-semibold" style={{ color: '#306770' }}>
@@ -313,11 +322,36 @@ export default function CustomJobRequestModal({
             </div>
           )}
 
-          {/* Delivery note */}
-          {hasDocs && (
+          {/* Add more credits nudge */}
+          {hasDocs && !canAfford && onBuyCredits && (
+            <button
+              onClick={() => { onClose(); onBuyCredits() }}
+              className="w-full mb-4 py-2.5 rounded-[12px] text-[13px] font-semibold transition-all"
+              style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', color: 'white', border: 'none' }}
+            >
+              Get More Credits
+            </button>
+          )}
+
+          {hasDocs && canAfford && (
             <p className="text-[12px] text-center mb-4" style={{ color: '#9CA3AF' }}>
               Saved to Messages and emailed in RTF + {fileFormat.toUpperCase()}.
             </p>
+          )}
+
+          {/* Low credits hint even when you can afford */}
+          {hasDocs && canAfford && currentCredits <= 3 && onBuyCredits && (
+            <div className="flex items-center justify-center mb-3">
+              <button
+                onClick={() => { onClose(); onBuyCredits() }}
+                className="text-[12px] font-medium transition-colors"
+                style={{ color: '#306770', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'transparent' }}
+                onMouseEnter={(e) => { e.currentTarget.style.textDecorationColor = '#306770' }}
+                onMouseLeave={(e) => { e.currentTarget.style.textDecorationColor = 'transparent' }}
+              >
+                Running low? Add more credits
+              </button>
+            </div>
           )}
 
           {/* Actions */}
@@ -335,9 +369,7 @@ export default function CustomJobRequestModal({
               <button
                 onClick={() => { onClose(); onSignUp?.() }}
                 className="flex-1 px-4 py-3 rounded-[12px] text-[14px] text-white font-medium"
-                style={{ background: '#306770' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#255860' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#306770' }}
+                style={{ background: 'linear-gradient(135deg, #112e33 0%, #306770 100%)' }}
               >
                 Sign Up
               </button>
@@ -347,10 +379,10 @@ export default function CustomJobRequestModal({
                 disabled={!canSubmit}
                 className="flex-1 px-4 py-3 rounded-[12px] text-[14px] text-white font-medium disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
                 style={{
-                  background: canSubmit ? '#306770' : '#D1D5DB',
+                  background: canSubmit
+                    ? 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)'
+                    : '#D1D5DB',
                 }}
-                onMouseEnter={(e) => { if (canSubmit) e.currentTarget.style.background = '#255860' }}
-                onMouseLeave={(e) => { if (canSubmit) e.currentTarget.style.background = '#306770' }}
               >
                 {submitting && (
                   <span
@@ -368,6 +400,19 @@ export default function CustomJobRequestModal({
               </button>
             )}
           </div>
+
+          {/* Add credits link — always visible at bottom if prop provided */}
+          {onBuyCredits && canAfford && currentCredits > 3 && (
+            <p className="text-center mt-3 text-[11px]" style={{ color: '#9CA3AF' }}>
+              Need more credits?{' '}
+              <button
+                onClick={() => { onClose(); onBuyCredits() }}
+                style={{ color: '#306770', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit' }}
+              >
+                Add tokens
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

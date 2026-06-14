@@ -891,6 +891,11 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             setInitialCustomRequest(null)
             onRecruiterContactsClick?.()
           }}
+          onBuyCredits={() => {
+            setShowCustomRequestModal(null)
+            setInitialCustomRequest(null)
+            openTokens()
+          }}
         />
       )}
 

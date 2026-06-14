@@ -87,6 +87,7 @@ interface JobFeedProps {
   onSignIn?: () => void
   onTopJobChange?: (id: number | null) => void
   onRecruiterContactsClick?: () => void
+  onBuyCredits?: () => void
 }
 
 const BATCH = 15
@@ -1123,7 +1124,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick, onBuyCredits }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -1692,6 +1693,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
             setShowCustomRequestModal(null)
             onRecruiterContactsClick?.()
           }}
+          onBuyCredits={onBuyCredits}
         />
       )}
 
