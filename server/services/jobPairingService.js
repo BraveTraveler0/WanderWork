@@ -4,7 +4,7 @@ const Jobs = require('../models/JobSeeker/jobSeeker.Job')
 const CandidateJobPairings = require('../models/JobSeeker/jobSeeker.CandidateJobPairing')
 
 const DEFAULT_LIMIT = 250
-const DEFAULT_MIN_SCORE = 18
+const DEFAULT_MIN_SCORE = 28
 
 // Seniority tiers — order matters (most senior first)
 const SENIORITY_TIERS = [
@@ -90,18 +90,10 @@ function unique(values) {
   return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
 }
 
-// Minimum word length to avoid matching noise words from resume text
-const MIN_WORD_LEN = 4
-
-function wordsFromText(text) {
-  if (!text) return []
-  return normalizeText(text)
-    .split(' ')
-    .filter((w) => w.length >= MIN_WORD_LEN)
-}
-
 function candidateKeywords(candidate) {
-  // inferredKeywords are AI-extracted terms stored at resume upload time — highest quality
+  // Structured fields only — free-text resume fields (work_experience, education, summary)
+  // extract too many generic English words ("senior", "platform", "company") that score
+  // false positives against unrelated job descriptions.
   const base = unique([
     ...toArray(candidate.skills),
     ...toArray(candidate.skills_2),
@@ -109,10 +101,6 @@ function candidateKeywords(candidate) {
     ...toArray(candidate.inferredSkills),
     ...toArray(candidate.inferred_skills),
     ...toArray(candidate.targetRoles),
-    // Split resume text fields into individual words rather than treating as one giant phrase
-    ...wordsFromText(candidate.work_experience),
-    ...wordsFromText(candidate.education),
-    ...wordsFromText(candidate.summary),
   ])
 
   const expanded = []
@@ -220,10 +208,14 @@ function scoreJob(candidate, job, keywords, candSeniority) {
   else if (uniqueMatches.length >= 3) score += 7
   else if (uniqueMatches.length >= 1) score += 3
 
-  // Domain relevance check: candidate's direct skills must appear in the job.
-  // Single-word skills require a title hit to avoid false positives from common
-  // English words ("design" in "study design", "react" used as a verb in
-  // clinical/research job descriptions). Multi-word phrases check full text.
+  // Domain relevance check: at least one of the candidate's core skills or
+  // target roles must appear somewhere in the job text. Single-word skills
+  // that are clearly domain-specific (e.g. "figma", "react") check full text
+  // rather than title-only to avoid over-penalising when a tool name doesn't
+  // appear in a short title. Generic single-word skills still require a title
+  // hit to prevent "design" or "data" from matching unrelated roles.
+  const GENERIC_WORDS = new Set(['data', 'design', 'product', 'sales', 'growth', 'content', 'writing', 'research', 'management', 'analytics', 'operations', 'strategy', 'marketing', 'engineering', 'development'])
+
   const directSkills = unique([
     ...toArray(candidate.skills),
     ...toArray(candidate.skills_2),
@@ -234,10 +226,19 @@ function scoreJob(candidate, job, keywords, candSeniority) {
     const hasDomainHit = directSkills.some(skill => {
       const parts = skill.split(' ').filter(Boolean)
       if (parts.length > 1) return containsPhrase(text, skill)
-      return containsPhrase(title, skill)
+      // Single-word: check full text if domain-specific tool/tech, title-only for generic words
+      if (GENERIC_WORDS.has(skill)) return containsPhrase(title, skill)
+      return containsPhrase(text, skill)
     })
-    if (!hasDomainHit) score -= 50
+    if (!hasDomainHit) score -= 60
   }
+
+  // Hard title-role gate: if none of the candidate's target roles appear
+  // anywhere in the job title, apply an additional penalty. A UX Designer
+  // should never match "Data Scientist" or "Account Executive" because their
+  // role keywords simply don't appear in those titles.
+  const titleRoleMatch = candidateRoles.some(r => r && containsPhrase(title, r))
+  if (!titleRoleMatch && candidateRoles.length > 0) score -= 25
 
   const cappedScore = Math.max(0, Math.min(100, Math.round(score)))
   return {
