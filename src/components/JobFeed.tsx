@@ -140,77 +140,884 @@ function getJobTime(job: any): number {
 
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
-// Semantic expansion: maps a search term to related terms that broaden the result set.
-// Exact matches always surface first; these populate the "Related results" section.
+// ---------------------------------------------------------------------------
+// Semantic search expansion — derived from the same 20-cluster role ontology
+// used for candidate-job matching (server/services/matching/roleOntology.js).
+//
+// Cluster distance guide (mirroring RAW_DISTANCES):
+//   d1 = very close, d2 = adjacent, d3 = stretch (selective crossovers only)
+//   d4+ excluded — too weak to surface as "Related results"
+//
+// Values are phrases that appear in job TITLES or DESCRIPTIONS for the
+// related cluster(s).  Exact matches always rank above these.
+// ---------------------------------------------------------------------------
 const SEARCH_EXPANSION: Record<string, string[]> = {
-  // Design
-  ux: ['user experience', 'product design', 'ui design', 'interaction design', 'visual design', 'design systems', 'ux research', 'usability', 'wireframing', 'prototyping', 'figma', 'information architecture', 'service design'],
-  ui: ['user interface', 'visual design', 'design systems', 'figma', 'interaction design', 'product design', 'ux design', 'frontend design'],
-  design: ['ux design', 'ui design', 'product design', 'graphic design', 'visual design', 'brand design', 'figma', 'creative direction', 'art direction', 'motion design'],
-  'product design': ['ux', 'ui', 'user research', 'prototyping', 'figma', 'design thinking', 'interaction design'],
-  'graphic design': ['visual design', 'brand', 'illustration', 'typography', 'adobe', 'photoshop', 'illustrator'],
-  'visual design': ['graphic design', 'ui design', 'brand design', 'figma', 'motion design'],
 
-  // Finance
-  finance: ['accounting', 'accounts payable', 'accounts receivable', 'bookkeeping', 'financial analysis', 'financial planning', 'investment', 'investing', 'portfolio management', 'audit', 'tax', 'treasury', 'cpa', 'cfa', 'banking', 'controller', 'fp and a', 'budgeting', 'forecasting', 'corporate finance', 'private equity', 'venture capital', 'financial reporting'],
-  accounting: ['accounts payable', 'accounts receivable', 'bookkeeping', 'audit', 'tax', 'cpa', 'gaap', 'financial reporting', 'controller', 'general ledger', 'reconciliation', 'finance', 'cost accounting'],
-  investing: ['investment', 'portfolio', 'asset management', 'private equity', 'venture capital', 'equities', 'fixed income', 'hedge fund', 'financial analysis', 'valuation', 'finance', 'capital markets'],
-  investment: ['investing', 'portfolio management', 'asset management', 'private equity', 'venture capital', 'equities', 'finance', 'valuation', 'capital markets'],
-  banking: ['finance', 'investment banking', 'commercial banking', 'credit', 'lending', 'loans', 'financial services', 'wealth management'],
-  'financial analyst': ['finance', 'financial analysis', 'fp and a', 'accounting', 'investment', 'valuation', 'modeling'],
-  treasury: ['finance', 'cash management', 'liquidity', 'risk management', 'banking', 'financial operations'],
+  // ── ux_design cluster ─────────────────────────────────────────────────────
+  // d1: ui_visual, design_systems  |  d2: brand_creative, design_content, frontend
+  ux: [
+    // d1 → ui_visual
+    'ui designer', 'visual designer', 'graphic designer', 'web designer', 'digital designer', 'brand designer',
+    // d1 → design_systems
+    'design systems', 'design engineer', 'ux engineer',
+    // d2 → design_content
+    'content designer', 'ux writer',
+    // d2 → brand_creative
+    'creative director', 'art director', 'motion designer',
+    // d2 → frontend (the "frontend design" the user mentioned)
+    'frontend engineer', 'frontend developer', 'ui engineer', 'web developer',
+  ],
+  'user experience': [
+    'ui designer', 'visual designer', 'design systems', 'design engineer',
+    'content designer', 'ux writer', 'frontend engineer', 'web developer',
+  ],
+  'product designer': [
+    'ux designer', 'ui designer', 'visual designer', 'interaction designer',
+    'design systems', 'design engineer', 'content designer', 'ux writer',
+  ],
+  'interaction design': [
+    'ux designer', 'ui designer', 'product designer', 'design systems', 'design engineer', 'frontend engineer',
+  ],
+  'service design': [
+    'ux designer', 'product designer', 'ui designer', 'design systems',
+  ],
 
-  // Frontend / Web
-  frontend: ['react', 'vue', 'angular', 'javascript', 'typescript', 'css', 'html', 'web development', 'ui development', 'next js', 'svelte'],
-  'front end': ['react', 'vue', 'angular', 'javascript', 'typescript', 'css', 'html', 'web development', 'ui development'],
-  react: ['frontend', 'javascript', 'typescript', 'next js', 'web development', 'ui engineering'],
-  javascript: ['frontend', 'web development', 'react', 'vue', 'angular', 'node', 'typescript', 'fullstack'],
-  typescript: ['javascript', 'frontend', 'react', 'node', 'web development'],
+  // ── ui_visual cluster ─────────────────────────────────────────────────────
+  // d1: ux_design, design_systems, brand_creative, frontend  |  d2: design_content, marketing
+  ui: [
+    // d1 → ux_design
+    'ux designer', 'product designer', 'interaction designer',
+    // d1 → design_systems
+    'design systems', 'design engineer', 'ux engineer',
+    // d1 → brand_creative
+    'creative director', 'art director', 'illustrator',
+    // d1 → frontend
+    'frontend engineer', 'frontend developer', 'web developer', 'ui engineer',
+    // d2 → design_content
+    'content designer', 'ux writer',
+    // d2 → marketing
+    'brand manager', 'digital marketer',
+  ],
+  'visual designer': [
+    'ui designer', 'graphic designer', 'brand designer', 'digital designer',
+    'ux designer', 'product designer', 'design systems', 'art director', 'creative director',
+    'motion designer', 'illustrator',
+  ],
+  'visual design': [
+    'ui designer', 'graphic designer', 'brand designer', 'ux designer',
+    'design systems', 'art director', 'creative director',
+  ],
+  'graphic designer': [
+    'visual designer', 'ui designer', 'brand designer', 'art director',
+    'creative director', 'illustrator', 'motion designer',
+  ],
+  'graphic design': [
+    'visual design', 'ui design', 'brand design', 'art direction',
+    'creative director', 'illustration', 'motion design',
+  ],
+  'web designer': [
+    'frontend engineer', 'frontend developer', 'ui designer', 'visual designer',
+    'ux designer', 'design systems',
+  ],
+  'brand designer': [
+    'graphic designer', 'visual designer', 'art director', 'creative director',
+    'brand manager', 'marketing manager',
+  ],
+  'digital designer': [
+    'ui designer', 'visual designer', 'graphic designer', 'ux designer',
+    'frontend engineer', 'motion designer',
+  ],
 
-  // Backend / Infrastructure
-  backend: ['node', 'python', 'java', 'ruby', 'rails', 'django', 'flask', 'api', 'database', 'microservices', 'server side', 'rest api', 'graphql'],
-  'back end': ['node', 'python', 'java', 'ruby', 'api', 'database', 'microservices'],
-  fullstack: ['frontend', 'backend', 'react', 'node', 'python', 'javascript', 'typescript', 'web development'],
-  'full stack': ['frontend', 'backend', 'react', 'node', 'python', 'javascript', 'web development'],
-  devops: ['infrastructure', 'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'ci cd', 'platform engineering', 'site reliability', 'sre', 'cloud', 'terraform', 'ansible'],
-  infrastructure: ['devops', 'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'cloud', 'platform', 'networking', 'sre'],
-  sre: ['site reliability', 'devops', 'infrastructure', 'kubernetes', 'monitoring', 'aws', 'on call'],
-  cloud: ['aws', 'gcp', 'azure', 'devops', 'infrastructure', 'kubernetes', 'terraform'],
-  python: ['backend', 'data science', 'machine learning', 'django', 'flask', 'scripting', 'automation'],
+  // ── design_systems cluster ────────────────────────────────────────────────
+  // d1: ux_design, ui_visual, frontend  |  d2: brand_creative, design_content, fullstack  |  d3: backend
+  'design systems': [
+    // d1
+    'ux designer', 'product designer', 'ui designer', 'visual designer',
+    'frontend engineer', 'frontend developer', 'ui engineer',
+    // d2
+    'creative director', 'content designer', 'ux writer', 'fullstack engineer',
+  ],
+  'design engineer': [
+    'frontend engineer', 'ux engineer', 'ui engineer', 'design systems',
+    'ux designer', 'ui designer', 'fullstack engineer',
+  ],
+  'ux engineer': [
+    'frontend engineer', 'design engineer', 'ui engineer', 'design systems',
+    'ux designer', 'ui designer',
+  ],
 
-  // Data / AI / ML
-  'machine learning': ['ml', 'ai', 'deep learning', 'nlp', 'neural network', 'pytorch', 'tensorflow', 'data science', 'computer vision', 'llm', 'generative ai'],
-  ml: ['machine learning', 'ai', 'deep learning', 'nlp', 'data science', 'pytorch', 'tensorflow', 'llm'],
-  ai: ['machine learning', 'ml', 'deep learning', 'nlp', 'llm', 'generative ai', 'computer vision', 'data science', 'artificial intelligence'],
-  'data science': ['machine learning', 'ml', 'python', 'statistics', 'analytics', 'modeling', 'research scientist', 'data analysis', 'ai'],
-  'data engineering': ['etl', 'data pipeline', 'spark', 'airflow', 'dbt', 'data warehouse', 'snowflake', 'bigquery', 'kafka', 'data infrastructure'],
-  analytics: ['data analysis', 'business intelligence', 'bi', 'tableau', 'sql', 'metrics', 'reporting', 'dashboards', 'data analytics'],
-  'business intelligence': ['analytics', 'bi', 'tableau', 'power bi', 'sql', 'reporting', 'dashboards', 'data visualization'],
+  // ── design_content cluster ────────────────────────────────────────────────
+  // d2: ux_design, ui_visual, design_systems, brand_creative, content_writing  |  d3: marketing, product_mgmt
+  'content designer': [
+    'ux writer', 'ux designer', 'ui designer', 'design systems',
+    'content writer', 'copywriter', 'technical writer', 'creative director',
+  ],
+  'ux writer': [
+    'content designer', 'ux designer', 'content writer', 'copywriter',
+    'technical writer', 'ui designer',
+  ],
+  'ux writing': [
+    'content design', 'copywriting', 'technical writing', 'content strategy',
+    'ux designer', 'content writer',
+  ],
 
-  // Product
-  'product manager': ['product management', 'pm', 'roadmap', 'product owner', 'technical pm', 'agile', 'scrum', 'go to market'],
-  'product management': ['product manager', 'pm', 'roadmap', 'product owner', 'agile', 'go to market', 'product strategy'],
-  pm: ['product manager', 'product management', 'roadmap', 'agile', 'scrum'],
+  // ── brand_creative cluster ────────────────────────────────────────────────
+  // d1: ui_visual  |  d2: ux_design, design_systems, design_content, marketing  |  d3: content_writing, frontend
+  'creative director': [
+    'art director', 'visual designer', 'graphic designer', 'brand designer',
+    'ux designer', 'product designer', 'design systems',
+    'marketing manager', 'brand manager', 'content writer', 'copywriter',
+  ],
+  'art director': [
+    'creative director', 'visual designer', 'graphic designer', 'brand designer',
+    'marketing manager', 'content writer',
+  ],
+  'motion designer': [
+    'animator', 'video editor', 'visual designer', 'graphic designer',
+    'creative director', 'art director',
+  ],
+  'motion design': [
+    'animation', 'video editing', 'visual design', 'graphic design',
+    'creative director', 'art direction',
+  ],
+  animator: [
+    'motion designer', 'video editor', 'illustrator', 'creative director', 'visual designer',
+  ],
+  illustrator: [
+    'graphic designer', 'visual designer', 'art director', 'creative director', 'motion designer',
+  ],
+  'video editor': [
+    'motion designer', 'animator', 'creative director', 'content creator',
+  ],
 
-  // Sales & Growth
-  sales: ['account executive', 'ae', 'business development', 'bdr', 'sdr', 'account management', 'revenue', 'quota', 'closing', 'saas sales', 'enterprise sales'],
-  'account executive': ['sales', 'ae', 'quota', 'closing', 'saas sales', 'enterprise sales', 'business development'],
-  'business development': ['sales', 'partnerships', 'biz dev', 'account executive', 'revenue', 'growth'],
-  marketing: ['growth', 'demand generation', 'content marketing', 'seo', 'sem', 'paid media', 'brand', 'communications', 'social media', 'campaign management', 'digital marketing'],
-  growth: ['growth hacking', 'growth marketing', 'acquisition', 'retention', 'conversion', 'demand generation', 'product led growth', 'marketing'],
-  seo: ['search engine optimization', 'organic growth', 'content strategy', 'keyword research', 'digital marketing'],
+  // ── platform cluster ──────────────────────────────────────────────────────
+  // d2: backend, fullstack, data_ml  |  d3: mobile
+  devops: [
+    // d2 → backend/fullstack
+    'software engineer', 'backend engineer', 'systems engineer', 'fullstack engineer',
+    'site reliability', 'sre', 'platform engineer', 'infrastructure engineer', 'cloud engineer',
+    // d2 → data_ml
+    'data engineer', 'ml engineer',
+  ],
+  sre: [
+    'site reliability engineer', 'devops', 'platform engineer', 'infrastructure engineer',
+    'cloud engineer', 'software engineer', 'backend engineer',
+  ],
+  'site reliability': [
+    'sre', 'devops', 'platform engineer', 'infrastructure engineer',
+    'backend engineer', 'software engineer',
+  ],
+  'platform engineer': [
+    'devops', 'infrastructure engineer', 'site reliability', 'cloud engineer',
+    'backend engineer', 'systems engineer', 'fullstack engineer', 'data engineer',
+  ],
+  'infrastructure engineer': [
+    'devops', 'platform engineer', 'cloud engineer', 'site reliability',
+    'backend engineer', 'systems engineer', 'network engineer',
+  ],
+  infrastructure: [
+    'devops', 'platform engineer', 'cloud engineer', 'site reliability', 'sre',
+    'backend engineer', 'systems engineer', 'data engineer',
+  ],
+  'cloud engineer': [
+    'devops', 'platform engineer', 'infrastructure engineer', 'site reliability',
+    'backend engineer', 'data engineer',
+  ],
+  aws: [
+    'devops', 'platform engineer', 'cloud engineer', 'infrastructure engineer',
+    'backend engineer', 'data engineer',
+  ],
+  kubernetes: [
+    'devops', 'platform engineer', 'site reliability', 'infrastructure engineer',
+    'backend engineer',
+  ],
+  docker: [
+    'devops', 'platform engineer', 'backend engineer', 'fullstack engineer',
+    'infrastructure engineer',
+  ],
+  terraform: [
+    'devops', 'platform engineer', 'infrastructure engineer', 'cloud engineer',
+  ],
 
-  // Operations & Support
-  operations: ['ops', 'process improvement', 'efficiency', 'project management', 'program management', 'supply chain', 'logistics', 'biz ops', 'revenue operations'],
-  'customer success': ['csm', 'customer success manager', 'account management', 'client success', 'customer support', 'renewals', 'churn', 'onboarding'],
-  'customer support': ['customer success', 'support engineer', 'technical support', 'help desk', 'customer service'],
-  'human resources': ['hr', 'people ops', 'talent acquisition', 'recruiting', 'hrbp', 'compensation', 'benefits', 'employee relations', 'people operations'],
-  hr: ['human resources', 'people ops', 'talent acquisition', 'recruiting', 'hrbp', 'people operations'],
-  recruiting: ['talent acquisition', 'sourcing', 'hr', 'people ops', 'technical recruiting', 'staffing'],
+  // ── data_ml cluster ───────────────────────────────────────────────────────
+  // d2: backend, platform, fullstack  |  d3: finance, frontend
+  'data scientist': [
+    // d2 → backend/platform
+    'data engineer', 'ml engineer', 'machine learning engineer', 'ai engineer',
+    'research scientist', 'backend engineer', 'software engineer',
+    'platform engineer', 'fullstack engineer',
+    // d3 → finance
+    'quantitative analyst', 'quant', 'financial analyst',
+  ],
+  'data engineer': [
+    'data scientist', 'ml engineer', 'analytics engineer', 'backend engineer',
+    'software engineer', 'platform engineer', 'fullstack engineer',
+  ],
+  'machine learning': [
+    'ml engineer', 'ai engineer', 'data scientist', 'research scientist',
+    'backend engineer', 'software engineer', 'data engineer',
+    // d3 → finance (quants)
+    'quantitative analyst', 'quant',
+  ],
+  'machine learning engineer': [
+    'ml engineer', 'ai engineer', 'data scientist', 'research scientist',
+    'backend engineer', 'software engineer',
+  ],
+  'ml engineer': [
+    'machine learning engineer', 'ai engineer', 'data scientist', 'research scientist',
+    'data engineer', 'backend engineer', 'software engineer',
+  ],
+  'ai engineer': [
+    'ml engineer', 'machine learning engineer', 'data scientist', 'research scientist',
+    'backend engineer', 'software engineer', 'data engineer',
+  ],
+  'data science': [
+    'machine learning', 'data engineering', 'analytics', 'ml engineer',
+    'research scientist', 'backend engineer', 'software engineer',
+    'quantitative analyst',
+  ],
+  'research scientist': [
+    'data scientist', 'ml engineer', 'ai engineer', 'machine learning engineer',
+    'backend engineer', 'software engineer',
+  ],
+  'analytics engineer': [
+    'data engineer', 'data analyst', 'business intelligence', 'backend engineer',
+    'data scientist',
+  ],
+  analytics: [
+    'data analyst', 'business intelligence', 'data scientist', 'data engineer',
+    'backend engineer', 'tableau', 'sql',
+  ],
+  'data analyst': [
+    'analytics engineer', 'business intelligence', 'data scientist', 'financial analyst',
+    'sql', 'tableau',
+  ],
+  'business intelligence': [
+    'data analyst', 'analytics engineer', 'data scientist', 'financial analyst',
+    'tableau', 'power bi', 'sql',
+  ],
+  llm: ['ai engineer', 'ml engineer', 'machine learning engineer', 'backend engineer', 'software engineer'],
+  nlp: ['ml engineer', 'ai engineer', 'data scientist', 'machine learning engineer', 'backend engineer'],
+  sql: ['data analyst', 'data engineer', 'analytics engineer', 'backend engineer', 'business intelligence'],
 
-  // Security
-  security: ['cybersecurity', 'information security', 'infosec', 'penetration testing', 'appsec', 'network security', 'soc', 'compliance', 'grc', 'devsecops'],
-  cybersecurity: ['security', 'information security', 'infosec', 'penetration testing', 'appsec', 'network security', 'soc'],
+  // ── mobile cluster ────────────────────────────────────────────────────────
+  // d2: frontend, fullstack, backend  |  d3: platform
+  ios: [
+    'android', 'mobile engineer', 'mobile developer', 'react native', 'flutter',
+    'frontend engineer', 'frontend developer', 'software engineer', 'fullstack engineer',
+  ],
+  android: [
+    'ios', 'mobile engineer', 'mobile developer', 'react native', 'flutter',
+    'frontend engineer', 'frontend developer', 'software engineer', 'fullstack engineer',
+    'java developer',
+  ],
+  'mobile engineer': [
+    'ios engineer', 'android engineer', 'mobile developer', 'react native', 'flutter',
+    'frontend engineer', 'fullstack engineer', 'software engineer',
+  ],
+  'mobile developer': [
+    'ios developer', 'android developer', 'react native developer', 'flutter developer',
+    'frontend developer', 'fullstack developer', 'software developer',
+  ],
+  'react native': [
+    'ios', 'android', 'mobile engineer', 'flutter', 'frontend engineer',
+    'javascript developer', 'fullstack engineer',
+  ],
+  flutter: [
+    'ios', 'android', 'mobile engineer', 'react native', 'frontend engineer',
+    'fullstack engineer',
+  ],
+  swift: ['ios', 'mobile engineer', 'ios developer', 'frontend engineer'],
+  kotlin: ['android', 'mobile engineer', 'android developer', 'java developer', 'fullstack engineer'],
+
+  // ── frontend cluster ──────────────────────────────────────────────────────
+  // d1: design_systems, ui_visual, fullstack  |  d2: ux_design, mobile  |  d3: backend, brand_creative, technical_sales
+  frontend: [
+    // d1 → design_systems
+    'design systems', 'design engineer', 'ux engineer',
+    // d1 → ui_visual
+    'ui designer', 'visual designer', 'web designer',
+    // d1 → fullstack
+    'fullstack engineer', 'fullstack developer', 'full stack engineer',
+    // d2 → ux_design
+    'ux designer', 'product designer',
+    // d2 → mobile
+    'mobile engineer', 'ios developer', 'android developer', 'react native',
+  ],
+  'front end': [
+    'design systems', 'design engineer', 'ui designer', 'visual designer',
+    'fullstack engineer', 'full stack engineer', 'ux designer', 'mobile engineer',
+  ],
+  'frontend engineer': [
+    'fullstack engineer', 'software engineer', 'ui engineer', 'design systems',
+    'design engineer', 'mobile engineer', 'web developer', 'react developer',
+    'ux designer', 'ui designer',
+  ],
+  'frontend developer': [
+    'fullstack developer', 'software developer', 'web developer',
+    'javascript developer', 'react developer', 'ui engineer', 'design engineer',
+    'mobile developer',
+  ],
+  'web developer': [
+    'frontend engineer', 'fullstack engineer', 'javascript developer', 'react developer',
+    'software engineer', 'ui engineer', 'design engineer',
+  ],
+  'ui engineer': [
+    'frontend engineer', 'design engineer', 'design systems', 'ux engineer',
+    'web developer', 'fullstack engineer',
+  ],
+  react: [
+    'javascript', 'typescript', 'frontend engineer', 'frontend developer',
+    'fullstack engineer', 'next js', 'web developer', 'ui engineer',
+    'design systems', 'mobile engineer',
+  ],
+  'react developer': [
+    'frontend engineer', 'frontend developer', 'javascript developer',
+    'fullstack engineer', 'software engineer', 'web developer',
+  ],
+  javascript: [
+    'typescript', 'react', 'frontend engineer', 'fullstack engineer',
+    'node', 'web developer', 'backend engineer', 'mobile engineer',
+  ],
+  'javascript developer': [
+    'frontend developer', 'react developer', 'typescript developer',
+    'fullstack developer', 'software developer', 'web developer',
+    'node developer', 'mobile developer',
+  ],
+  typescript: [
+    'javascript', 'react', 'frontend engineer', 'fullstack engineer',
+    'backend engineer', 'node', 'web developer',
+  ],
+  'typescript developer': [
+    'javascript developer', 'react developer', 'frontend developer',
+    'fullstack developer', 'backend developer', 'software developer',
+  ],
+  vue: ['react', 'angular', 'javascript', 'frontend engineer', 'fullstack engineer', 'web developer'],
+  angular: ['react', 'vue', 'javascript', 'typescript', 'frontend engineer', 'fullstack engineer'],
+  css: ['frontend engineer', 'web developer', 'ui engineer', 'design engineer', 'design systems', 'fullstack engineer'],
+  html: ['frontend engineer', 'web developer', 'ui engineer', 'fullstack engineer'],
+  'next js': ['react', 'javascript', 'typescript', 'frontend engineer', 'fullstack engineer', 'web developer'],
+  svelte: ['react', 'vue', 'javascript', 'frontend engineer', 'fullstack engineer'],
+  'creative technologist': ['frontend engineer', 'design engineer', 'ui engineer', 'motion designer'],
+  figma: [
+    // Figma in a job means design or frontend
+    'ux designer', 'ui designer', 'product designer', 'design systems',
+    'frontend engineer', 'design engineer',
+  ],
+
+  // ── fullstack cluster ─────────────────────────────────────────────────────
+  // d1: frontend, backend  |  d2: design_systems, mobile, platform  |  d3: data_ml, technical_sales
+  fullstack: [
+    'frontend engineer', 'backend engineer', 'software engineer',
+    'design systems', 'design engineer', 'mobile engineer',
+    'platform engineer', 'devops', 'data engineer', 'solutions engineer',
+  ],
+  'full stack': [
+    'frontend engineer', 'backend engineer', 'software engineer',
+    'design systems', 'mobile engineer', 'platform engineer', 'data engineer',
+  ],
+  'fullstack engineer': ['frontend engineer', 'backend engineer', 'software engineer', 'mobile engineer', 'platform engineer'],
+  'fullstack developer': ['frontend developer', 'backend developer', 'software developer', 'mobile developer'],
+
+  // ── backend cluster ───────────────────────────────────────────────────────
+  // d1: fullstack  |  d2: platform, data_ml, mobile  |  d3: frontend, design_systems, technical_sales
+  'software engineer': [
+    // d1
+    'fullstack engineer', 'fullstack developer', 'full stack engineer',
+    // d2
+    'platform engineer', 'devops', 'infrastructure engineer', 'cloud engineer',
+    'data engineer', 'ml engineer', 'ai engineer', 'data scientist',
+    'mobile engineer', 'ios developer', 'android developer',
+    // d3
+    'frontend engineer', 'web developer', 'design systems',
+    'solutions engineer', 'sales engineer',
+  ],
+  'software developer': [
+    'fullstack developer', 'frontend developer', 'backend developer',
+    'platform engineer', 'data engineer', 'ml engineer', 'mobile developer',
+  ],
+  backend: [
+    'fullstack engineer', 'software engineer', 'platform engineer',
+    'data engineer', 'mobile engineer', 'frontend engineer',
+    'solutions engineer',
+  ],
+  'back end': [
+    'fullstack engineer', 'software engineer', 'platform engineer',
+    'data engineer', 'mobile engineer',
+  ],
+  'backend engineer': [
+    'software engineer', 'fullstack engineer', 'platform engineer',
+    'data engineer', 'ml engineer', 'mobile engineer', 'frontend engineer',
+    'solutions engineer',
+  ],
+  'backend developer': [
+    'software developer', 'fullstack developer', 'frontend developer',
+    'platform engineer', 'data engineer', 'mobile developer',
+  ],
+  'api engineer': ['backend engineer', 'software engineer', 'fullstack engineer', 'platform engineer'],
+  'systems engineer': [
+    'backend engineer', 'software engineer', 'platform engineer',
+    'infrastructure engineer', 'network engineer', 'fullstack engineer',
+  ],
+  'security engineer': [
+    'backend engineer', 'platform engineer', 'software engineer',
+    'devops', 'infrastructure engineer',
+  ],
+  'network engineer': [
+    'infrastructure engineer', 'platform engineer', 'devops', 'systems engineer',
+    'backend engineer',
+  ],
+  engineer: [
+    'software engineer', 'backend engineer', 'frontend engineer', 'fullstack engineer',
+    'platform engineer', 'data engineer', 'mobile engineer', 'systems engineer',
+    'devops', 'solutions engineer',
+  ],
+  developer: [
+    'software developer', 'backend developer', 'frontend developer', 'fullstack developer',
+    'mobile developer', 'data engineer',
+  ],
+  python: [
+    'backend engineer', 'software engineer', 'fullstack engineer',
+    'data scientist', 'ml engineer', 'data engineer',
+    'platform engineer',
+  ],
+  'python developer': [
+    'software developer', 'backend developer', 'fullstack developer',
+    'data engineer', 'data scientist', 'ml engineer',
+  ],
+  java: [
+    'backend engineer', 'software engineer', 'fullstack engineer',
+    'android developer', 'systems engineer',
+  ],
+  'java developer': [
+    'software developer', 'backend developer', 'fullstack developer',
+    'android developer', 'systems engineer',
+  ],
+  golang: ['backend engineer', 'software engineer', 'platform engineer', 'systems engineer', 'fullstack engineer'],
+  'go developer': ['backend developer', 'software developer', 'platform engineer', 'systems engineer'],
+  rust: ['backend engineer', 'software engineer', 'systems engineer', 'platform engineer'],
+  ruby: ['backend engineer', 'software engineer', 'fullstack engineer'],
+  'ruby developer': ['backend developer', 'software developer', 'fullstack developer'],
+  node: ['backend engineer', 'javascript developer', 'fullstack engineer', 'software engineer'],
+  django: ['backend engineer', 'python developer', 'software engineer', 'fullstack engineer'],
+  rails: ['backend engineer', 'ruby developer', 'software engineer', 'fullstack engineer'],
+  graphql: ['backend engineer', 'fullstack engineer', 'software engineer', 'frontend engineer'],
+  microservices: ['backend engineer', 'software engineer', 'platform engineer', 'fullstack engineer'],
+  'solutions architect': ['backend engineer', 'software engineer', 'platform engineer', 'fullstack engineer'],
+
+  // ── content_writing cluster ───────────────────────────────────────────────
+  // d2: design_content, marketing  |  d3: brand_creative, ux_design, product_mgmt
+  'content writer': [
+    // d2
+    'copywriter', 'technical writer', 'ux writer', 'content designer',
+    'marketing manager', 'content marketer', 'digital marketer',
+    // d3
+    'creative director', 'art director', 'ux designer', 'product manager',
+  ],
+  copywriter: [
+    'content writer', 'technical writer', 'ux writer', 'content designer',
+    'marketing manager', 'brand manager', 'creative director',
+  ],
+  'technical writer': [
+    'content writer', 'ux writer', 'content designer', 'developer relations',
+    'documentation', 'marketing manager',
+  ],
+  editor: [
+    'content writer', 'copywriter', 'journalist', 'communications manager',
+    'content manager', 'marketing manager',
+  ],
+  journalist: [
+    'reporter', 'editor', 'content writer', 'copywriter', 'communications manager',
+  ],
+  'communications manager': [
+    'marketing manager', 'content writer', 'public relations', 'brand manager',
+    'copywriter',
+  ],
+  'communications director': [
+    'marketing director', 'content writer', 'public relations', 'brand manager',
+  ],
+  'public relations': [
+    'communications manager', 'brand manager', 'marketing manager', 'content writer',
+  ],
+  pr: [
+    'public relations', 'communications manager', 'marketing manager', 'brand manager',
+  ],
+
+  // ── marketing cluster ─────────────────────────────────────────────────────
+  // d2: brand_creative, content_writing, ui_visual  |  d3: ux_design, design_content, product_mgmt, technical_sales, sales
+  marketing: [
+    // d2 → brand_creative
+    'creative director', 'art director', 'motion designer', 'brand designer',
+    // d2 → content_writing
+    'content writer', 'copywriter', 'communications manager',
+    // d2 → ui_visual
+    'ui designer', 'visual designer', 'graphic designer',
+    // d3 → product_mgmt
+    'product manager',
+    // d3 → technical_sales/sales
+    'account manager', 'customer success manager', 'account executive',
+  ],
+  'marketing manager': [
+    'brand manager', 'content marketer', 'demand generation', 'growth marketer',
+    'digital marketer', 'social media manager', 'creative director', 'content writer',
+    'product marketer',
+  ],
+  'growth marketer': [
+    'demand generation', 'marketing manager', 'digital marketer', 'product marketer',
+    'seo specialist', 'content marketer',
+  ],
+  growth: [
+    'growth marketer', 'demand generation', 'marketing manager', 'product marketer',
+    'digital marketer', 'account executive', 'business development',
+  ],
+  'demand generation': [
+    'marketing manager', 'growth marketer', 'digital marketer', 'seo specialist',
+    'email marketer', 'content marketer',
+  ],
+  seo: [
+    'seo specialist', 'digital marketer', 'content marketer', 'growth marketer',
+    'marketing manager', 'content writer',
+  ],
+  'digital marketing': [
+    'marketing manager', 'seo specialist', 'demand generation', 'growth marketer',
+    'social media manager', 'content marketer',
+  ],
+  'social media': [
+    'social media manager', 'marketing manager', 'content marketer',
+    'brand manager', 'digital marketer',
+  ],
+  'brand manager': [
+    'marketing manager', 'brand strategist', 'creative director',
+    'art director', 'content marketer',
+  ],
+  'content marketer': [
+    'content writer', 'marketing manager', 'seo specialist',
+    'copywriter', 'growth marketer',
+  ],
+  'product marketer': [
+    'marketing manager', 'growth marketer', 'product manager',
+    'demand generation', 'content marketer',
+  ],
+  'email marketer': [
+    'marketing manager', 'demand generation', 'content marketer',
+    'growth marketer', 'digital marketer',
+  ],
+
+  // ── product_mgmt cluster ──────────────────────────────────────────────────
+  // d3: ux_design, design_content, marketing, content_writing, technical_sales
+  'product manager': [
+    'program manager', 'product lead', 'product owner', 'group product manager',
+    'technical product manager',
+    // d3
+    'ux designer', 'product designer', 'content designer', 'ux writer',
+    'marketing manager', 'customer success manager', 'account manager',
+  ],
+  'program manager': [
+    'product manager', 'project manager', 'technical program manager',
+    'operations manager', 'product owner',
+  ],
+  'product management': [
+    'product manager', 'program manager', 'product lead', 'product owner',
+    'technical product manager',
+  ],
+  'product owner': [
+    'product manager', 'program manager', 'scrum master', 'project manager',
+  ],
+  'head of product': [
+    'vp of product', 'product manager', 'program manager', 'chief product',
+  ],
+  'project manager': [
+    'program manager', 'product manager', 'operations manager', 'scrum master',
+    'product owner',
+  ],
+
+  // ── accounting cluster ────────────────────────────────────────────────────
+  // d2: finance  |  d3: admin
+  accounting: [
+    // d2 → finance
+    'financial analyst', 'financial planner', 'investment analyst', 'portfolio manager',
+    'treasury analyst', 'risk analyst', 'quant analyst', 'finance manager',
+    // d3 → admin
+    'executive assistant', 'office manager', 'operations coordinator',
+  ],
+  accountant: [
+    'controller', 'bookkeeper', 'auditor', 'tax accountant', 'financial analyst',
+    'accounts payable', 'accounts receivable', 'payroll specialist',
+    'investment analyst',
+  ],
+  bookkeeper: [
+    'accountant', 'controller', 'accounts payable', 'accounts receivable',
+    'payroll specialist', 'financial analyst',
+  ],
+  controller: [
+    'accountant', 'auditor', 'financial analyst', 'bookkeeper',
+    'finance manager', 'cfo',
+  ],
+  auditor: [
+    'accountant', 'controller', 'tax specialist', 'compliance officer',
+    'financial analyst', 'risk analyst',
+  ],
+  'accounts payable': [
+    'accounts receivable', 'accountant', 'bookkeeper', 'controller',
+    'payroll specialist', 'financial analyst',
+  ],
+  'accounts receivable': [
+    'accounts payable', 'accountant', 'bookkeeper', 'controller',
+    'billing specialist', 'financial analyst',
+  ],
+  tax: [
+    'accountant', 'auditor', 'tax specialist', 'tax manager',
+    'financial analyst', 'controller', 'cpa',
+  ],
+  payroll: [
+    'hr specialist', 'accountant', 'bookkeeper', 'controller',
+    'benefits administrator', 'people operations',
+  ],
+
+  // ── finance cluster ───────────────────────────────────────────────────────
+  // d2: accounting  |  d3: data_ml
+  finance: [
+    // d2 → accounting
+    'accountant', 'bookkeeper', 'controller', 'auditor', 'tax specialist',
+    'payroll specialist', 'accounts payable', 'accounts receivable',
+    // d3 → data_ml
+    'data scientist', 'quantitative analyst', 'quant', 'data analyst',
+  ],
+  'financial analyst': [
+    'investment analyst', 'portfolio manager', 'quant analyst', 'risk analyst',
+    'treasury analyst', 'accountant', 'data analyst', 'controller',
+  ],
+  'financial planner': [
+    'financial advisor', 'financial analyst', 'investment analyst',
+    'wealth manager', 'portfolio manager',
+  ],
+  'financial advisor': [
+    'financial planner', 'wealth manager', 'investment analyst',
+    'financial analyst', 'portfolio manager',
+  ],
+  investing: [
+    'investment analyst', 'portfolio manager', 'equity analyst',
+    'financial analyst', 'risk analyst', 'quant analyst', 'fund manager',
+    'accountant',
+  ],
+  investment: [
+    'investment analyst', 'portfolio manager', 'equity analyst',
+    'financial analyst', 'quant analyst', 'accountant',
+  ],
+  'investment analyst': [
+    'portfolio manager', 'equity analyst', 'quant analyst', 'risk analyst',
+    'financial analyst', 'data analyst',
+  ],
+  'investment banking': [
+    'financial analyst', 'investment analyst', 'portfolio manager',
+    'equity analyst', 'quant analyst', 'controller',
+  ],
+  'portfolio manager': [
+    'investment analyst', 'financial analyst', 'risk analyst',
+    'fund manager', 'equity analyst', 'quant analyst',
+  ],
+  'risk analyst': [
+    'financial analyst', 'quant analyst', 'actuary', 'data analyst',
+    'compliance officer', 'credit analyst',
+  ],
+  'credit analyst': [
+    'financial analyst', 'risk analyst', 'investment analyst', 'accountant',
+  ],
+  'treasury analyst': [
+    'financial analyst', 'controller', 'accountant', 'risk analyst',
+    'finance manager',
+  ],
+  treasury: [
+    'financial analyst', 'controller', 'accountant', 'risk analyst',
+    'finance manager',
+  ],
+  quant: [
+    'quantitative analyst', 'data scientist', 'financial analyst',
+    'risk analyst', 'ml engineer', 'data analyst',
+  ],
+  actuary: [
+    'risk analyst', 'financial analyst', 'quant analyst', 'data scientist',
+  ],
+  banking: [
+    'financial analyst', 'investment analyst', 'portfolio manager',
+    'credit analyst', 'accountant', 'controller',
+  ],
+  'equity analyst': [
+    'investment analyst', 'financial analyst', 'portfolio manager',
+    'quant analyst', 'risk analyst',
+  ],
+
+  // ── technical_sales cluster ───────────────────────────────────────────────
+  // d2: sales  |  d3: marketing, backend, frontend, product_mgmt, fullstack
+  'customer success': [
+    // d2 → sales
+    'account executive', 'bdr', 'sdr', 'business development representative',
+    'sales manager',
+    // d3 → marketing
+    'marketing manager', 'demand generation',
+    // d3 → backend/fullstack
+    'software engineer', 'backend engineer', 'fullstack engineer',
+    // d3 → product
+    'product manager',
+  ],
+  'customer success manager': [
+    'account manager', 'solutions engineer', 'account executive', 'sales manager',
+    'implementation specialist', 'software engineer',
+  ],
+  csm: [
+    'customer success manager', 'account manager', 'account executive',
+    'solutions engineer', 'sales manager',
+  ],
+  'account manager': [
+    'customer success manager', 'account executive', 'solutions engineer',
+    'sales representative', 'business development manager',
+  ],
+  'solutions engineer': [
+    'sales engineer', 'customer success engineer', 'implementation engineer',
+    'technical account manager', 'software engineer', 'backend engineer',
+    'account executive',
+  ],
+  'sales engineer': [
+    'solutions engineer', 'customer success engineer', 'technical sales',
+    'software engineer', 'account executive', 'backend engineer',
+  ],
+  'implementation engineer': [
+    'solutions engineer', 'customer success manager', 'account manager',
+    'technical consultant', 'software engineer',
+  ],
+  'client success': [
+    'customer success manager', 'account manager', 'account executive',
+    'solutions engineer',
+  ],
+  'customer support': [
+    'customer success', 'support engineer', 'technical support', 'help desk',
+    'account manager',
+  ],
+
+  // ── sales cluster ─────────────────────────────────────────────────────────
+  // d2: technical_sales  |  d3: marketing, product_mgmt
+  sales: [
+    // d2 → technical_sales
+    'solutions engineer', 'sales engineer', 'customer success manager',
+    'account manager', 'implementation engineer', 'client success',
+    // d3 → marketing
+    'marketing manager', 'growth marketer', 'demand generation',
+    // d3 → product_mgmt
+    'product manager',
+  ],
+  'account executive': [
+    'sales representative', 'business development', 'sales manager',
+    'account manager', 'customer success manager', 'bdr', 'sdr',
+  ],
+  'business development': [
+    'account executive', 'sales manager', 'partnerships manager', 'bdr', 'sdr',
+    'growth marketer', 'marketing manager',
+  ],
+  bdr: ['sdr', 'account executive', 'business development', 'sales representative'],
+  sdr: ['bdr', 'account executive', 'business development', 'sales representative'],
+  'enterprise sales': [
+    'account executive', 'sales manager', 'sales director',
+    'solutions engineer', 'customer success manager',
+  ],
+  'inside sales': [
+    'account executive', 'bdr', 'sdr', 'sales representative',
+    'customer success manager',
+  ],
+
+  // ── legal cluster ─────────────────────────────────────────────────────────
+  // d3: admin
+  legal: [
+    'attorney', 'paralegal', 'compliance officer', 'legal analyst',
+    'legal assistant', 'counsel',
+    // d3 → admin
+    'executive assistant', 'administrative assistant', 'office manager',
+    'operations coordinator',
+  ],
+  paralegal: [
+    // legal cluster peers
+    'legal assistant', 'legal coordinator', 'legal analyst',
+    'attorney', 'compliance officer',
+    // d3 → admin
+    'executive assistant', 'administrative assistant', 'office coordinator',
+    'operations coordinator',
+  ],
+  'legal assistant': [
+    'paralegal', 'legal coordinator', 'compliance officer',
+    'executive assistant', 'administrative assistant',
+  ],
+  attorney: [
+    'counsel', 'paralegal', 'legal analyst', 'compliance officer',
+    'legal manager', 'legal assistant',
+  ],
+  counsel: [
+    'attorney', 'legal analyst', 'compliance officer', 'paralegal',
+  ],
+  'compliance officer': [
+    'legal analyst', 'risk analyst', 'auditor', 'attorney', 'paralegal',
+    'regulatory specialist',
+  ],
+
+  // ── admin cluster ─────────────────────────────────────────────────────────
+  // d3: legal, accounting
+  'executive assistant': [
+    'administrative assistant', 'office manager', 'operations coordinator',
+    'project coordinator',
+    // d3 → legal
+    'legal assistant', 'paralegal',
+    // d3 → accounting
+    'accountant', 'bookkeeper',
+  ],
+  'administrative assistant': [
+    'executive assistant', 'office coordinator', 'office manager',
+    'operations coordinator', 'legal assistant',
+  ],
+  'office manager': [
+    'administrative assistant', 'executive assistant', 'operations coordinator',
+    'office coordinator', 'paralegal',
+  ],
+  'operations coordinator': [
+    'office manager', 'administrative assistant', 'project coordinator',
+    'program coordinator', 'executive assistant',
+  ],
+
+  // ── cross-cutting / hr ────────────────────────────────────────────────────
+  // HR isn't in the 20 clusters but appears frequently — mapped to nearest adjacent roles
+  'human resources': [
+    'hr specialist', 'people operations', 'talent acquisition', 'recruiter',
+    'hrbp', 'executive assistant', 'administrative assistant', 'payroll specialist',
+  ],
+  hr: [
+    'human resources', 'people operations', 'talent acquisition', 'recruiter',
+    'hrbp', 'executive assistant', 'payroll specialist',
+  ],
+  recruiter: [
+    'talent acquisition', 'sourcing specialist', 'hr specialist',
+    'people operations', 'technical recruiter',
+  ],
+  recruiting: [
+    'talent acquisition', 'recruiter', 'sourcing', 'hr specialist',
+    'people operations', 'technical recruiting',
+  ],
+  'people operations': [
+    'hr specialist', 'recruiter', 'talent acquisition', 'hrbp',
+    'payroll specialist', 'executive assistant',
+  ],
+
+  // ── security (maps into platform/backend) ─────────────────────────────────
+  security: [
+    'cybersecurity', 'information security', 'infosec', 'penetration testing',
+    'appsec', 'network security', 'compliance officer',
+    // adjacent to platform and backend
+    'devops', 'platform engineer', 'backend engineer', 'software engineer',
+  ],
+  cybersecurity: [
+    'information security', 'infosec', 'penetration testing', 'appsec',
+    'network security', 'compliance officer', 'platform engineer', 'backend engineer',
+  ],
+  'information security': [
+    'cybersecurity', 'security engineer', 'compliance officer',
+    'platform engineer', 'backend engineer',
+  ],
 }
 
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'])
@@ -283,6 +1090,42 @@ const isRealLocation = (loc: string): boolean => {
   if (t.length < 2) return false
   if (JUNK_LOCATION_RE.test(t)) return false
   return /^[A-Z]/.test(t) // proper noun — real city names are capitalized
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight client-side cluster classifier — mirrors server roleOntology IDs
+// so affinity scores align with the matching algorithm's 20 clusters.
+// Ordered most-specific first to avoid mis-classifications.
+// ---------------------------------------------------------------------------
+const CLUSTER_PATTERNS: Array<{ id: string; re: RegExp }> = [
+  { id: 'design_systems',  re: /\b(design[\s-]?systems?|ux[\s-]?engineer|design[\s-]?engineer|component[\s-]?library|design[\s-]?token)\b/i },
+  { id: 'design_content',  re: /\b(content[\s-]?design(?:er)?|ux[\s-]?writ(?:er|ing)|microcopy)\b/i },
+  { id: 'brand_creative',  re: /\b(creative[\s-]?director|art[\s-]?director|motion[\s-]?design(?:er)?|animator|video[\s-]?edit(?:or|ing))\b/i },
+  { id: 'ux_design',       re: /\b(ux|user[\s-]?experience|product[\s-]?design(?:er)?|interaction[\s-]?design|service[\s-]?design|usability)\b/i },
+  { id: 'ui_visual',       re: /\b(ui[\s-]?design(?:er)?|visual[\s-]?design(?:er)?|graphic[\s-]?design(?:er)?|web[\s-]?design(?:er)?|digital[\s-]?design(?:er)?|brand[\s-]?design(?:er)?|illustrat(?:or|ion))\b/i },
+  { id: 'platform',        re: /\b(devops|site[\s-]?reliabil|platform[\s-]?engineer|infrastructure[\s-]?engineer|cloud[\s-]?engineer|\bsre\b|devsecops|mlops|terraform|kubernetes)\b/i },
+  { id: 'data_ml',         re: /\b(data[\s-]?sci(?:entist|ence)|machine[\s-]?learn|ml[\s-]?engineer|ai[\s-]?engineer|research[\s-]?sci(?:entist)?|data[\s-]?engineer|analytics[\s-]?engineer|\bnlp\b|\bllm\b)\b/i },
+  { id: 'mobile',          re: /\b(ios|android|mobile[\s-]?(?:engineer|developer|app)|react[\s-]?native|flutter|\bswift(?:ui)?\b|\bkotlin\b)\b/i },
+  { id: 'frontend',        re: /\b(front[\s-]?end|frontend|ui[\s-]?engineer|react[\s-]?developer|javascript[\s-]?developer|typescript[\s-]?developer|web[\s-]?developer)\b/i },
+  { id: 'fullstack',       re: /\b(full[\s-]?stack|fullstack)\b/i },
+  { id: 'backend',         re: /\b(back[\s-]?end|backend|software[\s-]?engineer|software[\s-]?developer|api[\s-]?engineer|systems[\s-]?engineer|python[\s-]?developer|java[\s-]?developer|ruby[\s-]?developer|go[\s-]?developer|node[\s-]?developer)\b/i },
+  { id: 'content_writing', re: /\b(content[\s-]?writ(?:er|ing)|copywriter|copywriting|technical[\s-]?writ(?:er|ing)|journalist|communications?[\s-]+(?:manager|director|specialist))\b/i },
+  { id: 'marketing',       re: /\b(marketing[\s-]+(?:manager|director|specialist|analyst|strategist)|brand[\s-]?manager|growth[\s-]+(?:market|hacker)|demand[\s-]?gen|seo[\s-]?specialist|social[\s-]?media[\s-]+(?:manager|specialist)|product[\s-]?market(?:er|ing))\b/i },
+  { id: 'product_mgmt',    re: /\b(product[\s-]?manager|product[\s-]?management|program[\s-]?manager|product[\s-]?owner|product[\s-]?lead|head[\s-]?of[\s-]?product|vp[\s-]+(?:of[\s-]+)?product)\b/i },
+  { id: 'accounting',      re: /\b(accountant|bookkeeper|controller|auditor|accounts?[\s-]+(?:payable|receivable)|payroll[\s-]?specialist|tax[\s-]+(?:accountant|specialist|analyst))\b/i },
+  { id: 'finance',         re: /\b(financial?[\s-]+(?:analyst|advisor|planner|director)|investment[\s-]+(?:analyst|banker)|portfolio[\s-]?manager|risk[\s-]?analyst|treasury|actuary|quant(?:itative)?[\s-]+analyst)\b/i },
+  { id: 'technical_sales', re: /\b(solutions?[\s-]?engineer|sales[\s-]?engineer|customer[\s-]?success|account[\s-]?manager|client[\s-]?success|implementation[\s-]+(?:engineer|specialist)|technical[\s-]?account)\b/i },
+  { id: 'sales',           re: /\b(account[\s-]?executive|business[\s-]?development|\bbdr\b|\bsdr\b|enterprise[\s-]?sales|inside[\s-]?sales|sales[\s-]+(?:manager|director|representative|rep))\b/i },
+  { id: 'legal',           re: /\b(attorney|counsel|paralegal|legal[\s-]+(?:assistant|analyst|coordinator|manager|counsel)|compliance[\s-]?officer|general[\s-]?counsel)\b/i },
+  { id: 'admin',           re: /\b(executive[\s-]?assistant|administrative[\s-]?assistant|office[\s-]?manager|office[\s-]?coordinator|operations?[\s-]?coordinator)\b/i },
+]
+
+function _detectCluster(title: string): string | null {
+  if (!title) return null
+  for (const { id, re } of CLUSTER_PATTERNS) {
+    if (re.test(title)) return id
+  }
+  return null
 }
 
 const LOW_LEVEL_JOB_RE = /\b(junior|jr|entry level|intern|internship|apprentice|apprenticeship|trainee|new grad|new graduate|early career|campus|student|co op|fellowship)\b/
@@ -359,6 +1202,25 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       return {}
     }
   })
+  const [clusterAffinity, setClusterAffinity] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('wanderworkClusterAffinity')
+      if (!saved) return {}
+      const parsed = JSON.parse(saved)
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch { return {} }
+  })
+
+  const _nudgeAffinity = (title: string, delta: number) => {
+    const clusterId = _detectCluster(title)
+    if (!clusterId) return
+    setClusterAffinity(prev => {
+      const next = { ...prev, [clusterId]: Math.max(-10, Math.min(10, (prev[clusterId] ?? 0) + delta)) }
+      localStorage.setItem('wanderworkClusterAffinity', JSON.stringify(next))
+      return next
+    })
+  }
+
   const [showInterestedOnly, setShowInterestedOnly] = useState(false)
   const [showMatchedOnly, setShowMatchedOnly] = useState(isAuthenticated)
   const [showFilters, setShowFilters] = useState(false)
@@ -410,6 +1272,8 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     const nextJobId = shouldAdvanceSelection
       ? visibleJobs.find((job: any) => job.id !== jobId && !discardedJobs.has(job.id))?.id ?? null
       : null
+    const discardedJob = visibleJobs.find((j: any) => j.id === jobId)
+    if (discardedJob) _nudgeAffinity(discardedJob.title, -1)
     setFadingJobId(jobId)
     setTimeout(() => {
       setDiscardedJobs(prev => {
@@ -425,6 +1289,8 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   }
 
   const handleRestoreJob = (jobId: number) => {
+    const restoredJob = visibleJobsList.find((j: any) => j.id === jobId)
+    if (restoredJob) _nudgeAffinity(restoredJob.title, 1)
     setDiscardedJobs(prev => {
       const newSet = new Set(prev)
       newSet.delete(jobId)
@@ -607,99 +1473,121 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     const searchTerms = searchQuery.trim() ? _normSearch(searchQuery).split(' ').filter(Boolean) : []
     const exactIds = new Set<number>()
 
-    const jobs = visibleJobsList
-      .filter(jobHasUsableUrl)
-    .filter((job: any) => !discardedJobs.has(job.id))
-    .filter((job: any) => !showMatchedOnly || matchedSet.has(job.id))
-    .filter((job: any) => !showInterestedOnly || isJobInterested(job))
-    .filter((job: any) => !showNewOnly || isNewJob(job))
-    .filter((job: any) => {
-      const text = [job.title, job.company, job.description].filter(Boolean).join(' ')
-      if (!text) return true
-      const hasCyrillic = /[\u0400-\u04FF]/.test(text)
-      const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(text)
-      return !(hasCyrillic || hasArabic)
-    })
-    .filter((job: any) => {
-      if (dateRange === 'all') return true
-      if (!job.postedAt) return true
-      const posted = new Date(job.postedAt)
-      const now = new Date()
-      const diffDays = (now.getTime() - posted.getTime()) / (1000 * 60 * 60 * 24)
-      const sameMonth = posted.getMonth() === now.getMonth() && posted.getFullYear() === now.getFullYear()
-      const sameYear = posted.getFullYear() === now.getFullYear()
+    // Hoist per-filter constants so they're computed once, not per-job
+    const nowMs = Date.now()
+    const trimmedLocation = locationQuery.trim().toLowerCase()
+    const normalizedKeywords = keywords.map(k => k.toLowerCase())
 
-      switch (dateRange) {
-        case 'today':
-          return diffDays < 1
-        case 'yesterday':
-          return diffDays >= 1 && diffDays < 2
-        case 'this_week':
-          return diffDays <= 7
-        case 'two_weeks':
-          return diffDays <= 14
-        case 'this_month':
-          return sameMonth
-        case 'this_year':
-          return sameYear
-        default:
-          return true
+    // Precompute search expansion once (not per-job \u00D7 per-term)
+    type ExpandedEntry = { rt: string; multi: boolean }
+    const expandedSearch: Array<{ entries: ExpandedEntry[] }> = searchTerms.map(term => ({
+      entries: (SEARCH_EXPANSION[term] ?? []).map(phrase => {
+        const rt = _normSearch(phrase)
+        return { rt, multi: rt.includes(' ') }
+      }),
+    }))
+
+    // Single combined filter pass \u2014 replaces 7 chained .filter() calls
+    const jobs = visibleJobsList.filter((job: any) => {
+      if (!jobHasUsableUrl(job)) return false
+      if (discardedJobs.has(job.id)) return false
+      if (showMatchedOnly && !matchedSet.has(job.id)) return false
+      if (showInterestedOnly && !isJobInterested(job)) return false
+      if (showNewOnly && !isNewJob(job)) return false
+
+      // Script filter: drop Cyrillic / Arabic text
+      const rawText = [job.title, job.company, job.description].filter(Boolean).join(' ')
+      if (rawText && (/[\u0400-\u04FF]/.test(rawText) || /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(rawText))) return false
+
+      // Date range (nowMs hoisted)
+      if (dateRange !== 'all' && job.postedAt) {
+        const posted = new Date(job.postedAt)
+        const diffDays = (nowMs - posted.getTime()) / 86400000
+        if (dateRange === 'today'     && diffDays >= 1)  return false
+        if (dateRange === 'yesterday' && (diffDays < 1 || diffDays >= 2)) return false
+        if (dateRange === 'this_week' && diffDays > 7)   return false
+        if (dateRange === 'two_weeks' && diffDays > 14)  return false
+        if (dateRange === 'this_month') {
+          const n = new Date(nowMs)
+          if (posted.getMonth() !== n.getMonth() || posted.getFullYear() !== n.getFullYear()) return false
+        }
+        if (dateRange === 'this_year' && posted.getFullYear() !== new Date(nowMs).getFullYear()) return false
       }
-    })
-    .filter((job: any) => {
-      if (!locationQuery.trim()) return true
-      return (job.location || '').toLowerCase().includes(locationQuery.trim().toLowerCase())
-    })
-    .filter((job: any) => {
-      if (keywords.length === 0) return true
-      const entry = jobSearchTexts.get(job.id)
-      if (!entry) return true
-      return keywords.every((kw) => entry.txt.includes(kw.toLowerCase()))
-    })
-    .filter((job: any) => {
-      if (searchTerms.length === 0) return true
-      const entry = jobSearchTexts.get(job.id)
-      const tokens: Set<string> = entry?.tokens ?? new Set(_normSearch([job.title, job.company, job.description].filter(Boolean).join(' ')).split(' ').filter(Boolean))
-      const txt = entry?.txt ?? ''
 
-      // Exact: every search term appears as a token or prefix
-      const isExact = searchTerms.every(term =>
-        tokens.has(term) || (term.length >= 3 && Array.from(tokens).some(t => t.startsWith(term)))
-      )
-      if (isExact) { exactIds.add(job.id); return true }
+      // Location (trimmedLocation hoisted)
+      if (trimmedLocation && !(job.location || '').toLowerCase().includes(trimmedLocation)) return false
 
-      // Related: any semantically expanded term appears in the job text
-      return searchTerms.some(term => {
-        const expansion = (SEARCH_EXPANSION[term] ?? []).map(_normSearch)
-        return expansion.some(rt => {
-          const parts = rt.split(' ').filter(Boolean)
-          return parts.length === 1 ? tokens.has(rt) : txt.includes(rt)
+      // Keywords (pre-lowercased above)
+      if (normalizedKeywords.length > 0) {
+        const entry = jobSearchTexts.get(job.id)
+        if (entry && !normalizedKeywords.every(kw => entry.txt.includes(kw))) return false
+      }
+
+      // Semantic search
+      if (searchTerms.length > 0) {
+        const entry = jobSearchTexts.get(job.id)
+        const tokens: Set<string> = entry?.tokens ?? new Set(_normSearch([job.title, job.company, job.description].filter(Boolean).join(' ')).split(' ').filter(Boolean))
+        const txt = entry?.txt ?? ''
+
+        // Exact: use for...of on Set to avoid Array.from allocation
+        const isExact = searchTerms.every(term => {
+          if (tokens.has(term)) return true
+          if (term.length < 3) return false
+          for (const t of tokens) { if (t.startsWith(term)) return true }
+          return false
         })
-      })
+        if (isExact) { exactIds.add(job.id); return true }
+
+        // Related: use precomputed expanded entries (no per-job re-normalization)
+        return expandedSearch.some(({ entries }) =>
+          entries.some(({ rt, multi }) => multi ? txt.includes(rt) : tokens.has(rt))
+        )
+      }
+
+      return true
     })
-    .sort((a: any, b: any) => {
-      const qualityScore = (job: any) => (job.has_recruiter ? 2 : 0) + (job.ats_direct ? 1 : 0)
+
+
+    // Precompute sort keys once O(N) — avoids recomputing per comparison O(N log N)
+    const qualityCache = new Map<number, number>()
+    const affinityCache = new Map<number, number>()
+    const titleScoreCache = new Map<number, number>()
+
+    for (const job of jobs) {
+      qualityCache.set(job.id, (job.has_recruiter ? 2 : 0) + (job.ats_direct ? 1 : 0))
+
+      const clusterId = _detectCluster(job.title)
+      if (clusterId) {
+        affinityCache.set(job.id, Math.max(-5, Math.min(5, clusterAffinity[clusterId] ?? 0)))
+      }
 
       if (searchTerms.length > 0) {
-        // Exact matches always before related
-        const aExact = exactIds.has(a.id) ? 1 : 0
-        const bExact = exactIds.has(b.id) ? 1 : 0
-        if (bExact !== aExact) return bExact - aExact
-
-        // Within tier: title match first, then quality, then recency
-        const titleScore = (job: any) => {
-          const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
-          const allInTitle = searchTerms.every(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
-          const anyInTitle = searchTerms.some(t => titleTokens.has(t) || (t.length >= 3 && Array.from(titleTokens).some(tk => tk.startsWith(t))))
-          return allInTitle ? 2 : anyInTitle ? 1 : 0
+        const titleTokens = new Set(_normSearch(job.title || '').split(' ').filter(Boolean))
+        let all = true, any = false
+        for (const t of searchTerms) {
+          let hit = titleTokens.has(t)
+          if (!hit && t.length >= 3) { for (const tk of titleTokens) { if (tk.startsWith(t)) { hit = true; break } } }
+          if (hit) any = true; else all = false
         }
-        const titleDiff = titleScore(b) - titleScore(a)
+        titleScoreCache.set(job.id, all ? 2 : any ? 1 : 0)
+      }
+    }
+
+    jobs.sort((a: any, b: any) => {
+      if (searchTerms.length > 0) {
+        const exactDiff = (exactIds.has(b.id) ? 1 : 0) - (exactIds.has(a.id) ? 1 : 0)
+        if (exactDiff !== 0) return exactDiff
+        const titleDiff = (titleScoreCache.get(b.id) ?? 0) - (titleScoreCache.get(a.id) ?? 0)
         if (titleDiff !== 0) return titleDiff
-        const qDiff = qualityScore(b) - qualityScore(a)
+        const qDiff = (qualityCache.get(b.id) ?? 0) - (qualityCache.get(a.id) ?? 0)
         if (qDiff !== 0) return qDiff
+        const affDiff = (affinityCache.get(b.id) ?? 0) - (affinityCache.get(a.id) ?? 0)
+        if (affDiff !== 0) return affDiff
       } else {
-        const qDiff = qualityScore(b) - qualityScore(a)
+        const qDiff = (qualityCache.get(b.id) ?? 0) - (qualityCache.get(a.id) ?? 0)
         if (qDiff !== 0) return qDiff
+        const affDiff = (affinityCache.get(b.id) ?? 0) - (affinityCache.get(a.id) ?? 0)
+        if (affDiff !== 0) return affDiff
         if (userCountry) {
           const diff = getJobCountryScore(b, userCountry) - getJobCountryScore(a, userCountry)
           if (diff !== 0) return diff
@@ -709,7 +1597,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
 
     return { visibleJobs: jobs, exactSearchCount: searchTerms.length > 0 ? exactIds.size : jobs.length }
-  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry])
+  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Report the top visible job to the parent whenever the list changes
@@ -736,6 +1624,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       localStorage.setItem('wanderworkInterestedJobs', JSON.stringify(next))
       return next
     })
+    _nudgeAffinity(job.title, nextValue ? 1 : -1)
     try {
       const candidateId = data?.Candidates?.[0]?._id
       const jobId = job?.backendId

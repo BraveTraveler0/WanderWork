@@ -143,19 +143,16 @@ function computeRoleScore(distance, bridgeEvidence) {
 }
 
 // Skill score — matches candidate skills against job text + job.skills array
-function computeSkillScore(candidateSkills, job) {
-  if (!candidateSkills.length) return 30  // neutral baseline
+// expandedSkills and jobPrecomp are precomputed outside the scoring loop
+function computeSkillScore(expandedSkills, jobPrecomp) {
+  if (!expandedSkills.length) return 30  // neutral baseline
 
-  const jobText = jobFullText(job)
-  const tokens = tokenSet(jobText)
-  const jobSkillsNorm = normalizeSkills(toArray(job.skills))
-  const expanded = expandSkillsWithAliases(candidateSkills)
+  const { text: jobText, tokens, skillsNorm: jobSkillsNorm } = jobPrecomp
 
   let matched = 0
   let total = 0
-  const matchedList = []
 
-  for (const skill of expanded) {
+  for (const skill of expandedSkills) {
     total++
     const parts = skill.split(' ').filter(Boolean)
     const inText = parts.length > 1 ? containsPhrase(jobText, skill) : tokens.has(skill)
@@ -163,10 +160,8 @@ function computeSkillScore(candidateSkills, job) {
 
     if (inJobSkills) {
       matched += 1.5  // required-skill bonus
-      matchedList.push(skill)
     } else if (inText) {
       matched += 1
-      matchedList.push(skill)
     }
   }
 
@@ -191,8 +186,8 @@ function computeSeniorityScore(candLevel, job) {
 }
 
 // Remote score — generous defaults when data is missing
-function computeRemoteScore(job) {
-  const text = jobFullText(job)
+function computeRemoteScore(jobPrecomp) {
+  const { text } = jobPrecomp
   if (containsPhrase(text, 'remote')) return 85
   if (containsPhrase(text, 'hybrid')) return 55
   if (containsPhrase(text, 'on-site') || containsPhrase(text, 'onsite') || containsPhrase(text, 'in office') || containsPhrase(text, 'in-office')) return 30
@@ -215,19 +210,21 @@ function computeRecencyScore(job) {
 
 // Domain/role alignment score — checks if candidate's target role keywords
 // appear in the job text (title gets extra weight)
-function computeDomainScore(candidateRoles, candidateSkills, job) {
-  const title = norm(job.title || '')
-  const text = jobFullText(job)
+// expandedSkills and jobPrecomp are precomputed outside the scoring loop
+function computeDomainScore(candidateRoles, expandedSkills, jobPrecomp) {
+  const { text, titleNorm } = jobPrecomp
   let score = 0
 
   for (const role of candidateRoles) {
-    if (containsPhrase(title, role)) { score += 30; break }
+    if (containsPhrase(titleNorm, role)) { score += 30; break }
     if (containsPhrase(text, role)) { score += 15; break }
   }
 
   // Cluster-specific skill hits
-  const skillsExpanded = expandSkillsWithAliases(candidateSkills)
-  const domainHits = skillsExpanded.filter(s => s.length >= 3 && containsPhrase(text, s)).length
+  let domainHits = 0
+  for (const s of expandedSkills) {
+    if (s.length >= 3 && containsPhrase(text, s)) domainHits++
+  }
   score += Math.min(30, domainHits * 6)
 
   return Math.min(100, score)
@@ -270,12 +267,10 @@ function buildReasons(params) {
 const DEFAULT_MIN_SCORE = 40
 const ALGORITHM_VERSION = 'structured-v3'
 
-function scoreJob(candidate, job, candSkills, candRoles, candCluster, candSeniorityLevel) {
-  const title = norm(job.title || '')
-  const text = jobFullText(job)
-
-  // Detect job cluster
-  const jobClusterObj = detectCluster(job.title)
+// jobPrecomp = { text, tokens, titleNorm, skillsNorm, cluster }
+// expandedSkills = expandSkillsWithAliases(candSkills) — precomputed per candidate
+function scoreJob(candidate, job, jobPrecomp, candSkills, expandedSkills, candRoles, candCluster, candSeniorityLevel) {
+  const { text, tokens, titleNorm, cluster: jobClusterObj } = jobPrecomp
   const jobClusterId = jobClusterObj?.id ?? null
 
   // Role distance
@@ -311,16 +306,16 @@ function scoreJob(candidate, job, candSkills, candRoles, candCluster, candSenior
     }
   }
 
-  // Score components
+  // Score components — all use precomputed jobPrecomp and expandedSkills
   const roleScore = computeRoleScore(distance, bridgeEvidenceResult)
-  const skillScore = computeSkillScore(candSkills, job)
+  const skillScore = computeSkillScore(expandedSkills, jobPrecomp)
   const seniorityScore = computeSeniorityScore(candSeniorityLevel, job)
-  const remoteScore = computeRemoteScore(job)
+  const remoteScore = computeRemoteScore(jobPrecomp)
   const recencyScore = computeRecencyScore(job)
-  const domainScore = computeDomainScore(candRoles, candSkills, job)
+  const domainScore = computeDomainScore(candRoles, expandedSkills, jobPrecomp)
 
   // Did the candidate's target role appear in the job title?
-  const matchedRoleKeyword = candRoles.find(r => containsPhrase(title, r)) || null
+  const matchedRoleKeyword = candRoles.find(r => containsPhrase(titleNorm, r)) || null
 
   // Weighted formula — weights must sum to 1.0
   const rawScore =
@@ -334,11 +329,9 @@ function scoreJob(candidate, job, candSkills, candRoles, candCluster, candSenior
 
   const finalScore = Math.max(0, Math.min(100, Math.round(rawScore)))
 
-  // Skill match list for display (top skills that appear in job text)
-  const tokens = tokenSet(text)
-  const expanded = expandSkillsWithAliases(candSkills)
+  // Skill match list for display — reuse precomputed tokens and expandedSkills
   const matchedSkills = unique(
-    expanded.filter(s => {
+    expandedSkills.filter(s => {
       const parts = s.split(' ').filter(Boolean)
       return parts.length > 1 ? containsPhrase(text, s) : tokens.has(s)
     })
@@ -380,7 +373,26 @@ function scoreJob(candidate, job, candSkills, candRoles, candCluster, candSenior
 // Pairing engine
 // ---------------------------------------------------------------------------
 
-async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
+// Build the per-job precomputed map used by scoreJob.
+// Called once per jobs array so the same data can be reused across all candidates.
+function buildJobPrecomputedMap(jobs) {
+  const map = new Map()
+  for (const job of jobs) {
+    const text = jobFullText(job)
+    map.set(String(job._id), {
+      text,
+      tokens: tokenSet(text),
+      titleNorm: norm(job.title || ''),
+      skillsNorm: normalizeSkills(toArray(job.skills)),
+      cluster: detectCluster(job.title),
+    })
+  }
+  return map
+}
+
+// jobPrecomputedMap is passed in from the caller so it can be shared across
+// all candidates (computed once in pairAllCandidates, once in pairCandidateJobs).
+async function _pairCandidateWithJobs(candidateId, jobs, jobPrecomputedMap, options = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(candidateId))) {
     throw new Error('Invalid candidate id')
   }
@@ -393,21 +405,21 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
     const err = new Error('Candidate not found'); err.statusCode = 404; throw err
   }
 
-  // Pre-compute candidate attributes once
+  // Pre-compute candidate attributes once (not per job)
   const candSkills = candidateSkillList(candidate)
+  const expandedSkills = expandSkillsWithAliases(candSkills)  // was called 3× per job
   const candRoles = candidateRoleStrings(candidate)
   const candSeniorityLevel = candidateSeniority(candidate)
-
-  // Detect candidate cluster from their target roles
-  const roleText = candRoles.join(' ')
-  const candCluster = detectCluster(roleText) ?? detectCluster(candRoles[0] || '')
+  const candCluster = detectCluster(candRoles.join(' ')) ?? detectCluster(candRoles[0] || '')
 
   const scored = jobs
     .map(job => {
-      const result = scoreJob(candidate, job, candSkills, candRoles, candCluster, candSeniorityLevel)
+      const jobPrecomp = jobPrecomputedMap.get(String(job._id))
+      if (!jobPrecomp) return null
+      const result = scoreJob(candidate, job, jobPrecomp, candSkills, expandedSkills, candRoles, candCluster, candSeniorityLevel)
       return { job, ...result }
     })
-    .filter(item => !item.excluded && item.score >= minScore)
+    .filter(item => item && !item.excluded && item.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
 
@@ -457,19 +469,30 @@ async function _pairCandidateWithJobs(candidateId, jobs, options = {}) {
 
 async function pairCandidateJobs(candidateId, options = {}) {
   const jobs = await getJobsModel().find({}).lean()
-  return _pairCandidateWithJobs(candidateId, jobs, options)
+  const jobPrecomputedMap = buildJobPrecomputedMap(jobs)
+  return _pairCandidateWithJobs(candidateId, jobs, jobPrecomputedMap, options)
 }
+
+const PAIR_ALL_CONCURRENCY = 8  // candidates processed in parallel; safe since pairings are per-candidateId
 
 async function pairAllCandidates(options = {}) {
   const candidates = await Candidates.find({}).select('_id').lean()
   const jobs = await getJobsModel().find({}).lean()
+
+  // Build job precomputed map once — shared across all candidates
+  const jobPrecomputedMap = buildJobPrecomputedMap(jobs)
+
   const results = []
-  for (const candidate of candidates) {
-    try {
-      results.push(await _pairCandidateWithJobs(candidate._id, jobs, options))
-    } catch (err) {
-      results.push({ candidateId: String(candidate._id), error: err.message })
-    }
+  // Process in batches of PAIR_ALL_CONCURRENCY to parallelize I/O without overwhelming the DB
+  for (let i = 0; i < candidates.length; i += PAIR_ALL_CONCURRENCY) {
+    const batch = candidates.slice(i, i + PAIR_ALL_CONCURRENCY)
+    const batchResults = await Promise.all(
+      batch.map(candidate =>
+        _pairCandidateWithJobs(candidate._id, jobs, jobPrecomputedMap, options)
+          .catch(err => ({ candidateId: String(candidate._id), error: err.message }))
+      )
+    )
+    results.push(...batchResults)
   }
   return results
 }
@@ -477,6 +500,7 @@ async function pairAllCandidates(options = {}) {
 module.exports = {
   pairCandidateJobs,
   pairAllCandidates,
+  buildJobPrecomputedMap,
   scoreJob,
   candidateSeniority,
   isLowLevelJob,
