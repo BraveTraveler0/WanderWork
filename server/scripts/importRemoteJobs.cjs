@@ -399,6 +399,63 @@ async function importRemoteJobs() {
   return { totalUpserted, totalUpdated, totalSkipped, totalErrors };
 }
 
+// Remotive-only import — used as fallback when ATS import doesn't reach the threshold
+const REMOTIVE_SOURCES = [
+  { name: 'Remotive (all)',          fetch: () => fetchRemotive() },
+  { name: 'Remotive (software-dev)', fetch: () => fetchRemotive('software-dev') },
+  { name: 'Remotive (design)',       fetch: () => fetchRemotive('design') },
+  { name: 'Remotive (marketing)',    fetch: () => fetchRemotive('marketing') },
+  { name: 'Remotive (finance)',      fetch: () => fetchRemotive('finance-legal') },
+  { name: 'Remotive (mgmt)',         fetch: () => fetchRemotive('management-finance') },
+  { name: 'Remotive (sales)',        fetch: () => fetchRemotive('sales') },
+  { name: 'Remotive (writing)',      fetch: () => fetchRemotive('writing') },
+  { name: 'Remotive (product)',      fetch: () => fetchRemotive('product') },
+  { name: 'Remotive (data)',         fetch: () => fetchRemotive('data') },
+  { name: 'Remotive (hr)',           fetch: () => fetchRemotive('hr') },
+  { name: 'Remotive (devops)',       fetch: () => fetchRemotive('devops-sysadmin') },
+  { name: 'Remotive (qa)',           fetch: () => fetchRemotive('qa') },
+  { name: 'Remotive (other)',        fetch: () => fetchRemotive('all-others') },
+];
+
+async function importRemotiveOnly() {
+  const col = mongoose.connection.collection('jobseeker.jobs');
+  let totalUpserted = 0, totalUpdated = 0, totalSkipped = 0;
+
+  for (const src of REMOTIVE_SOURCES) {
+    console.log(`[Remotive] Fetching ${src.name}...`);
+    let jobs;
+    try {
+      jobs = await src.fetch();
+      console.log(`[Remotive] ${src.name}: ${jobs.length} jobs`);
+    } catch (err) {
+      console.error(`[Remotive] ${src.name} failed:`, err.message);
+      continue;
+    }
+
+    jobs = await resolveCompanyUrls(jobs);
+
+    for (const job of jobs) {
+      try {
+        if (!job.title || !job.url || !job.description_short) { totalSkipped++; continue; }
+        const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
+        const result = await col.updateOne(
+          { url_normalized: urlNormalized },
+          {
+            $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
+            $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
+          },
+          { upsert: true }
+        );
+        if (result.upsertedCount) totalUpserted++;
+        else totalUpdated++;
+      } catch { totalSkipped++; }
+    }
+  }
+
+  console.log(`[Remotive] Fallback complete: new=${totalUpserted} updated=${totalUpdated} skipped=${totalSkipped}`);
+  return { totalUpserted, totalUpdated, totalSkipped };
+}
+
 if (require.main === module) {
   mongoose.connect(process.env.DATABASE_URI)
     .then(() => importRemoteJobs())
@@ -406,4 +463,4 @@ if (require.main === module) {
     .catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { importRemoteJobs };
+module.exports = { importRemoteJobs, importRemotiveOnly };
