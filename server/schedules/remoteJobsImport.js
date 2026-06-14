@@ -5,6 +5,7 @@ const { importRemotiveOnly } = require('../scripts/importRemoteJobs.cjs');
 const { cleanNewJobs } = require('../scripts/cleanJobDescriptions.cjs');
 const { tagRecruiterJobs } = require('../scripts/tagRecruiterJobs.cjs');
 const { purgeJobs } = require('../scripts/purgeJobs.cjs');
+const { pairAllCandidates } = require('../services/jobPairingService');
 
 // If ATS import leaves the DB below this count, Remotive fills the gap
 const REMOTIVE_FALLBACK_THRESHOLD = 1200;
@@ -40,6 +41,13 @@ async function runImport() {
     try { await tagRecruiterJobs(); } catch (e) { console.warn('[Import] Recruiter tag error:', e.message); }
     // Purge zombie/low-quality jobs after every import cycle
     try { await purgeJobs(); } catch (e) { console.warn('[Import] Purge error:', e.message); }
+    // Re-pair all candidates so matches reflect new jobs + latest algorithm
+    try {
+      console.log('[Import] Re-pairing all candidates...');
+      const pairResults = await pairAllCandidates();
+      const paired = pairResults.reduce((s, r) => s + (r.paired || 0), 0);
+      console.log(`[Import] Paired ${paired} jobs across ${pairResults.length} candidates`);
+    } catch (e) { console.warn('[Import] Pairing error:', e.message); }
     // Bust the in-memory job cache so new jobs show within the next request
     try {
       const ctrl = require('../controllers/JobSeeker/jobSeekerController');

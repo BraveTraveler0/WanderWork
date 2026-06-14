@@ -15,6 +15,7 @@ const { initScheduledSync } = require('./airtable-scheduler');
 const { scheduleRecruiterCompanyPairing } = require('./services/recruiterCompanyPairingService');
 const { purgeJunkJobs, backfillCandidateResumeFields } = require('./controllers/JobSeeker/jobSeekerController');
 const { purgeJobs } = require('./scripts/purgeJobs.cjs');
+const { pairAllCandidates } = require('./services/jobPairingService');
 const syncRoutes = require('./routes/sync');
 
 // Import schedules
@@ -229,6 +230,7 @@ const startServer = async () => {
     await connectDB();
     purgeJunkJobs(); // fire-and-forget: delete scraped search-result pages from the jobs collection
     purgeJobs();    // fire-and-forget: remove stale/low-quality jobs on every deploy
+    pairAllCandidates().catch(e => console.warn('[Startup] pairAllCandidates failed:', e.message)); // re-score matches with latest algorithm
     backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
     initRemoteJobsImport(); // after DB connects so the startup import has an active connection
 

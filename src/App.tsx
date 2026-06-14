@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap, X, Check } from 'lucide-react'
+import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
 import JobFeed from './components/JobFeed'
@@ -594,7 +594,6 @@ function App() {
     }
   }, [])
   const [showRecruiterNavModal, setShowRecruiterNavModal] = useState(false)
-  const [showAutoApplyPopover, setShowAutoApplyPopover] = useState(false)
   const [profileImage, setProfileImage] = useState<string | null>(() => {
     return getMigratedStorageItem('wanderworkProfileImage', ['wanderHireProfileImage'])
   })
@@ -622,18 +621,6 @@ function App() {
     setShowWelcomeModal(localStorage.getItem(key) !== 'true')
   }, [_token, _user])
 
-  useEffect(() => {
-    if (!showAutoApplyPopover) return
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node
-      // Close if click is outside the popover and its trigger button
-      if (!(target as Element).closest?.('.auto-apply-nav-wrapper')) {
-        setShowAutoApplyPopover(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showAutoApplyPopover])
 
   const dismissWelcomeModal = () => {
     if (_user) localStorage.setItem(getWelcomeStorageKey(_user), 'true')
@@ -1325,70 +1312,16 @@ function App() {
               </>
             ) : (
               <>
-                {/* Auto Apply nav button */}
-                <div className="relative auto-apply-nav-wrapper">
-                  <button
-                    onClick={() => setShowAutoApplyPopover(v => !v)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium transition-all duration-200"
-                    style={{ border: '1px solid #36BF8F', color: '#36BF8F' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E8F8F2' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                    title="Activate Auto Apply"
-                  >
-                    <Zap size={13} />
-                    <span className="hidden sm:inline">Activate Auto Apply</span>
-                  </button>
-
-                  {showAutoApplyPopover && (
-                    <div
-                      className="absolute z-50 top-[calc(100%+10px)] right-0 w-[300px] rounded-[16px] p-5 shadow-[0_12px_40px_rgba(0,0,0,0.14)]"
-                      style={{ background: '#fff', border: '1px solid #E0EFEF', fontFamily: 'Manrope' }}
-                    >
-                      <button
-                        onClick={() => setShowAutoApplyPopover(false)}
-                        className="absolute top-3 right-3 flex items-center justify-center w-6 h-6 rounded-full transition-colors"
-                        style={{ color: '#999', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#F0F0F0' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                      >
-                        <X size={13} />
-                      </button>
-
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-[10px]" style={{ background: 'linear-gradient(135deg, #36BF8F, #306770)' }}>
-                          <Zap size={15} color="white" fill="white" />
-                        </div>
-                        <p className="font-bold text-[14px]" style={{ color: '#1a1a1a' }}>Auto Apply Extension</p>
-                      </div>
-
-                      <p className="text-[12.5px] leading-[1.6] mb-4" style={{ color: '#555' }}>
-                        Apply to jobs in seconds. The Wander/Work Chrome extension autofills your name, contact info, and links directly into any application form. Apply while you browse, commute, or wander.
-                      </p>
-
-                      <ul className="mb-4 flex flex-col gap-1.5">
-                        {['Instant autofill on Greenhouse, Lever, Ashby and more', 'One click to request your AI resume or cover letter', 'Apply from anywhere, on any device'].map(item => (
-                          <li key={item} className="flex items-start gap-2 text-[12px]" style={{ color: '#444' }}>
-                            <span className="mt-[3px] flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#E8F8F2' }}>
-                              <Check size={9} color="#36BF8F" strokeWidth={3} />
-                            </span>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-
-                      <a
-                        href="https://chrome.google.com/webstore"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-[10px] text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                        style={{ background: 'linear-gradient(135deg, #36BF8F, #306770)', textDecoration: 'none' }}
-                      >
-                        <Zap size={13} fill="white" />
-                        Get the Chrome Extension
-                      </a>
-                    </div>
-                  )}
-                </div>
+                {/* Auto Apply — coming soon */}
+                <button
+                  disabled
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium cursor-not-allowed"
+                  style={{ border: '1px solid #D0D0D0', color: '#B0B0B0', background: 'transparent' }}
+                  title="Coming Soon"
+                >
+                  <Zap size={13} />
+                  <span className="hidden sm:inline">Auto Apply — Coming Soon</span>
+                </button>
 
                 <button
                   onClick={() => setShowRecruiterNavModal(true)}
