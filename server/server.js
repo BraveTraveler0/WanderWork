@@ -22,6 +22,7 @@ const syncRoutes = require('./routes/sync');
 require("./schedules/postsJobs");
 require("./schedules/starsJobs");
 const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
+const { initAdminWeeklyDigest } = require('./schedules/adminWeeklyDigest');
 const { initRemoteJobsImport } = require('./schedules/remoteJobsImport');
 
 const app = express();
@@ -121,7 +122,10 @@ app.use((req, res, next) => {
 
 
 // Health check (before DB middleware so Render's check always passes)
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => res.json({ status: 'ok' }))
+
+// SEO routes — sitemaps and feeds (need DB, but use their own error handling)
+app.use('/', require('./routes/seoRoutes'));
 
 const staticPage = (title, bodyHtml) => `<!DOCTYPE html>
 <html lang="en">
@@ -239,6 +243,93 @@ app.get('/support', (req, res) => {
 `));
 });
 
+app.get('/about', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(staticPage('About WanderWork', `
+<h1>About WanderWork</h1>
+<p class="meta">Remote job board and AI job search platform</p>
+
+<h2>What We Do</h2>
+<p>WanderWork helps remote job seekers find the right role and apply more effectively. We aggregate remote, work-from-home, and digital nomad-friendly jobs from verified sources, then provide AI tools to tailor resumes, generate cover letters, and find the right recruiter contact — all in one place.</p>
+
+<h2>Who We're For</h2>
+<ul>
+<li>Remote job seekers who want curated listings, not a firehose</li>
+<li>Digital nomads who need location-flexible, async-friendly work</li>
+<li>Career changers breaking into remote work for the first time</li>
+<li>Anyone who wants AI-assisted help applying, not just browsing</li>
+</ul>
+
+<h2>How Jobs Are Sourced</h2>
+<p>Jobs are imported every 6 hours directly from ATS platforms: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, and Jobvite. Remotive serves as a fallback when direct ATS coverage is below threshold. All jobs are verified as remote before import. Stale or low-quality listings are purged automatically.</p>
+
+<h2>How Remote Status Is Verified</h2>
+<p>Remote tags are assigned based on job content, location field values, and ATS metadata. Every job is tagged as worldwide, US-only, Europe timezone, LATAM timezone, hybrid, or async-friendly. Tags are set automatically and reviewed against content.</p>
+
+<h2>AI Tools</h2>
+<ul>
+<li><strong>Resume customization:</strong> Generates a tailored resume optimized for a specific job posting's requirements and ATS keywords.</li>
+<li><strong>Cover letter generation:</strong> Writes a targeted cover letter per application — not a generic template.</li>
+<li><strong>Recruiter outreach:</strong> Identifies the likely hiring contact and drafts a personalized email. You review and send.</li>
+<li><strong>AI job matching:</strong> Scores and ranks every job against your full profile. Powered by OpenAI embeddings.</li>
+</ul>
+
+<h2>What Makes Us Different</h2>
+<p>Most job boards show you jobs. WanderWork shows you whether a job is actually travel-friendly, then helps you apply for it. Every listing includes real remote restrictions, salary transparency when available, and direct links to the original ATS posting.</p>
+
+<h2>Data and Privacy</h2>
+<p>We do not sell your data. Resume content is processed by OpenAI's API under API usage terms that prohibit training on inputs by default. We store only what is needed to provide the service. See our <a href="/privacy">Privacy Policy</a> for details.</p>
+
+<h2>How to Report a Fake Job</h2>
+<p>If you find a job that appears to be fake, misleading, or no longer active, report it to <a href="mailto:support@wanderwork.io">support@wanderwork.io</a>. We investigate and remove confirmed fake listings within 24 hours.</p>
+
+<h2>Contact</h2>
+<ul>
+<li>General: <a href="mailto:support@wanderwork.io">support@wanderwork.io</a></li>
+<li>Privacy: <a href="mailto:privacy@wanderwork.io">privacy@wanderwork.io</a></li>
+<li>Website: <a href="https://wanderwork.io">wanderwork.io</a></li>
+</ul>
+`));
+});
+
+app.get('/terms', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(staticPage('Terms of Service', `
+<h1>Terms of Service</h1>
+<p class="meta">Last Updated: January 3, 2026</p>
+
+<h2>1. Agreement to Terms</h2>
+<p>By accessing and using Wander/Work, you accept and agree to be bound by these terms. If you do not agree, please do not use this service.</p>
+
+<h2>2. Use License</h2>
+<p>Permission is granted to use this platform for personal, non-commercial job-search purposes. You may not modify, copy for commercial use, reverse engineer, or redistribute platform materials.</p>
+
+<h2>3. Disclaimer</h2>
+<p>The materials on Wander/Work are provided "as is." Wander/Work makes no warranties, expressed or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement of intellectual property rights.</p>
+
+<h2>4. Limitations</h2>
+<p>Wander/Work shall not be liable for any damages arising from use or inability to use the platform, even if notified of the possibility of such damage.</p>
+
+<h2>5. Accuracy of Materials</h2>
+<p>Job listings and other materials may contain errors. Wander/Work does not warrant accuracy, completeness, or currency of any listing. Job availability and details are sourced from third-party ATS platforms and may change without notice.</p>
+
+<h2>6. Links</h2>
+<p>Wander/Work is not responsible for the contents of any third-party sites linked from this platform. Use of linked websites is at your own risk.</p>
+
+<h2>7. AI-Generated Content</h2>
+<p>Resumes, cover letters, and recruiter messages generated by Wander/Work's AI tools are provided as drafts for your review. You are responsible for verifying the accuracy of all AI-generated content before submitting it to employers.</p>
+
+<h2>8. Modifications</h2>
+<p>Wander/Work may revise these terms at any time without notice. Continued use of the service constitutes acceptance of the revised terms.</p>
+
+<h2>9. Governing Law</h2>
+<p>These terms are governed by the laws of California. You submit to the exclusive jurisdiction of courts in California for any disputes arising under these terms.</p>
+
+<h2>10. Contact</h2>
+<p>Questions about these terms? Email <a href="mailto:support@wanderwork.io">support@wanderwork.io</a>.</p>
+`));
+});
+
 app.use(checkConnection);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
@@ -311,6 +402,7 @@ Object.entries(routes).forEach(([path, route]) => {
 // Initialize Airtable sync scheduler
 initScheduledSync();
 initJobDigestSchedule();
+initAdminWeeklyDigest();
 if (process.env.ENABLE_RECRUITER_COMPANY_PAIRING_SCHEDULE !== 'false') {
   scheduleRecruiterCompanyPairing({
     intervalMs: Number(process.env.RECRUITER_COMPANY_PAIR_INTERVAL_MS) || undefined,

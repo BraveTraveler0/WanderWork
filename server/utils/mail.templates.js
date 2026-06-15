@@ -196,4 +196,4 @@ function weeklyTokenEmail(firstName, amount, claimUrl) {
   }
 }
 
-module.exports = { proWelcomeEmail, premiumWelcomeEmail, weeklyTokenEmail }
+module.exports = { base, proWelcomeEmail, premiumWelcomeEmail, weeklyTokenEmail }

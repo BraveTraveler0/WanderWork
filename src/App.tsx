@@ -701,6 +701,50 @@ function App() {
     }
   }, [showLogin, showSignup])
 
+  // SEO: update document title and robots meta based on current page/auth state.
+  // Private pages (dashboard, settings, auth screens) get noindex so Google doesn't
+  // waste crawl budget on login walls or personal data views.
+  useEffect(() => {
+    const PAGE_META: Partial<Record<string, { title: string; noindex?: boolean }>> = {
+      dashboard:      { title: 'Dashboard | WanderWork', noindex: true },
+      settings:       { title: 'Settings | WanderWork', noindex: true },
+      profile:        { title: 'My Profile | WanderWork', noindex: true },
+      messages:       { title: 'Messages | WanderWork', noindex: true },
+      accountsettings:{ title: 'Account Settings | WanderWork', noindex: true },
+      personal:       { title: 'Personal Info | WanderWork', noindex: true },
+      payment:        { title: 'Billing | WanderWork', noindex: true },
+      upgrade:        { title: 'Upgrade | WanderWork', noindex: true },
+      reportbug:      { title: 'Report a Bug | WanderWork', noindex: true },
+      jointeam:       { title: 'Join the Team | WanderWork', noindex: true },
+      plans:          { title: 'Plans & Pricing | WanderWork', noindex: false },
+      privacy:        { title: 'Privacy Policy | WanderWork', noindex: false },
+      terms:          { title: 'Terms of Service | WanderWork', noindex: false },
+    }
+
+    const effectivePage = showLogin || showSignup ? '__auth__' : currentPage
+    const meta = effectivePage === '__auth__'
+      ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: true }
+      : (PAGE_META[effectivePage] ?? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: false })
+
+    document.title = meta.title
+
+    let robotsTag = document.querySelector<HTMLMetaElement>('meta[name="robots"]')
+    if (!robotsTag) {
+      robotsTag = document.createElement('meta')
+      robotsTag.name = 'robots'
+      document.head.appendChild(robotsTag)
+    }
+    robotsTag.content = meta.noindex ? 'noindex, nofollow' : 'index, follow'
+
+    let canonicalTag = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+    if (!canonicalTag) {
+      canonicalTag = document.createElement('link')
+      canonicalTag.rel = 'canonical'
+      document.head.appendChild(canonicalTag)
+    }
+    canonicalTag.href = `https://wanderwork.io${window.location.pathname === '/' ? '/' : window.location.pathname}`
+  }, [currentPage, showLogin, showSignup])
+
   useEffect(() => {
     if (_token) return
     const JUNK_SALARY = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i
