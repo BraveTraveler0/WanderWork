@@ -1403,7 +1403,6 @@ function App() {
                             <Zap size={15} color="#fff" fill="#fff" />
                           </div>
                           <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.3px', fontFamily: 'Manrope, sans-serif' }}>Auto Apply</span>
-                          <span style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', color: '#9ecfd6', fontSize: 9.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, letterSpacing: '0.6px', flexShrink: 0 }}>COMING SOON</span>
                         </div>
                         <p style={{ color: 'rgba(180,215,220,0.88)', fontSize: 12, margin: 0, lineHeight: 1.6, position: 'relative' }}>
                           Apply to jobs in seconds with your Wanderwork profile. No retyping, no tab switching.
@@ -1429,13 +1428,15 @@ function App() {
                       {/* CTA */}
                       <div style={{ padding: '4px 18px 18px' }}>
                         <div style={{ borderTop: '1px solid #F0F2F4', paddingTop: 14 }}>
-                          <button
-                            disabled
-                            style={{ width: '100%', padding: '10px 0', background: 'linear-gradient(135deg, #1a3d42, #306770)', color: 'rgba(255,255,255,0.45)', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'not-allowed', letterSpacing: '0.2px', fontFamily: 'Manrope, sans-serif' }}
+                          <a
+                            href="https://chromewebstore.google.com/detail/wanderwork-autofill/iddgmiajobadogdnjdmhfdecbfkfhjfi"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: 'block', width: '100%', padding: '10px 0', background: 'linear-gradient(135deg, #1a3d42, #306770)', color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.2px', fontFamily: 'Manrope, sans-serif', textAlign: 'center', textDecoration: 'none' }}
                           >
                             Get the Chrome Extension
-                          </button>
-                          <p style={{ textAlign: 'center', fontSize: 11, color: '#b0b8bb', margin: '8px 0 0', fontFamily: 'Manrope, sans-serif' }}>Available soon on the Chrome Web Store</p>
+                          </a>
+                          <p style={{ textAlign: 'center', fontSize: 11, color: '#b0b8bb', margin: '8px 0 0', fontFamily: 'Manrope, sans-serif' }}>Free on the Chrome Web Store</p>
                         </div>
                       </div>
                     </div>

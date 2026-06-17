@@ -1052,8 +1052,17 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
                 <div className="border rounded-[12px] p-5 flex flex-col gap-2" style={{ borderColor: '#E8EFF0' }}>
                   <h3 className="text-[15px] font-semibold mb-1" style={{ color: '#306770' }}>How to Install</h3>
+                  <a
+                    href="https://chromewebstore.google.com/detail/wanderwork-autofill/iddgmiajobadogdnjdmhfdecbfkfhjfi"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-semibold text-white transition-colors"
+                    style={{ background: '#306770', textDecoration: 'none', marginBottom: 6 }}
+                  >
+                    Add to Chrome. It&apos;s Free.
+                  </a>
                   {[
-                    'Download the Wander/Work extension from the Chrome Web Store',
+                    'Click "Add to Chrome" above to install the extension',
                     'Click the extension icon and paste your key above',
                     'Open any job application on a supported site',
                     'Click the teal Autofill button to fill the form instantly',
