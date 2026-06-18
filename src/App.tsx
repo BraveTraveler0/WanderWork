@@ -16,6 +16,7 @@ import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
 import JoinTeamPage from './components/JoinTeamPage'
+import LandingPage from './landing/LandingPage'
 import { API_BASE_URL } from './api/config'
 import {
   getAllJobSeekerData,
@@ -686,6 +687,10 @@ function App() {
   })
   const [showPlans, setShowPlans] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.location.pathname === '/landing'
+  })
 
   useEffect(() => {
     if (pendingCoverLetterJobId && !_token) {
@@ -721,8 +726,10 @@ function App() {
       terms:          { title: 'Terms of Service | WanderWork', noindex: false },
     }
 
-    const effectivePage = showLogin || showSignup ? '__auth__' : currentPage
-    const meta = effectivePage === '__auth__'
+    const effectivePage = showLandingPage ? '__landing__' : showLogin || showSignup ? '__auth__' : currentPage
+    const meta = effectivePage === '__landing__'
+      ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: false }
+      : effectivePage === '__auth__'
       ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: true }
       : (PAGE_META[effectivePage] ?? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: false })
 
@@ -743,7 +750,7 @@ function App() {
       document.head.appendChild(canonicalTag)
     }
     canonicalTag.href = `https://wanderwork.io${window.location.pathname === '/' ? '/' : window.location.pathname}`
-  }, [currentPage, showLogin, showSignup])
+  }, [currentPage, showLogin, showSignup, showLandingPage])
 
   useEffect(() => {
     if (_token) return
@@ -1228,6 +1235,24 @@ function App() {
       ))}
     </div>
   )
+
+  // Marketing landing page — always shown at /landing regardless of auth state
+  if (showLandingPage) {
+    return (
+      <LandingPage
+        onSignIn={() => {
+          setShowLandingPage(false)
+          setShowLogin(true)
+          window.history.pushState({}, '', '/?login=true')
+        }}
+        onSignUp={() => {
+          setShowLandingPage(false)
+          setShowSignup(true)
+          window.history.pushState({}, '', '/?signup=true')
+        }}
+      />
+    )
+  }
 
   // Plans page accessible to unauthenticated users
   if (!_token && showPlans && !showLogin && !showSignup) {
