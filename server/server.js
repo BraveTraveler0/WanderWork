@@ -79,7 +79,7 @@ app.use(cors({
     }
     return callback(new Error('Not allowed by CORS'));
   },
-  allowedHeaders: ["Content-Type", "Authorization", "Accept", "x-extension-key", "x-admin-key"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "x-extension-key", "x-admin-key", "x-capitalwatch-key"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
 app.use(express.json({ limit: '25mb' }));
