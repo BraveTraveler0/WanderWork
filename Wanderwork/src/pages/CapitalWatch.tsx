@@ -195,7 +195,7 @@ export default function CapitalWatch() {
         {grants.map((grant) => (
           <div
             key={grant._id}
-            className="relative border border-gray-200 mb-4 px-2 transition-colors hover:border-black"
+            className="group relative border border-gray-200 mb-4 px-2 transition-colors hover:border-black"
           >
             <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-6 items-start">
               <div className="font-bold">{grant.title}</div>
@@ -220,7 +220,7 @@ export default function CapitalWatch() {
             </div>
 
             {statusFilter === "pending" && (
-              <div className="absolute -top-3 -right-3 flex flex-col">
+              <div className="absolute -top-3 -right-3 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setPopupGrantId(grant._id)}
                   className="w-7 h-7 bg-[#FACC15] text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
