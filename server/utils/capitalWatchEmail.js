@@ -36,6 +36,7 @@ function matchReasons(grant) {
   if (demo.includes('veteran') || demo.includes('military')) reasons.push('Veteran-owned eligible')
   const loc = `${grant.location || ''} ${grant.title || ''} ${grant.agency || ''}`.toLowerCase()
   if (/atlanta|georgia/.test(loc)) reasons.push('Atlanta/Georgia')
+  if (grant.amountUsd >= 5000) reasons.push(`High payout ($${grant.amountUsd.toLocaleString()})`)
   if (grant.fundingType === 'grant') reasons.push('Grant (non-dilutive)')
   if (/\bangel\b/.test((grant.title || '').toLowerCase()) || /\bangel\b/.test((grant.agency || '').toLowerCase())) reasons.push('Angel funding')
   if (!grant.requirements) reasons.push('Minimal stated paperwork')

@@ -1,9 +1,11 @@
 'use strict'
 
 // Ranks how well a grant matches this team: military/veteran or Black/African
-// American-owned eligibility and Atlanta/Georgia location score highest, grants and
-// angel-style funding score above loans/accelerators/contests, and opportunities with
-// little or no stated paperwork burden score above ones with heavy requirements.
+// American-owned eligibility and Atlanta/Georgia location score highest, more money
+// scores higher (the big differentiator), grants and angel-style funding score above
+// loans/accelerators/contests, and opportunities with little or no stated paperwork
+// burden score above ones with heavy requirements -- biggest payout for least work,
+// to a team we qualify for, ranks first.
 function scoreGrant(grant) {
   let score = 0
   const demo = grant.targetDemographics || []
@@ -14,6 +16,11 @@ function scoreGrant(grant) {
   if (demo.includes('black') || demo.includes('african_american')) score += 3
   if (demo.includes('veteran') || demo.includes('military')) score += 3
   if (/atlanta|georgia/.test(location) || /atlanta|georgia/.test(title) || /atlanta|georgia/.test(agency)) score += 2
+
+  if (grant.amountUsd >= 100000) score += 4
+  else if (grant.amountUsd >= 25000) score += 3
+  else if (grant.amountUsd >= 5000) score += 2
+  else if (grant.amountUsd >= 1000) score += 1
 
   if (grant.fundingType === 'grant') score += 2
   if (/\bangel\b/.test(title) || /\bangel\b/.test(agency)) score += 2

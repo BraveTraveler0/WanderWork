@@ -4,6 +4,7 @@ const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { getCompanies, getCompanyProfile } = require('../config/capitalWatchCompanies')
 const { applicationDraftEmail } = require('../utils/capitalWatchEmail')
+const { scoreGrant } = require('../utils/capitalWatchScoring')
 
 const router = express.Router()
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -32,7 +33,9 @@ router.get('/grants', async (req, res) => {
       const re = new RegExp(String(q).trim(), 'i')
       filter.$or = [{ title: re }, { agency: re }]
     }
-    const grants = await Grant.find(filter).sort({ dateFound: -1 }).lean()
+    const grants = await Grant.find(filter).lean()
+    // Most promising first: best demographic fit + highest payout + least work to apply.
+    grants.sort((a, b) => scoreGrant(b) - scoreGrant(a))
     res.json(grants)
   } catch (err) {
     res.status(500).json({ message: err.message })
