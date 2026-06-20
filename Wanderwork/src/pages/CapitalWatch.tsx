@@ -202,7 +202,7 @@ export default function CapitalWatch() {
             className="group relative border border-gray-200 mb-4 px-2 transition-colors hover:border-black"
           >
             <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[2fr_1.5fr_1fr_1fr_3fr] sm:gap-4 sm:py-6 sm:items-start">
-              <div className="font-bold pr-10">{grant.title}</div>
+              <div className="font-bold pr-14 sm:pr-10">{grant.title}</div>
               <div className="text-gray-600">
                 <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Website</span>
                 {grant.link ? (
@@ -248,14 +248,14 @@ export default function CapitalWatch() {
               <div className="absolute -top-3 -right-3 flex flex-col opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setPopupGrantId(grant._id)}
-                  className="w-7 h-7 bg-[#FACC15] text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
+                  className="w-11 h-11 sm:w-8 sm:h-8 bg-[#FACC15] text-white flex items-center justify-center font-bold text-xl sm:text-base transition-transform hover:scale-110"
                   title="Approve"
                 >
                   ✓
                 </button>
                 <button
                   onClick={() => decide(grant._id, "rejected")}
-                  className="w-7 h-7 bg-black text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
+                  className="w-9 h-9 sm:w-7 sm:h-7 bg-black text-white flex items-center justify-center font-bold text-base sm:text-sm transition-transform hover:scale-110"
                   title="Reject"
                 >
                   ✕
