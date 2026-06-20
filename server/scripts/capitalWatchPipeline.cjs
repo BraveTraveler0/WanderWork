@@ -208,8 +208,14 @@ async function fetchDatasetItems(existingRunId) {
     run = await waitForRun(client, started.id);
   }
 
-  if (run.status !== 'SUCCEEDED') {
+  // TIMED-OUT runs still finalize their dataset with whatever was scraped before the
+  // cutoff — worth keeping since we already paid for that compute, rather than
+  // discarding it. Only truly failed/aborted runs have nothing usable.
+  if (run.status !== 'SUCCEEDED' && run.status !== 'TIMED-OUT') {
     throw new Error(`Apify run ended with status ${run.status}`);
+  }
+  if (run.status === 'TIMED-OUT') {
+    console.log('[CapitalWatch] Run hit the timeout — using partial results scraped before the cutoff.');
   }
 
   console.log('[CapitalWatch] Fetching dataset items...');

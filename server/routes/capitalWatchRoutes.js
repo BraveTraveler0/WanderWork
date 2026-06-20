@@ -76,19 +76,39 @@ router.get('/stats', async (req, res) => {
 })
 
 async function generateApplicationDraft(grant, company) {
-  const systemPrompt = `You are a founder writing a short, thoughtful outreach email and a concise three-paragraph application narrative for a funding opportunity.
+  const systemPrompt = `You are a founder preparing a complete, near submission-ready application package for a funding opportunity. Your job is to do as much of the actual work as possible so the founder only has to review and submit — not write from scratch.
 
 Company context (must preserve):
 ${company.profile}
 
-This is not a generic pitch. It is a hook plus a signal. Calm, grounded, founder-to-founder tone. No hype, no exaggerated market sizing, no valuation language unless explicitly appropriate.
+CRITICAL — no generic template. Every opportunity below is different; do not reuse the same tone, structure, or framing across opportunities. Before writing, work out from the details given what kind of opportunity this actually is, and adapt:
+- Government/agency grant or compliance-heavy program → formal, precise, fact-based. No pitch-deck energy. Emphasize eligibility, compliance, measurable impact.
+- Angel investor / VC / accelerator → warmer, founder-to-founder hook plus signal. Light pitch energy, but no hype, no invented metrics, no valuation language unless explicitly appropriate.
+- Pitch competition / contest → punchy, differentiated, written to be read or judged quickly; assume a panel or public audience.
+- Loan / lending program → conservative, financially grounded, emphasizing repayment ability and track record, not vision.
+- Scholarship / fellowship → personal narrative grounded in the founder's specific background and this program's stated mission, not generic company boilerplate.
+- If a specific demographic this company genuinely qualifies under (veteran, Black-owned, etc.) is named as relevant, weave it in naturally and specifically — never a bolted-on generic diversity statement.
+- If a specific location (e.g. Atlanta/Georgia) is named as relevant, reference the company's actual ties to that location rather than a generic mention.
 
-CRITICAL: The opportunity below has stated submission requirements/standards. You MUST follow them exactly — if it specifies a format, required sections, length, documents, or a particular tone/audience, honor that over the default style described above.
+Outreach channel: if a contact email is given below, write outreach_email as a real cold email to that named contact/agency. If no contact email is given, this is most likely a direct portal/form submission with no email outreach step — write outreach_email instead as a short cover note meant to accompany the submission, and say explicitly that there's no separate outreach email needed for this one.
+
+CRITICAL — requirements handling:
+1. Read the stated submission requirements/standards below line by line. Treat every required document, question, format rule, length limit, or audience instruction as binding — it overrides the default tone/structure above.
+2. Break the requirements into a checklist, one entry per distinct requirement (e.g. "2 letters of recommendation", "budget breakdown", "500-word answer to X", "EIN/Tax ID", "video pitch"). For each one:
+   - If it's something you can fully draft from the company context (a written answer, narrative, statement, budget summary, etc.), write it out in full inside application_narrative under a clear heading matching that requirement, and mark its checklist status "drafted" with detail "Drafted in application narrative below."
+   - If it's something only the founder can supply (a signature, a specific document/file, a third-party letter, financial statements, a video, an in-person component), mark its checklist status "needs_input" and write specifically what they need to gather or do in detail.
+   - If a requirement doesn't apply (e.g. asks for something the company context already shows isn't relevant), mark "not_applicable" and say why in detail.
+3. If no requirements are stated, return a single checklist entry: { "requirement": "None explicitly stated", "status": "not_applicable", "detail": "Used standard professional submission practice." }
+4. application_narrative should be structured with one heading per drafted requirement (not a generic three-paragraph blob) so it's ready to copy into the application portal section by section.
 
 Return ONLY valid JSON with this exact shape, no markdown, no extra text:
-{ "outreach_email": "string", "application_narrative": "string" }`
+{
+  "outreach_email": "string",
+  "application_narrative": "string",
+  "requirements_checklist": [ { "requirement": "string", "status": "drafted" | "needs_input" | "not_applicable", "detail": "string" } ]
+}`
 
-  const userPrompt = `Write application materials for this funding opportunity:
+  const userPrompt = `Write a complete application package for this funding opportunity:
 
 Title: ${grant.title}
 Agency: ${grant.agency || 'N/A'}
@@ -97,8 +117,11 @@ Amount: ${grant.amountUsd || 'N/A'}
 Deadline: ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}
 Location: ${grant.location || 'N/A'}
 Link: ${grant.link}
-Why this matters: ${grant.why || 'N/A'}
-Stated submission requirements/standards (follow these exactly): ${grant.requirements || 'None explicitly stated — use standard professional submission practice.'}`
+Contact Email: ${grant.contactEmail || 'None given — most likely a direct portal/form submission, not email outreach'}
+Target Demographics Stated As Eligible: ${(grant.targetDemographics || []).join(', ') || 'None stated — open to all founders'}
+Summary: ${grant.summary || 'N/A'}
+Why this matters / fit for this company: ${grant.why || 'N/A'}
+Stated submission requirements/standards (break these into the checklist and follow them exactly): ${grant.requirements || 'None explicitly stated — use standard professional submission practice.'}`
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -138,6 +161,7 @@ router.patch('/grants/:id', async (req, res) => {
     grant.company = company.id
     grant.outreachEmail = draft.outreach_email || ''
     grant.applicationNarrative = draft.application_narrative || ''
+    grant.requirementsChecklist = Array.isArray(draft.requirements_checklist) ? draft.requirements_checklist : []
     await grant.save()
 
     const apiKey = process.env.SENDGRID_API_KEY

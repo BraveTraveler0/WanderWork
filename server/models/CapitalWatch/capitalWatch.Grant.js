@@ -35,6 +35,13 @@ const capitalWatchGrantSchema = new mongoose.Schema({
 
   outreachEmail:        { type: String },
   applicationNarrative: { type: String },
+  // One entry per stated requirement, so the approval email shows exactly what the AI
+  // already handled vs. what still needs the founder's input (documents, signatures, etc.).
+  requirementsChecklist: [{
+    requirement: String,
+    status: { type: String, enum: ['drafted', 'needs_input', 'not_applicable'] },
+    detail: String,
+  }],
 
   dateFound: { type: Date, default: Date.now },
 }, {
