@@ -64,6 +64,9 @@ const defaultAllowedOrigins = [
   'https://www.wanderwork.io',
   'https://wanderwork.onrender.com',
   'https://wanderwork-backend-server.onrender.com',
+  'https://aoncreative.io',
+  'https://www.aoncreative.io',
+  'https://aoncreativev.onrender.com',
 ];
 const configuredAllowedOrigins = String(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '')
   .split(',')
