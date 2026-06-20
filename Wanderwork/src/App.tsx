@@ -1,25 +1,32 @@
 import { useState, useEffect } from "react";
 import JobSeekerLanding from "./imports/JobSeekerLanding-1-344";
 import LandingPageAnimated from "./components/LandingPageAnimated";
+import CapitalWatch from "./pages/CapitalWatch";
 
 export default function App() {
-  const [showLanding, setShowLanding] = useState(true);
+  const [view, setView] = useState<"landing" | "jobs" | "capitalwatch">("landing");
 
   useEffect(() => {
-    // Check if there's a query parameter to show the jobs page
+    // Check if there's a query parameter to show an alternate page
     const params = new URLSearchParams(window.location.search);
-    const showJobs = params.get("jobs");
-    
-    if (showJobs === "true") {
-      setShowLanding(false);
+    if (params.get("capitalwatch") === "true") {
+      setView("capitalwatch");
+    } else if (params.get("jobs") === "true") {
+      setView("jobs");
     } else {
-      setShowLanding(true);
+      setView("landing");
     }
   }, []);
 
   return (
     <div className="w-full min-h-screen">
-      {showLanding ? <LandingPageAnimated /> : <JobSeekerLanding />}
+      {view === "capitalwatch" ? (
+        <CapitalWatch />
+      ) : view === "jobs" ? (
+        <JobSeekerLanding />
+      ) : (
+        <LandingPageAnimated />
+      )}
     </div>
   );
 }

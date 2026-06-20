@@ -24,6 +24,7 @@ require("./schedules/starsJobs");
 const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
 const { initAdminWeeklyDigest } = require('./schedules/adminWeeklyDigest');
 const { initRemoteJobsImport } = require('./schedules/remoteJobsImport');
+const { initCapitalWatchImport } = require('./schedules/capitalWatchImport');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -392,6 +393,7 @@ const routes = {
   '/sync': './routes/sync',
   '/tally': './routes/tallyWebhook',
   '/oauth': './routes/oauthRoutes',
+  '/capitalwatch': './routes/capitalWatchRoutes',
 };
 
 // Register routes
@@ -441,6 +443,7 @@ const startServer = async () => {
     pairAllCandidates().catch(e => console.warn('[Startup] pairAllCandidates failed:', e.message)); // re-score matches with latest algorithm
     backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
     initRemoteJobsImport(); // after DB connects so the startup import has an active connection
+    initCapitalWatchImport(); // weekly grant/funding-opportunity scrape
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

@@ -21,6 +21,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
     "@sendgrid/mail": "^8.1.0",
+    "apify-client": "^2.23.4",
     "aws-sdk": "^2.1370.0",
     "axios": "^1.4.0",
     "bcrypt": "^5.1.0",
