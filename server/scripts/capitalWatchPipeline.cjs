@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const OpenAI = require('openai');
 const { ApifyClient } = require('apify-client');
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
+const SOURCES = require('../config/capitalWatchSources');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -87,6 +88,51 @@ function isEligibleForTeam(targetDemographics) {
 // so a single huge scraped page can't blow the budget alongside the system prompt.
 const MAX_TEXT_CHARS = 60000;
 
+// Normalized forms used for duplicate detection — catches the same opportunity
+// reappearing under a slightly different URL (trailing slash, www, query string)
+// or being re-extracted with an identical title from a different page.
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url);
+    return (u.hostname.replace(/^www\./, '') + u.pathname.replace(/\/$/, '')).toLowerCase();
+  } catch {
+    return String(url || '').trim().toLowerCase();
+  }
+}
+
+function normalizeTitle(title) {
+  return String(title || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function loadExistingFingerprints() {
+  const existing = await Grant.find({}, { link: 1, title: 1 }).lean();
+  return {
+    links: new Set(existing.map((g) => normalizeUrl(g.link))),
+    titles: new Set(existing.map((g) => normalizeTitle(g.title))),
+  };
+}
+
+// Rotates through capitalWatchSources.js in fixed-size batches instead of crawling
+// every source every run, tracked in Mongo so it persists across deploys/restarts.
+const ROTATION_BATCH_SIZE = 16;
+
+async function getRotationBatch() {
+  const col = mongoose.connection.collection('capitalwatch.state');
+  const state = await col.findOne({ _id: 'rotation' });
+  const startIndex = state?.batchIndex || 0;
+  const batch = [];
+  for (let i = 0; i < ROTATION_BATCH_SIZE; i++) {
+    batch.push(SOURCES[(startIndex + i) % SOURCES.length]);
+  }
+  const nextIndex = (startIndex + ROTATION_BATCH_SIZE) % SOURCES.length;
+  await col.updateOne(
+    { _id: 'rotation' },
+    { $set: { batchIndex: nextIndex, lastRunAt: new Date() } },
+    { upsert: true }
+  );
+  return batch;
+}
+
 function normalizeItem(item) {
   return {
     url: item.url || '',
@@ -138,6 +184,13 @@ async function fetchDatasetItems(existingRunId) {
     run = await waitForRun(client, existingRunId);
   } else {
     const taskId = process.env.APIFY_CAPITALWATCH_TASK_ID;
+
+    const batch = await getRotationBatch();
+    console.log(`[CapitalWatch] Rotating to this run's ${batch.length} source(s): ${batch.join(', ')}`);
+    const task = await client.task(taskId).get();
+    task.input.startUrls = batch.map((url) => ({ url }));
+    await client.task(taskId).update({ input: task.input });
+
     console.log('[CapitalWatch] Starting Apify actor task...');
     const started = await client.task(taskId).start({ timeout: 1800, memory: 4096 });
     run = await waitForRun(client, started.id);
@@ -156,13 +209,14 @@ async function processDatasetItems(rawItems) {
   const result = { scraped: rawItems.length, inserted: 0, skippedDuplicates: 0, skippedIneligible: 0, errors: 0, newGrants: [] };
   console.log(`[CapitalWatch] Scraped ${rawItems.length} pages`);
 
+  const seen = await loadExistingFingerprints();
+
   for (const raw of rawItems) {
     const item = normalizeItem(raw);
     if (!item.url) continue;
 
     try {
-      const existing = await Grant.exists({ link: item.url });
-      if (existing) { result.skippedDuplicates++; continue; }
+      if (seen.links.has(normalizeUrl(item.url))) { result.skippedDuplicates++; continue; }
 
       const parsed = await extractOpportunity(item);
       if (!parsed) continue;
@@ -172,8 +226,12 @@ async function processDatasetItems(rawItems) {
         continue;
       }
 
-      const alreadyHaveLink = await Grant.exists({ link: parsed.link });
-      if (alreadyHaveLink) { result.skippedDuplicates++; continue; }
+      const linkNorm = normalizeUrl(parsed.link);
+      const titleNorm = normalizeTitle(parsed.title);
+      if (seen.links.has(linkNorm) || seen.titles.has(titleNorm)) {
+        result.skippedDuplicates++;
+        continue;
+      }
 
       const grant = await Grant.create({
         title: parsed.title,
@@ -193,6 +251,8 @@ async function processDatasetItems(rawItems) {
         status: 'pending',
       });
 
+      seen.links.add(linkNorm);
+      seen.titles.add(titleNorm);
       result.inserted++;
       result.newGrants.push(grant);
     } catch (err) {
