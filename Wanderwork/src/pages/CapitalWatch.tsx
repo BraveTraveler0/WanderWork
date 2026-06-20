@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, ArrowLeft, Plus, Triangle } from "lucide-react";
+import { Trash2, ArrowLeft, Plus, Triangle, Check, X } from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
@@ -245,20 +245,20 @@ export default function CapitalWatch() {
             </div>
 
             {statusFilter === "pending" && (
-              <div className="absolute -top-3 -right-3 flex flex-col opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <div className="absolute -top-4 -right-4 flex flex-col gap-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setPopupGrantId(grant._id)}
-                  className="w-11 h-11 sm:w-8 sm:h-8 bg-[#FACC15] text-white flex items-center justify-center font-bold text-xl sm:text-base transition-transform hover:scale-110"
+                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-[#FACC15] text-white ring-4 ring-white shadow-lg flex items-center justify-center transition-all hover:bg-yellow-400 hover:scale-110"
                   title="Approve"
                 >
-                  ✓
+                  <Check size={18} strokeWidth={3} />
                 </button>
                 <button
                   onClick={() => decide(grant._id, "rejected")}
-                  className="w-9 h-9 sm:w-7 sm:h-7 bg-black text-white flex items-center justify-center font-bold text-base sm:text-sm transition-transform hover:scale-110"
+                  className="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-black text-white ring-4 ring-white shadow-lg flex items-center justify-center transition-all hover:bg-gray-800 hover:scale-110"
                   title="Reject"
                 >
-                  ✕
+                  <X size={15} strokeWidth={3} />
                 </button>
               </div>
             )}

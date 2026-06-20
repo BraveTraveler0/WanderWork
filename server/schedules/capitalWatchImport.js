@@ -10,8 +10,8 @@ const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
 
-// Monday 8am EST = 13:00 UTC
-const SCHEDULE = '0 13 * * 1'
+// Wednesday 12am EST = 05:00 UTC
+const SCHEDULE = '0 5 * * 3'
 
 let running = false
 
@@ -43,7 +43,7 @@ async function runImport() {
 }
 
 function initCapitalWatchImport() {
-  console.log('[CapitalWatch] Import scheduled: Mondays at 8AM EST')
+  console.log('[CapitalWatch] Import scheduled: Wednesdays at 12AM EST')
   cron.schedule(SCHEDULE, runImport)
   // Deliberately NOT run-once-at-startup like the free job importers: each run burns
   // real Apify run minutes/quota, and dev-server restarts (nodemon) would otherwise
