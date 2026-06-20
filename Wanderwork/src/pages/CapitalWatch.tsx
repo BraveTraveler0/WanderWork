@@ -122,10 +122,10 @@ export default function CapitalWatch() {
   return (
     <div className="min-h-screen bg-white font-mono">
       <div className="relative bg-[#FACC15] px-4 sm:px-8 py-6 overflow-hidden">
-        <h1 className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2">
+        <a href="/" className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2 w-fit transition-opacity hover:opacity-70">
           <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
           Capital Watch /
-        </h1>
+        </a>
         <CornerMark className="absolute top-4 right-6 opacity-50" />
       </div>
 
@@ -256,7 +256,7 @@ export default function CapitalWatch() {
                   className="w-9 h-9 sm:w-8 sm:h-8 rotate-45 bg-[#FACC15] text-white ring-4 ring-white shadow-lg flex items-center justify-center transition-all hover:bg-yellow-400 hover:scale-110"
                   title="Approve"
                 >
-                  <Check size={16} strokeWidth={3} className="-rotate-45" />
+                  <Check size={16} strokeWidth={2} className="-rotate-45" />
                 </button>
                 <button
                   onClick={() => decide(grant._id, "rejected")}
