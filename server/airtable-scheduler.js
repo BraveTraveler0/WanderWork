@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
 const { pairAllCandidates } = require('./services/jobPairingService');
 const { syncRecruiters } = require('./services/recruiterSyncService');
+const { runRecruiterApifyPipeline } = require('./services/apifyRecruiterService');
 const { sendWeeklyTokenEmails } = require('./services/weeklyTokenService');
 
 let isRunning = false;
@@ -94,6 +95,34 @@ ${'='.repeat(60)}`);
   }
 }
 
+let isRecruiterApifyRunning = false;
+
+/**
+ * Weekly recruiter pull straight from the Apify actor task (replaces the n8n relay).
+ */
+async function runRecruiterApifySync() {
+  if (isRecruiterApifyRunning) {
+    console.log('⏭️  Recruiter Apify sync already in progress, skipping...');
+    return;
+  }
+
+  isRecruiterApifyRunning = true;
+  const startTime = new Date();
+
+  try {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`📅 Weekly Recruiter Apify Sync - ${startTime.toISOString()}`);
+    console.log(`${'='.repeat(60)}`);
+
+    const result = await runRecruiterApifyPipeline();
+    console.log(`✅ Recruiter Apify sync completed in ${Math.round((new Date() - startTime) / 1000)}s`, result);
+  } catch (error) {
+    console.error(`❌ Recruiter Apify sync failed: ${error.message}`);
+  } finally {
+    isRecruiterApifyRunning = false;
+  }
+}
+
 function isElevenAmEastern() {
   const etHour = new Date(
     new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
@@ -129,9 +158,14 @@ function initScheduledSync() {
     sendWeeklyTokenEmails().catch((e) => console.error('[WeeklyToken] Cron failed:', e.message));
   });
 
+  // Weekly recruiter pull from Apify — Monday 6:00 AM UTC.
+  const recruiterApifyTask = cron.schedule('0 6 * * 1', () => {
+    runRecruiterApifySync();
+  });
+
 console.log('✅ Scheduled sync initialized\n');
 
-  return { sync: task, dedup: dedupTask };
+  return { sync: task, dedup: dedupTask, recruiterApify: recruiterApifyTask };
 }
 
 /**
@@ -160,4 +194,5 @@ module.exports = {
   triggerSync,
   runSync,
   runDailyDedup,
+  runRecruiterApifySync,
 };

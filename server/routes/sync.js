@@ -12,6 +12,7 @@ const {
   dedupeRecruiters,
   reclassifyRecruiterSpecialties,
 } = require('../services/recruiterSyncService');
+const { runRecruiterApifyPipeline } = require('../services/apifyRecruiterService');
 
 const router = express.Router();
 
@@ -284,6 +285,20 @@ router.post('/recruiters', requireSyncSecret, async (req, res) => {
     res.json({
       success: true,
       message: 'Recruiters upserted into MongoDB',
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/recruiters/apify', requireSyncSecret, async (req, res) => {
+  try {
+    const result = await runRecruiterApifyPipeline(req.body?.existingRunId);
+    res.json({
+      success: true,
+      message: 'Recruiters synced from Apify',
       ...result,
       timestamp: new Date().toISOString(),
     });
