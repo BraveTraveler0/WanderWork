@@ -29,6 +29,47 @@ function weeklyDigestEmail(newGrants, dashboardUrl) {
   }
 }
 
+function matchReasons(grant) {
+  const demo = grant.targetDemographics || []
+  const reasons = []
+  if (demo.includes('black') || demo.includes('african_american')) reasons.push('Black-owned eligible')
+  if (demo.includes('veteran') || demo.includes('military')) reasons.push('Veteran-owned eligible')
+  const loc = `${grant.location || ''} ${grant.title || ''} ${grant.agency || ''}`.toLowerCase()
+  if (/atlanta|georgia/.test(loc)) reasons.push('Atlanta/Georgia')
+  if (grant.fundingType === 'grant') reasons.push('Grant (non-dilutive)')
+  if (/\bangel\b/.test((grant.title || '').toLowerCase()) || /\bangel\b/.test((grant.agency || '').toLowerCase())) reasons.push('Angel funding')
+  if (!grant.requirements) reasons.push('Minimal stated paperwork')
+  if (grant.rolling) reasons.push('Rolling deadline')
+  return reasons
+}
+
+function topMatchesDigestEmail(rankedGrants, dashboardUrl) {
+  const rows = rankedGrants.map((g, i) => {
+    const reasons = matchReasons(g)
+    return `
+    <li style="margin-bottom:16px;">
+      <div style="font-size:13px;color:#9ca3af;font-weight:700;">#${i + 1}</div>
+      <a href="${g.link}" style="color:#306770;font-weight:700;text-decoration:none;">${escapeHtml(g.title)}</a>
+      <div style="font-size:13px;color:#6b7280;">${escapeHtml(g.agency || '')} &middot; ${escapeHtml(g.fundingType || '')} &middot; ${g.amountUsd ? '$' + g.amountUsd : 'Amount not stated'}</div>
+      ${reasons.length ? `<div style="margin-top:4px;">${reasons.map(r => `<span style="display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;margin-right:4px;color:#4b5563;">${escapeHtml(r)}</span>`).join('')}</div>` : ''}
+    </li>`
+  }).join('')
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;">
+      <h1 style="color:#1f2937;">Capital Watch — Top ${rankedGrants.length} Best Matches</h1>
+      <p style="color:#6b7280;font-size:14px;">Ranked for fit: Black-owned/veteran-owned eligibility, Atlanta/Georgia location, grants and angel funding over loans/accelerators/contests, and minimal paperwork to apply.</p>
+      <ol style="padding-left:18px;list-style:none;">${rows}</ol>
+      <p style="margin-top:24px;"><a href="${dashboardUrl}" style="background:#FACC15;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Review on the dashboard →</a></p>
+    </div>`
+
+  return {
+    from: FROM_EMAIL,
+    subject: `Capital Watch: Top ${rankedGrants.length} best-matched opportunities`,
+    html,
+  }
+}
+
 function applicationDraftEmail(grant, companyName) {
   const html = `
 <html>
@@ -86,4 +127,4 @@ function applicationDraftEmail(grant, companyName) {
   }
 }
 
-module.exports = { weeklyDigestEmail, applicationDraftEmail }
+module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail }

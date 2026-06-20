@@ -3,8 +3,10 @@
 const cron = require('node-cron')
 const sgMail = require('@sendgrid/mail')
 const { runCapitalWatchPipeline } = require('../scripts/capitalWatchPipeline.cjs')
-const { weeklyDigestEmail } = require('../utils/capitalWatchEmail')
+const { topMatchesDigestEmail } = require('../utils/capitalWatchEmail')
+const { rankGrants } = require('../utils/capitalWatchScoring')
 const { getPublicAppUrl } = require('../utils/publicUrls')
+const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
 
@@ -26,10 +28,12 @@ async function runImport() {
         return
       }
       sgMail.setApiKey(apiKey)
+      const pending = await Grant.find({ status: 'pending' }).lean()
+      const top = rankGrants(pending, 10)
       const dashboardUrl = `${getPublicAppUrl()}/?capitalwatch=true`
-      const msg = { ...weeklyDigestEmail(result.newGrants, dashboardUrl), to: RECIPIENTS }
+      const msg = { ...topMatchesDigestEmail(top, dashboardUrl), to: RECIPIENTS }
       await sgMail.send(msg)
-      console.log('[CapitalWatch] Digest sent to', RECIPIENTS.join(', '))
+      console.log('[CapitalWatch] Top-matches digest sent to', RECIPIENTS.join(', '))
     }
   } catch (err) {
     console.error('[CapitalWatch] Cycle error:', err.message)
