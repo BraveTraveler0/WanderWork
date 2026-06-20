@@ -274,7 +274,7 @@ function Group46({ onSignUp, onGoPremium }: { onSignUp?: () => void; onGoPremium
         <p className="mb-0">while you work.</p>
       </div>
       <Group43 />
-      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[158px] leading-[26px] ml-[65px] mt-[340.755px] relative text-[#787878] text-[16px] w-[420px]">Let us write your resume, craft your cover letter, and connect you with top recruiters. We match you with the best (and most fresh) remote jobs from all over the world, or connect you straight to recruiters in your field. Stop sending out thousands of applications and let the work come to you.</p>
+      <p className="[grid-area:1_/_1] font-['Manrope:Regular',_sans-serif] font-normal h-[158px] leading-[26px] ml-[65px] mt-[272px] relative text-[#787878] text-[16px] w-[420px]">Let us write your resume, craft your cover letter, and connect you with top recruiters. We match you with the best (and most fresh) remote jobs from all over the world, or connect you straight to recruiters in your field. Stop sending out thousands of applications and let the work come to you.</p>
     </motion.div>
   );
 }
