@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Trash2, Plus, Triangle, Check, X } from "lucide-react";
+import { Trash2, Plus, Triangle, Check, X, Loader2 } from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
@@ -80,6 +80,8 @@ export default function CapitalWatch() {
   const [loading, setLoading] = useState(false);
   const [popupGrantId, setPopupGrantId] = useState<string | null>(null);
   const [hoveredStat, setHoveredStat] = useState<string | null>(null);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -110,16 +112,24 @@ export default function CapitalWatch() {
   }, [load]);
 
   async function decide(id: string, status: "approved" | "rejected", companyId?: string) {
+    if (decidingId) return; // a request is already in flight — ignore repeat clicks
+    setDecidingId(id);
     try {
       await api(`/grants/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status, companyId }),
       });
-      setPopupGrantId(null);
       setGrants((prev) => prev.filter((g) => g._id !== id));
+      if (status === "approved") {
+        setSuccessMessage("Application drafted and emailed.");
+        setTimeout(() => setSuccessMessage(null), 2500);
+      }
+      setPopupGrantId(null);
     } catch (err) {
       console.error("[CapitalWatch] decision failed:", err);
       alert("Could not update grant: " + (err as Error).message);
+    } finally {
+      setDecidingId(null);
     }
   }
 
@@ -296,34 +306,51 @@ export default function CapitalWatch() {
       {popupGrantId && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-          onClick={() => setPopupGrantId(null)}
+          onClick={() => !decidingId && setPopupGrantId(null)}
         >
           <div
             className="bg-white p-8 w-80"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg mb-4">Apply as which company?</h2>
-            <div className="flex flex-col gap-2">
-              {companies.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => decide(popupGrantId, "approved", c.id)}
-                  className="border border-gray-300 px-4 py-2 text-left transition-all hover:border-black hover:translate-x-1"
-                >
-                  {c.name}
-                </button>
-              ))}
-              {companies.length === 0 && (
-                <div className="text-gray-400 text-sm">No companies configured.</div>
-              )}
-            </div>
+            {decidingId === popupGrantId ? (
+              <div className="flex flex-col items-center gap-3 py-6 text-gray-500">
+                <Loader2 size={24} className="animate-spin" />
+                <div className="text-sm">Drafting application…</div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-lg mb-4">Apply as which company?</h2>
+                <div className="flex flex-col gap-2">
+                  {companies.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => decide(popupGrantId, "approved", c.id)}
+                      className="border border-gray-300 px-4 py-2 text-left transition-all hover:border-black hover:translate-x-1"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                  {companies.length === 0 && (
+                    <div className="text-gray-400 text-sm">No companies configured.</div>
+                  )}
+                </div>
+              </>
+            )}
             <button
               onClick={() => setPopupGrantId(null)}
-              className="mt-4 text-gray-400 underline"
+              disabled={!!decidingId}
+              className="mt-4 text-gray-400 underline disabled:opacity-0"
             >
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-black text-white px-4 py-3 shadow-lg">
+          <Check size={16} strokeWidth={2} />
+          <span className="text-sm">{successMessage}</span>
         </div>
       )}
     </div>
