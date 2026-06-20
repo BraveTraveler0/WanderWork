@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { Trash2, ArrowLeft, Plus, Triangle } from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
@@ -15,6 +16,7 @@ type Grant = {
   link?: string;
   summary?: string;
   requirements?: string;
+  targetDemographics?: string[];
   status: "pending" | "approved" | "rejected";
 };
 
@@ -45,6 +47,27 @@ function websiteLabel(link?: string) {
   } catch {
     return link;
   }
+}
+
+// Thin geometric line-art, purely decorative — sits behind the stats row.
+function GeometricBackdrop() {
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <circle cx="92%" cy="10%" r="120" fill="none" stroke="#e5e7eb" strokeWidth="1" />
+      <line x1="0" y1="0" x2="100%" y2="100%" stroke="#f3f4f6" strokeWidth="1" />
+      <line x1="60%" y1="0" x2="60%" y2="100%" stroke="#f3f4f6" strokeWidth="1" />
+      <path d="M 0 70 Q 200 0 400 70" fill="none" stroke="#e5e7eb" strokeWidth="1" />
+    </svg>
+  );
+}
+
+// Small "+" crop-mark, decorative corner accent.
+function CornerMark({ className = "" }: { className?: string }) {
+  return <Plus size={14} strokeWidth={1.5} className={className} />;
 }
 
 export default function CapitalWatch() {
@@ -98,46 +121,57 @@ export default function CapitalWatch() {
 
   return (
     <div className="min-h-screen bg-white font-mono">
-      <div className="bg-[#FACC15] px-8 py-6">
-        <h1 className="text-3xl tracking-tight">Capital Watch /</h1>
+      <div className="relative bg-[#FACC15] px-8 py-6 overflow-hidden">
+        <h1 className="text-3xl tracking-tight flex items-center gap-2">
+          <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
+          Capital Watch /
+        </h1>
+        <CornerMark className="absolute top-4 right-6 opacity-50" />
       </div>
 
-      <div className="flex items-end justify-between px-8 py-8 gap-8 flex-wrap">
-        <div className="flex gap-16">
+      <div className="relative flex items-end justify-between px-8 py-8 gap-8 flex-wrap overflow-hidden">
+        <GeometricBackdrop />
+
+        <div className="relative z-10 flex gap-16 divide-x divide-gray-200">
           <div>
             <div className="text-6xl leading-none">{stats.grants}</div>
             <div className="text-gray-500 mt-2">Grants</div>
           </div>
-          <div>
+          <div className="pl-16">
             <div className="text-6xl leading-none">{stats.angels}</div>
             <div className="text-gray-500 mt-2">Angels</div>
           </div>
-          <div>
+          <div className="pl-16">
             <div className="text-6xl leading-none">{stats.venture}</div>
             <div className="text-gray-500 mt-2">Venture</div>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="relative z-10 flex flex-col items-end gap-2">
           <div className="flex">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
-              className="border border-gray-300 px-4 py-2 w-64 outline-none"
+              className="border border-gray-300 px-4 py-2 w-64 outline-none transition-colors focus:border-black"
             />
             <button
               onClick={load}
-              className="bg-black text-white px-6 py-2"
+              className="bg-black text-white px-6 py-2 transition-colors hover:bg-gray-800"
             >
               Go
             </button>
           </div>
           <button
             onClick={() => setStatusFilter((s) => (s === "pending" ? "rejected" : "pending"))}
-            className="text-gray-400 underline"
+            className="flex items-center gap-1.5 text-gray-400 transition-colors hover:text-black"
+            title={statusFilter === "pending" ? "View deleted" : "Back to pending"}
           >
-            {statusFilter === "pending" ? "deleted" : "back to pending"}
+            {statusFilter === "pending" ? (
+              <Trash2 size={16} strokeWidth={1.5} />
+            ) : (
+              <ArrowLeft size={16} strokeWidth={1.5} />
+            )}
           </button>
         </div>
       </div>
@@ -159,12 +193,29 @@ export default function CapitalWatch() {
         )}
 
         {grants.map((grant) => (
-          <div key={grant._id} className="relative border border-gray-200 mb-4 px-2">
+          <div
+            key={grant._id}
+            className="relative border border-gray-200 mb-4 px-2 transition-colors hover:border-black"
+          >
             <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-6 items-start">
               <div className="font-bold">{grant.title}</div>
               <div className="text-gray-600">{websiteLabel(grant.link)}</div>
               <div>{formatAmount(grant.amountUsd)}</div>
-              <div>{grant.fundingType || "—"}</div>
+              <div>
+                {grant.fundingType || "—"}
+                {!!grant.targetDemographics?.length && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {grant.targetDemographics.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] uppercase tracking-wide border border-gray-300 px-1.5 py-0.5 text-gray-500"
+                      >
+                        {tag.replace("_", " ")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="text-sm text-gray-500">{grant.summary || "—"}</div>
             </div>
 
@@ -172,14 +223,14 @@ export default function CapitalWatch() {
               <div className="absolute -top-3 -right-3 flex flex-col">
                 <button
                   onClick={() => setPopupGrantId(grant._id)}
-                  className="w-7 h-7 bg-[#FACC15] text-white flex items-center justify-center font-bold"
+                  className="w-7 h-7 bg-[#FACC15] text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
                   title="Approve"
                 >
                   ✓
                 </button>
                 <button
                   onClick={() => decide(grant._id, "rejected")}
-                  className="w-7 h-7 bg-black text-white flex items-center justify-center font-bold"
+                  className="w-7 h-7 bg-black text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
                   title="Reject"
                 >
                   ✕
@@ -205,7 +256,7 @@ export default function CapitalWatch() {
                 <button
                   key={c.id}
                   onClick={() => decide(popupGrantId, "approved", c.id)}
-                  className="border border-gray-300 px-4 py-2 text-left hover:bg-gray-100"
+                  className="border border-gray-300 px-4 py-2 text-left transition-all hover:border-black hover:translate-x-1"
                 >
                   {c.name}
                 </button>

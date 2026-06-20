@@ -53,6 +53,8 @@ why: 1 to 2 sentences explaining relevance based only on stated purpose or audie
 
 requirements: explicit eligibility criteria or submission requirements/standards stated in the text (e.g. required documents, format, who may apply, how to submit). If not explicitly stated, null.
 
+target_demographics: array of founder/owner eligibility groups EXPLICITLY stated in the text, using only these values: "women", "veteran", "military", "black", "african_american", "latino", "hispanic", "asian", "minority", "lgbtq", "disabled", "rural", "youth". If the text states no specific founder demographic restriction (open to all founders), return an empty array [].
+
 Return EXACTLY this JSON shape and nothing else:
 
 {
@@ -66,13 +68,29 @@ Return EXACTLY this JSON shape and nothing else:
 "link": null,
 "summary": null,
 "why": null,
-"requirements": null
+"requirements": null,
+"target_demographics": []
 }`;
+
+// This team is military/veteran and African American. Skip opportunities whose stated
+// eligibility is exclusively for demographics the team doesn't qualify under — keep
+// anything open to all founders, or that explicitly includes veteran/military/black/
+// african_american/minority among its eligible groups.
+const QUALIFYING_TAGS = ['veteran', 'military', 'black', 'african_american', 'minority'];
+
+function isEligibleForTeam(targetDemographics) {
+  if (!Array.isArray(targetDemographics) || targetDemographics.length === 0) return true;
+  return targetDemographics.some((tag) => QUALIFYING_TAGS.includes(tag));
+}
+
+// gpt-4o-mini has a 128k-token context window; cap text well below that (~15k tokens)
+// so a single huge scraped page can't blow the budget alongside the system prompt.
+const MAX_TEXT_CHARS = 60000;
 
 function normalizeItem(item) {
   return {
     url: item.url || '',
-    text: item.text || '',
+    text: (item.text || '').slice(0, MAX_TEXT_CHARS),
     title: item.title || '',
     agency: item.source || '',
     email: item.email || (item.emails && item.emails[0]) || '',
@@ -101,23 +119,41 @@ async function extractOpportunity(item) {
   return parsed;
 }
 
-async function fetchDatasetItems() {
-  const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-  const taskId = process.env.APIFY_CAPITALWATCH_TASK_ID;
+// Poll with plain GETs instead of the SDK's long-poll (waitForFinish=999999), which
+// has been prone to "socket hang up" over long-running crawls on this connection.
+async function waitForRun(client, runId) {
+  for (;;) {
+    const run = await client.run(runId).get();
+    if (run.status !== 'RUNNING' && run.status !== 'READY') return run;
+    await new Promise((r) => setTimeout(r, 15000));
+  }
+}
 
-  console.log('[CapitalWatch] Running Apify actor task...');
-  const run = await client.task(taskId).call({ timeout: 1200, memory: 2048 });
+async function fetchDatasetItems(existingRunId) {
+  const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
+
+  let run;
+  if (existingRunId) {
+    console.log(`[CapitalWatch] Resuming existing run ${existingRunId}...`);
+    run = await waitForRun(client, existingRunId);
+  } else {
+    const taskId = process.env.APIFY_CAPITALWATCH_TASK_ID;
+    console.log('[CapitalWatch] Starting Apify actor task...');
+    const started = await client.task(taskId).start({ timeout: 1800, memory: 4096 });
+    run = await waitForRun(client, started.id);
+  }
+
+  if (run.status !== 'SUCCEEDED') {
+    throw new Error(`Apify run ended with status ${run.status}`);
+  }
 
   console.log('[CapitalWatch] Fetching dataset items...');
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   return items;
 }
 
-async function runCapitalWatchPipeline() {
-  const result = { scraped: 0, inserted: 0, skippedDuplicates: 0, errors: 0, newGrants: [] };
-
-  const rawItems = await fetchDatasetItems();
-  result.scraped = rawItems.length;
+async function processDatasetItems(rawItems) {
+  const result = { scraped: rawItems.length, inserted: 0, skippedDuplicates: 0, skippedIneligible: 0, errors: 0, newGrants: [] };
   console.log(`[CapitalWatch] Scraped ${rawItems.length} pages`);
 
   for (const raw of rawItems) {
@@ -130,6 +166,11 @@ async function runCapitalWatchPipeline() {
 
       const parsed = await extractOpportunity(item);
       if (!parsed) continue;
+
+      if (!isEligibleForTeam(parsed.target_demographics)) {
+        result.skippedIneligible++;
+        continue;
+      }
 
       const alreadyHaveLink = await Grant.exists({ link: parsed.link });
       if (alreadyHaveLink) { result.skippedDuplicates++; continue; }
@@ -146,6 +187,7 @@ async function runCapitalWatchPipeline() {
         summary: parsed.summary || undefined,
         why: parsed.why || undefined,
         requirements: parsed.requirements || undefined,
+        targetDemographics: Array.isArray(parsed.target_demographics) ? parsed.target_demographics : [],
         contactEmail: item.email || undefined,
         hotLead: !!item.email,
         status: 'pending',
@@ -159,15 +201,20 @@ async function runCapitalWatchPipeline() {
     }
   }
 
-  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, Duplicates skipped: ${result.skippedDuplicates}, Errors: ${result.errors}`);
+  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, Duplicates skipped: ${result.skippedDuplicates}, Ineligible skipped: ${result.skippedIneligible}, Errors: ${result.errors}`);
   return result;
+}
+
+async function runCapitalWatchPipeline(existingRunId) {
+  const rawItems = await fetchDatasetItems(existingRunId);
+  return processDatasetItems(rawItems);
 }
 
 async function main() {
   await mongoose.connect(process.env.DATABASE_URI);
   console.log('[CapitalWatch] Connected to MongoDB');
   try {
-    await runCapitalWatchPipeline();
+    await runCapitalWatchPipeline(process.env.CAPITALWATCH_RESUME_RUN_ID);
   } finally {
     await mongoose.disconnect();
   }

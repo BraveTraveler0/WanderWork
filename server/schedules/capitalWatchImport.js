@@ -41,8 +41,10 @@ async function runImport() {
 function initCapitalWatchImport() {
   console.log('[CapitalWatch] Import scheduled: Mondays at 8AM EST')
   cron.schedule(SCHEDULE, runImport)
-  // Run once at startup so grants are available immediately
-  setImmediate(runImport)
+  // Deliberately NOT run-once-at-startup like the free job importers: each run burns
+  // real Apify run minutes/quota, and dev-server restarts (nodemon) would otherwise
+  // fire a fresh scrape on every file save. Trigger manually via the pipeline script
+  // when you want fresh data outside the weekly schedule.
 }
 
 module.exports = { initCapitalWatchImport, runImport }

@@ -19,6 +19,9 @@ const capitalWatchGrantSchema = new mongoose.Schema({
   why:        { type: String },
   // Eligibility / submission requirements stated explicitly in the source text.
   requirements: { type: String },
+  // Founder/owner eligibility groups explicitly stated in the source (e.g. "veteran", "women").
+  // Empty array means no stated demographic restriction.
+  targetDemographics: { type: [String], default: [] },
   contactEmail: { type: String },
   hotLead:      { type: Boolean, default: false },
 
