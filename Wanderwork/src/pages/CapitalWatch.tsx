@@ -147,7 +147,7 @@ export default function CapitalWatch() {
               className={`text-left transition-opacity ${i > 0 ? "pl-6 sm:pl-16" : ""} ${categoryFilter !== "all" && categoryFilter !== key ? "opacity-40" : ""}`}
               title={`Filter by ${label}`}
             >
-              <div className={`text-4xl sm:text-6xl leading-none ${categoryFilter === key ? "underline" : ""}`}>{value}</div>
+              <div className="text-4xl sm:text-6xl leading-none">{value}</div>
               <div className={`mt-2 text-sm sm:text-base ${categoryFilter === key ? "text-black" : "text-gray-500"}`}>{label}</div>
             </button>
           ))}
