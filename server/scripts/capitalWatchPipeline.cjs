@@ -34,7 +34,7 @@ link must equal the input url ONLY if a real funding opportunity exists. Otherwi
 If no clear funding opportunity exists, title MUST be null and link MUST be null.
 
 Allowed funding_type values only:
-grant, loan, prize, contract, fellowship, stipend, other
+grant, loan, prize, contract, fellowship, stipend, scholarship, other
 
 Extraction requirements:
 
@@ -78,6 +78,15 @@ Return EXACTLY this JSON shape and nothing else:
 // anything open to all founders, or that explicitly includes veteran/military/black/
 // african_american/minority among its eligible groups.
 const QUALIFYING_TAGS = ['veteran', 'military', 'black', 'african_american', 'minority'];
+
+// Mirrors the Mongoose enum in capitalWatch.Grant.js — anything the model returns
+// outside this list (it occasionally drifts from the prompt's allowed values)
+// falls back to 'other' instead of throwing a validation error and dropping the item.
+const ALLOWED_FUNDING_TYPES = ['grant', 'loan', 'prize', 'contract', 'fellowship', 'stipend', 'scholarship', 'other'];
+
+function normalizeFundingType(fundingType) {
+  return ALLOWED_FUNDING_TYPES.includes(fundingType) ? fundingType : 'other';
+}
 
 function isEligibleForTeam(targetDemographics) {
   if (!Array.isArray(targetDemographics) || targetDemographics.length === 0) return true;
@@ -239,7 +248,7 @@ async function processDatasetItems(rawItems) {
       const grant = await Grant.create({
         title: parsed.title,
         agency: parsed.agency || item.agency || undefined,
-        fundingType: parsed.funding_type || 'other',
+        fundingType: normalizeFundingType(parsed.funding_type),
         amountUsd: parsed.amount?.value_usd ?? undefined,
         dueDate: parsed.due_date || undefined,
         rolling: !!parsed.rolling,

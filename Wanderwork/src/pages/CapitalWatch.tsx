@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash2, Plus, Triangle, Check, X } from "lucide-react";
 
 const API_BASE =
@@ -79,6 +79,8 @@ export default function CapitalWatch() {
   const [categoryFilter, setCategoryFilter] = useState<"all" | "grants" | "angels" | "venture" | "loans">("all");
   const [loading, setLoading] = useState(false);
   const [popupGrantId, setPopupGrantId] = useState<string | null>(null);
+  const [hoveredStat, setHoveredStat] = useState<string | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,10 +133,10 @@ export default function CapitalWatch() {
         <CornerMark className="absolute top-4 right-6 opacity-50" />
       </div>
 
-      <div className="relative flex flex-col sm:flex-row items-stretch sm:items-end justify-between px-4 sm:px-8 py-6 sm:py-8 gap-6 sm:gap-8 overflow-hidden">
+      <div className="relative flex flex-col lg:flex-row items-stretch lg:items-end justify-between px-4 sm:px-8 py-6 sm:py-8 gap-6 sm:gap-8 overflow-hidden">
         <GeometricBackdrop />
 
-        <div className="relative z-10 flex flex-wrap gap-6 sm:gap-16 divide-x divide-gray-200">
+        <div className="relative z-10 flex flex-wrap sm:flex-nowrap gap-4 sm:gap-10 lg:gap-16 divide-x divide-gray-200">
           {([
             ["grants", "Grants", stats.grants],
             ["angels", "Angels", stats.angels],
@@ -144,22 +146,40 @@ export default function CapitalWatch() {
             <button
               key={key}
               onClick={() => setCategoryFilter((c) => (c === key ? "all" : key))}
-              className={`text-left transition-opacity ${i > 0 ? "pl-6 sm:pl-16" : ""} ${categoryFilter !== "all" && categoryFilter !== key ? "opacity-40" : ""}`}
-              title={`Filter by ${label}`}
+              onMouseEnter={() => setHoveredStat(label)}
+              onMouseLeave={() => setHoveredStat(null)}
+              className={`group relative text-left transition-opacity ${i > 0 ? "pl-4 sm:pl-10 lg:pl-16" : ""} ${categoryFilter !== "all" && categoryFilter !== key ? "opacity-40" : ""}`}
             >
               <div className="text-4xl sm:text-6xl leading-none">{value}</div>
               <div className={`mt-2 text-sm sm:text-base ${categoryFilter === key ? "text-black" : "text-gray-500"}`}>{label}</div>
+              {hoveredStat === label && (
+                <span className="hidden sm:block absolute left-1/2 -translate-x-1/2 top-full mt-2 z-30 whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white">
+                  Filter by {label}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        <div className="relative z-10 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
-          <div className="flex w-full sm:w-auto">
+        {hoveredStat && (
+          <span
+            className="sm:hidden absolute z-30 -translate-y-full whitespace-nowrap rounded bg-black px-2 py-1 text-xs text-white"
+            style={{
+              top: searchRef.current?.offsetTop ?? 0,
+              left: searchRef.current?.offsetLeft ?? 0,
+            }}
+          >
+            Filter by {hoveredStat}
+          </span>
+        )}
+
+        <div ref={searchRef} className="relative z-10 flex flex-col items-stretch lg:items-end gap-2 w-full lg:w-auto">
+          <div className="flex w-full lg:w-auto">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
-              className="border border-gray-300 px-4 py-2 flex-1 sm:w-64 outline-none transition-colors focus:border-black"
+              className="border border-gray-300 px-4 py-2 flex-1 lg:w-64 outline-none transition-colors focus:border-black"
             />
             <button
               onClick={load}

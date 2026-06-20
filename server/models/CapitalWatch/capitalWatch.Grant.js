@@ -7,7 +7,7 @@ const capitalWatchGrantSchema = new mongoose.Schema({
   agency:      { type: String },
   fundingType: {
     type: String,
-    enum: ['grant', 'loan', 'prize', 'contract', 'fellowship', 'stipend', 'other'],
+    enum: ['grant', 'loan', 'prize', 'contract', 'fellowship', 'stipend', 'scholarship', 'other'],
     default: 'other',
   },
   amountUsd:  { type: Number },
