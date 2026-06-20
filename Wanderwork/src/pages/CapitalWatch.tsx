@@ -124,7 +124,7 @@ export default function CapitalWatch() {
   return (
     <div className="min-h-screen bg-white font-mono">
       <div className="relative bg-[#FACC15] px-4 sm:px-8 py-6 overflow-hidden">
-        <a href="/" className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2 w-fit transition-opacity hover:opacity-70">
+        <a href="https://wanderwork.io" className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2 w-fit transition-opacity hover:opacity-70">
           <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
           Capital Watch /
         </a>
