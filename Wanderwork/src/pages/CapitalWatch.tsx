@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, ArrowLeft, Plus, Triangle, Check, X } from "lucide-react";
+import { Trash2, Plus, Triangle, Check, X } from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
@@ -75,7 +75,7 @@ export default function CapitalWatch() {
   const [stats, setStats] = useState<Stats>({ grants: 0, angels: 0, venture: 0, loans: 0 });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"pending" | "rejected">("pending");
+  const [statusFilter, setStatusFilter] = useState<"pending" | "rejected" | "approved">("pending");
   const [loading, setLoading] = useState(false);
   const [popupGrantId, setPopupGrantId] = useState<string | null>(null);
 
@@ -166,17 +166,22 @@ export default function CapitalWatch() {
               Go
             </button>
           </div>
-          <button
-            onClick={() => setStatusFilter((s) => (s === "pending" ? "rejected" : "pending"))}
-            className="flex items-center gap-1.5 text-gray-400 transition-colors hover:text-black self-end"
-            title={statusFilter === "pending" ? "View deleted" : "Back to pending"}
-          >
-            {statusFilter === "pending" ? (
+          <div className="flex items-center gap-4 self-end">
+            <button
+              onClick={() => setStatusFilter((s) => (s === "approved" ? "pending" : "approved"))}
+              className={`transition-colors ${statusFilter === "approved" ? "text-black" : "text-gray-400 hover:text-black"}`}
+              title={statusFilter === "approved" ? "Back to pending" : "View applied"}
+            >
+              <Check size={16} strokeWidth={2} />
+            </button>
+            <button
+              onClick={() => setStatusFilter((s) => (s === "rejected" ? "pending" : "rejected"))}
+              className={`transition-colors ${statusFilter === "rejected" ? "text-black" : "text-gray-400 hover:text-black"}`}
+              title={statusFilter === "rejected" ? "Back to pending" : "View deleted"}
+            >
               <Trash2 size={16} strokeWidth={1.5} />
-            ) : (
-              <ArrowLeft size={16} strokeWidth={1.5} />
-            )}
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
