@@ -4,7 +4,8 @@
  * Normalization/scoring logic is a direct port of the n8n "Normalize + Key + Score" node.
  */
 const { ApifyClient } = require('apify-client')
-const { upsertRecruiters } = require('./recruiterSyncService')
+const Recruiter = require('../models/JobSeeker/jobSeeker.Recruiter')
+const { upsertRecruiters, dedupeRecruiters } = require('./recruiterSyncService')
 
 const SOURCE = 'apify_linkedin_recruiters'
 
@@ -245,8 +246,21 @@ async function runRecruiterApifyPipeline(existingRunId) {
   const leads = normalizeItems(rawItems, runId)
   console.log(`[RecruiterApify] Scraped ${rawItems.length}, matched ${leads.length} recruiter leads`)
 
+  // Apify search tasks tend to resurface the same LinkedIn profiles run after run.
+  // lead_key is derived from the linkedin URL, so this is purely informational —
+  // upsertRecruiters() below already matches on it and updates in place rather
+  // than inserting a duplicate.
+  const leadKeys = leads.map((l) => l.lead_key).filter(Boolean)
+  const alreadyKnown = leadKeys.length
+    ? new Set((await Recruiter.find({ leadKey: { $in: leadKeys } }).select('leadKey').lean()).map((r) => r.leadKey))
+    : new Set()
+  const newLeads = leadKeys.filter((k) => !alreadyKnown.has(k)).length
+
   const result = await upsertRecruiters(leads)
-  return { ...result, scraped: rawItems.length, matched: leads.length, runId }
+  const dedupe = await dedupeRecruiters().catch((e) => ({ error: e.message }))
+
+  console.log(`[RecruiterApify] ${newLeads} new, ${alreadyKnown.size} already known, ${dedupe.duplicatesRemoved || 0} duplicates merged`)
+  return { ...result, scraped: rawItems.length, matched: leads.length, newLeads, alreadyKnown: alreadyKnown.size, dedupe, runId }
 }
 
 module.exports = {
