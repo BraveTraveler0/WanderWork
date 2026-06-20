@@ -161,7 +161,7 @@ function adminDigestEmail({ weekStart, weekEnd, stats }) {
 
   return {
     from: FROM_EMAIL,
-    to: 'darrienccarter@gmail.com',
+    to: ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com'],
     subject: `WW Digest: ${fmt(stats.newCandidates)} new signup${stats.newCandidates === 1 ? '' : 's'} · ${fmt(stats.newJobs)} new jobs · ${date(weekStart)}`,
     html: base(content),
   }

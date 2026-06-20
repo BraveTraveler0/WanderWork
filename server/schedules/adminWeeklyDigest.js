@@ -130,7 +130,7 @@ async function sendAdminWeeklyDigest() {
 
   try {
     await sgMail.send(msg)
-    console.log('[AdminDigest] Digest sent to darrienccarter@gmail.com')
+    console.log('[AdminDigest] Digest sent to', msg.to.join(', '))
   } catch (err) {
     console.error('[AdminDigest] Send failed:', err.response?.body || err.message)
   }
