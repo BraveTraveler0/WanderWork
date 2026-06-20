@@ -20,7 +20,7 @@ type Grant = {
   status: "pending" | "approved" | "rejected";
 };
 
-type Stats = { grants: number; angels: number; venture: number };
+type Stats = { grants: number; angels: number; venture: number; loans: number };
 
 async function api(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_BASE}/capitalwatch${path}`, {
@@ -72,7 +72,7 @@ function CornerMark({ className = "" }: { className?: string }) {
 
 export default function CapitalWatch() {
   const [grants, setGrants] = useState<Grant[]>([]);
-  const [stats, setStats] = useState<Stats>({ grants: 0, angels: 0, venture: 0 });
+  const [stats, setStats] = useState<Stats>({ grants: 0, angels: 0, venture: 0, loans: 0 });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"pending" | "rejected">("pending");
@@ -145,6 +145,10 @@ export default function CapitalWatch() {
             <div className="text-6xl leading-none">{stats.venture}</div>
             <div className="text-gray-500 mt-2">Venture</div>
           </div>
+          <div className="pl-16">
+            <div className="text-6xl leading-none">{stats.loans}</div>
+            <div className="text-gray-500 mt-2">Loans</div>
+          </div>
         </div>
 
         <div className="relative z-10 flex flex-col items-end gap-2">
@@ -199,7 +203,20 @@ export default function CapitalWatch() {
           >
             <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-6 items-start">
               <div className="font-bold">{grant.title}</div>
-              <div className="text-gray-600">{websiteLabel(grant.link)}</div>
+              <div className="text-gray-600">
+                {grant.link ? (
+                  <a
+                    href={grant.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline transition-colors hover:text-black"
+                  >
+                    {websiteLabel(grant.link)}
+                  </a>
+                ) : (
+                  websiteLabel(grant.link)
+                )}
+              </div>
               <div>{formatAmount(grant.amountUsd)}</div>
               <div>
                 {grant.fundingType || "—"}

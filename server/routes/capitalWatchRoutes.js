@@ -41,12 +41,13 @@ router.get('/grants', async (req, res) => {
 
 router.get('/stats', async (req, res) => {
   try {
-    const [total, angels, venture] = await Promise.all([
+    const [total, angels, venture, loans] = await Promise.all([
       Grant.countDocuments({ status: 'pending' }),
       Grant.countDocuments({ status: 'pending', $or: [{ title: /angel/i }, { agency: /angel/i }] }),
       Grant.countDocuments({ status: 'pending', $or: [{ title: /venture|\bvc\b/i }, { agency: /venture|\bvc\b/i }] }),
+      Grant.countDocuments({ status: 'pending', fundingType: 'loan' }),
     ])
-    res.json({ grants: total - angels - venture, angels, venture })
+    res.json({ grants: total - angels - venture - loans, angels, venture, loans })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }
