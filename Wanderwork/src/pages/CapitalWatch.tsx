@@ -121,43 +121,43 @@ export default function CapitalWatch() {
 
   return (
     <div className="min-h-screen bg-white font-mono">
-      <div className="relative bg-[#FACC15] px-8 py-6 overflow-hidden">
-        <h1 className="text-3xl tracking-tight flex items-center gap-2">
+      <div className="relative bg-[#FACC15] px-4 sm:px-8 py-6 overflow-hidden">
+        <h1 className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2">
           <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
           Capital Watch /
         </h1>
         <CornerMark className="absolute top-4 right-6 opacity-50" />
       </div>
 
-      <div className="relative flex items-end justify-between px-8 py-8 gap-8 flex-wrap overflow-hidden">
+      <div className="relative flex flex-col sm:flex-row items-stretch sm:items-end justify-between px-4 sm:px-8 py-6 sm:py-8 gap-6 sm:gap-8 overflow-hidden">
         <GeometricBackdrop />
 
-        <div className="relative z-10 flex gap-16 divide-x divide-gray-200">
+        <div className="relative z-10 flex flex-wrap gap-6 sm:gap-16 divide-x divide-gray-200">
           <div>
-            <div className="text-6xl leading-none">{stats.grants}</div>
-            <div className="text-gray-500 mt-2">Grants</div>
+            <div className="text-4xl sm:text-6xl leading-none">{stats.grants}</div>
+            <div className="text-gray-500 mt-2 text-sm sm:text-base">Grants</div>
           </div>
-          <div className="pl-16">
-            <div className="text-6xl leading-none">{stats.angels}</div>
-            <div className="text-gray-500 mt-2">Angels</div>
+          <div className="pl-6 sm:pl-16">
+            <div className="text-4xl sm:text-6xl leading-none">{stats.angels}</div>
+            <div className="text-gray-500 mt-2 text-sm sm:text-base">Angels</div>
           </div>
-          <div className="pl-16">
-            <div className="text-6xl leading-none">{stats.venture}</div>
-            <div className="text-gray-500 mt-2">Venture</div>
+          <div className="pl-6 sm:pl-16">
+            <div className="text-4xl sm:text-6xl leading-none">{stats.venture}</div>
+            <div className="text-gray-500 mt-2 text-sm sm:text-base">Venture</div>
           </div>
-          <div className="pl-16">
-            <div className="text-6xl leading-none">{stats.loans}</div>
-            <div className="text-gray-500 mt-2">Loans</div>
+          <div className="pl-6 sm:pl-16">
+            <div className="text-4xl sm:text-6xl leading-none">{stats.loans}</div>
+            <div className="text-gray-500 mt-2 text-sm sm:text-base">Loans</div>
           </div>
         </div>
 
-        <div className="relative z-10 flex flex-col items-end gap-2">
-          <div className="flex">
+        <div className="relative z-10 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
+          <div className="flex w-full sm:w-auto">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
-              className="border border-gray-300 px-4 py-2 w-64 outline-none transition-colors focus:border-black"
+              className="border border-gray-300 px-4 py-2 flex-1 sm:w-64 outline-none transition-colors focus:border-black"
             />
             <button
               onClick={load}
@@ -168,7 +168,7 @@ export default function CapitalWatch() {
           </div>
           <button
             onClick={() => setStatusFilter((s) => (s === "pending" ? "rejected" : "pending"))}
-            className="flex items-center gap-1.5 text-gray-400 transition-colors hover:text-black"
+            className="flex items-center gap-1.5 text-gray-400 transition-colors hover:text-black self-end"
             title={statusFilter === "pending" ? "View deleted" : "Back to pending"}
           >
             {statusFilter === "pending" ? (
@@ -182,8 +182,8 @@ export default function CapitalWatch() {
 
       <hr className="border-gray-200" />
 
-      <div className="px-8">
-        <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-4 text-gray-400 text-sm uppercase tracking-wide">
+      <div className="px-4 sm:px-8">
+        <div className="hidden sm:grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-4 text-gray-400 text-sm uppercase tracking-wide">
           <div>Grant Name</div>
           <div>Website</div>
           <div>Amount</div>
@@ -201,9 +201,10 @@ export default function CapitalWatch() {
             key={grant._id}
             className="group relative border border-gray-200 mb-4 px-2 transition-colors hover:border-black"
           >
-            <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-6 items-start">
-              <div className="font-bold">{grant.title}</div>
+            <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[2fr_1.5fr_1fr_1fr_3fr] sm:gap-4 sm:py-6 sm:items-start">
+              <div className="font-bold pr-10">{grant.title}</div>
               <div className="text-gray-600">
+                <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Website</span>
                 {grant.link ? (
                   <a
                     href={grant.link}
@@ -217,8 +218,12 @@ export default function CapitalWatch() {
                   websiteLabel(grant.link)
                 )}
               </div>
-              <div>{formatAmount(grant.amountUsd)}</div>
               <div>
+                <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Amount</span>
+                {formatAmount(grant.amountUsd)}
+              </div>
+              <div>
+                <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Type</span>
                 {grant.fundingType || "—"}
                 {!!grant.targetDemographics?.length && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -233,11 +238,14 @@ export default function CapitalWatch() {
                   </div>
                 )}
               </div>
-              <div className="text-sm text-gray-500">{grant.summary || "—"}</div>
+              <div className="text-sm text-gray-500">
+                <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Description</span>
+                {grant.summary || "—"}
+              </div>
             </div>
 
             {statusFilter === "pending" && (
-              <div className="absolute -top-3 -right-3 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute -top-3 -right-3 flex flex-col opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => setPopupGrantId(grant._id)}
                   className="w-7 h-7 bg-[#FACC15] text-white flex items-center justify-center font-bold transition-transform hover:scale-110"
