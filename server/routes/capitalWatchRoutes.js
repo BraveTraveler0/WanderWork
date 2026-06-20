@@ -24,16 +24,35 @@ router.get('/companies', (req, res) => {
   res.json(getCompanies())
 })
 
+const ANGEL_RE = /angel/i
+const VENTURE_RE = /venture|\bvc\b/i
+
+// Same bucket definitions /stats counts with, so clicking a stat number filters to
+// exactly what that number represents. Done in JS (not a Mongo query) so it composes
+// cleanly with the free-text search filter instead of fighting over $or.
+function matchesCategory(grant, category) {
+  const isAngel = ANGEL_RE.test(grant.title || '') || ANGEL_RE.test(grant.agency || '')
+  const isVenture = VENTURE_RE.test(grant.title || '') || VENTURE_RE.test(grant.agency || '')
+  const isLoan = grant.fundingType === 'loan'
+  if (category === 'angels') return isAngel
+  if (category === 'venture') return isVenture
+  if (category === 'loans') return isLoan
+  if (category === 'grants') return !isAngel && !isVenture && !isLoan
+  return true
+}
+
 router.get('/grants', async (req, res) => {
   try {
-    const { status = 'pending', q } = req.query
+    const { status = 'pending', q, category } = req.query
     const filter = {}
     if (status && status !== 'all') filter.status = status
     if (q) {
       const re = new RegExp(String(q).trim(), 'i')
       filter.$or = [{ title: re }, { agency: re }]
     }
-    const grants = await Grant.find(filter).lean()
+
+    let grants = await Grant.find(filter).lean()
+    if (category && category !== 'all') grants = grants.filter((g) => matchesCategory(g, category))
     // Most promising first: best demographic fit + highest payout + least work to apply.
     grants.sort((a, b) => scoreGrant(b) - scoreGrant(a))
     res.json(grants)

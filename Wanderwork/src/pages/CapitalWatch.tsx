@@ -76,6 +76,7 @@ export default function CapitalWatch() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"pending" | "rejected" | "approved">("pending");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "grants" | "angels" | "venture" | "loans">("all");
   const [loading, setLoading] = useState(false);
   const [popupGrantId, setPopupGrantId] = useState<string | null>(null);
 
@@ -84,6 +85,7 @@ export default function CapitalWatch() {
     try {
       const params = new URLSearchParams({ status: statusFilter });
       if (search.trim()) params.set("q", search.trim());
+      if (categoryFilter !== "all") params.set("category", categoryFilter);
       const [grantsData, statsData] = await Promise.all([
         api(`/grants?${params.toString()}`),
         api(`/stats`),
@@ -95,7 +97,7 @@ export default function CapitalWatch() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, categoryFilter]);
 
   useEffect(() => {
     api("/companies").then(setCompanies).catch(console.error);
@@ -133,22 +135,22 @@ export default function CapitalWatch() {
         <GeometricBackdrop />
 
         <div className="relative z-10 flex flex-wrap gap-6 sm:gap-16 divide-x divide-gray-200">
-          <div>
-            <div className="text-4xl sm:text-6xl leading-none">{stats.grants}</div>
-            <div className="text-gray-500 mt-2 text-sm sm:text-base">Grants</div>
-          </div>
-          <div className="pl-6 sm:pl-16">
-            <div className="text-4xl sm:text-6xl leading-none">{stats.angels}</div>
-            <div className="text-gray-500 mt-2 text-sm sm:text-base">Angels</div>
-          </div>
-          <div className="pl-6 sm:pl-16">
-            <div className="text-4xl sm:text-6xl leading-none">{stats.venture}</div>
-            <div className="text-gray-500 mt-2 text-sm sm:text-base">Venture</div>
-          </div>
-          <div className="pl-6 sm:pl-16">
-            <div className="text-4xl sm:text-6xl leading-none">{stats.loans}</div>
-            <div className="text-gray-500 mt-2 text-sm sm:text-base">Loans</div>
-          </div>
+          {([
+            ["grants", "Grants", stats.grants],
+            ["angels", "Angels", stats.angels],
+            ["venture", "Venture", stats.venture],
+            ["loans", "Loans", stats.loans],
+          ] as const).map(([key, label, value], i) => (
+            <button
+              key={key}
+              onClick={() => setCategoryFilter((c) => (c === key ? "all" : key))}
+              className={`text-left transition-opacity ${i > 0 ? "pl-6 sm:pl-16" : ""} ${categoryFilter !== "all" && categoryFilter !== key ? "opacity-40" : ""}`}
+              title={`Filter by ${label}`}
+            >
+              <div className={`text-4xl sm:text-6xl leading-none ${categoryFilter === key ? "underline" : ""}`}>{value}</div>
+              <div className={`mt-2 text-sm sm:text-base ${categoryFilter === key ? "text-black" : "text-gray-500"}`}>{label}</div>
+            </button>
+          ))}
         </div>
 
         <div className="relative z-10 flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto">
