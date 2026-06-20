@@ -258,7 +258,7 @@ export default function CapitalWatch() {
                   className="w-9 h-9 sm:w-8 sm:h-8 rotate-45 bg-[#FACC15] text-white ring-4 ring-white shadow-lg flex items-center justify-center transition-all hover:bg-yellow-400 hover:scale-110"
                   title="Approve"
                 >
-                  <Check size={16} strokeWidth={2} className="-rotate-45" />
+                  <Check size={16} strokeWidth={2} className="-rotate-45 text-black" />
                 </button>
                 <button
                   onClick={() => decide(grant._id, "rejected")}

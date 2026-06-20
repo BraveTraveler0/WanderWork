@@ -192,7 +192,10 @@ async function fetchDatasetItems(existingRunId) {
     await client.task(taskId).update({ input: task.input });
 
     console.log('[CapitalWatch] Starting Apify actor task...');
-    const started = await client.task(taskId).start({ timeout: 1800, memory: 4096 });
+    // start(input, options) -- timeout/memory belong in the second (options) argument,
+    // not the first (input override). Passing them as a single object silently merged
+    // them into the run's input instead of actually capping its timeout/memory.
+    const started = await client.task(taskId).start(undefined, { timeout: 1800, memory: 4096 });
     run = await waitForRun(client, started.id);
   }
 
