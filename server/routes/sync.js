@@ -293,15 +293,24 @@ router.post('/recruiters', requireSyncSecret, async (req, res) => {
   }
 });
 
-router.post('/recruiters/apify', requireSyncSecret, async (req, res) => {
+router.post('/recruiters/apify', requireSyncSecret, (req, res) => {
+  // The Apify run + polling can take many minutes — respond immediately so the
+  // request doesn't sit open long enough for Cloudflare/Render to reset the connection.
+  res.json({ success: true, message: 'Recruiter Apify sync started in the background', timestamp: new Date().toISOString() });
+  runRecruiterApifyPipeline(req.body?.existingRunId)
+    .then((result) => console.log('[RecruiterApify] Manual sync completed:', result))
+    .catch((err) => console.error('[RecruiterApify] Manual sync failed:', err.message));
+});
+
+router.get('/recruiters/apify/status', requireSyncSecret, async (req, res) => {
   try {
-    const result = await runRecruiterApifyPipeline(req.body?.existingRunId);
-    res.json({
-      success: true,
-      message: 'Recruiters synced from Apify',
-      ...result,
-      timestamp: new Date().toISOString(),
-    });
+    const Recruiter = require('../models/JobSeeker/jobSeeker.Recruiter');
+    const [total, fromApify, mostRecent] = await Promise.all([
+      Recruiter.countDocuments({}),
+      Recruiter.countDocuments({ source: 'apify_linkedin_recruiters' }),
+      Recruiter.findOne({ source: 'apify_linkedin_recruiters' }).sort({ lastSeenAt: -1 }).select('name company lastSeenAt sourceRunId').lean(),
+    ]);
+    res.json({ success: true, total, fromApify, mostRecent });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
