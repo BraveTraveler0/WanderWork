@@ -8,6 +8,7 @@ const OpenAI = require('openai');
 const { ApifyClient } = require('apify-client');
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
 const SOURCES = require('../config/capitalWatchSources');
+const { isEligibleLocation } = require('../config/capitalWatchGeo');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -224,7 +225,7 @@ async function fetchDatasetItems(existingRunId) {
 }
 
 async function processDatasetItems(rawItems) {
-  const result = { scraped: rawItems.length, inserted: 0, skippedDuplicates: 0, skippedIneligible: 0, errors: 0, newGrants: [] };
+  const result = { scraped: rawItems.length, inserted: 0, skippedDuplicates: 0, skippedIneligible: 0, skippedLocation: 0, errors: 0, newGrants: [] };
   console.log(`[CapitalWatch] Scraped ${rawItems.length} pages`);
 
   const seen = await loadExistingFingerprints();
@@ -241,6 +242,11 @@ async function processDatasetItems(rawItems) {
 
       if (!isEligibleForTeam(parsed.target_demographics)) {
         result.skippedIneligible++;
+        continue;
+      }
+
+      if (!isEligibleLocation(parsed)) {
+        result.skippedLocation++;
         continue;
       }
 
@@ -279,7 +285,7 @@ async function processDatasetItems(rawItems) {
     }
   }
 
-  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, Duplicates skipped: ${result.skippedDuplicates}, Ineligible skipped: ${result.skippedIneligible}, Errors: ${result.errors}`);
+  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, Duplicates skipped: ${result.skippedDuplicates}, Ineligible skipped: ${result.skippedIneligible}, Out-of-region skipped: ${result.skippedLocation}, Errors: ${result.errors}`);
   return result;
 }
 

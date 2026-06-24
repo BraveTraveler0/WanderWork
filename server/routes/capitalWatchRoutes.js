@@ -139,15 +139,15 @@ Stated submission requirements/standards (break these into the checklist and fol
 router.patch('/grants/:id', async (req, res) => {
   try {
     const { status, companyId } = req.body
-    if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ message: 'status must be approved or rejected' })
+    if (!['approved', 'rejected', 'archived'].includes(status)) {
+      return res.status(400).json({ message: 'status must be approved, rejected, or archived' })
     }
 
     const grant = await Grant.findById(req.params.id)
     if (!grant) return res.status(404).json({ message: 'Grant not found' })
 
-    if (status === 'rejected') {
-      grant.status = 'rejected'
+    if (status === 'rejected' || status === 'archived') {
+      grant.status = status
       await grant.save()
       return res.json(grant)
     }

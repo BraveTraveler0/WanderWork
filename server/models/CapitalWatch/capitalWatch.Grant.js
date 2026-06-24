@@ -25,9 +25,11 @@ const capitalWatchGrantSchema = new mongoose.Schema({
   contactEmail: { type: String },
   hotLead:      { type: Boolean, default: false },
 
+  // 'archived' = looks good for later, not a fit right now -- pulled out of the main
+  // pending list into its own view instead of being approved or rejected.
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
+    enum: ['pending', 'approved', 'rejected', 'archived'],
     default: 'pending',
     index: true,
   },
@@ -44,6 +46,10 @@ const capitalWatchGrantSchema = new mongoose.Schema({
   }],
 
   dateFound: { type: Date, default: Date.now },
+
+  // Which deadline-warning tiers ('14d', '7d', '3d') have already been emailed for
+  // this grant, so the daily deadline check doesn't re-send the same warning every day.
+  deadlineAlertsSent: { type: [String], default: [] },
 }, {
   collection: 'capitalwatch.grants',
   timestamps: true,

@@ -145,4 +145,42 @@ function applicationDraftEmail(grant, companyName) {
   }
 }
 
-module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail }
+// dueByTier: { '3d': [grant...], '7d': [...], '14d': [...] } -- keys match the tier
+// keys used by the deadline-check cron in server/schedules/capitalWatchDeadlines.js.
+function deadlineAlertEmail(dueByTier, dashboardUrl) {
+  const sections = [
+    { key: '3d', label: 'Final days, apply now', color: '#dc2626' },
+    { key: '7d', label: '1 week left', color: '#ea580c' },
+    { key: '14d', label: '2 weeks left', color: '#ca8a04' },
+  ]
+
+  const sectionHtml = sections
+    .filter((s) => dueByTier[s.key]?.length)
+    .map((s) => {
+      const rows = dueByTier[s.key].map((g) => `
+        <li style="margin-bottom:12px;">
+          <a href="${g.link}" style="color:#306770;font-weight:700;text-decoration:none;">${escapeHtml(g.title)}</a>
+          <div style="font-size:13px;color:#6b7280;">${escapeHtml(g.agency || '')} &middot; Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied/in progress' : 'Still pending review'}</div>
+        </li>`).join('')
+      return `
+        <h2 style="color:${s.color};border-bottom:2px solid ${s.color};padding-bottom:6px;">${s.label} (${dueByTier[s.key].length})</h2>
+        <ul style="padding-left:18px;list-style:none;">${rows}</ul>`
+    }).join('')
+
+  const totalCount = sections.reduce((n, s) => n + (dueByTier[s.key]?.length || 0), 0)
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;">
+      <h1 style="color:#1f2937;">Capital Watch: Deadline Alert</h1>
+      ${sectionHtml}
+      <p style="margin-top:24px;"><a href="${dashboardUrl}" style="background:#FACC15;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Review on the dashboard →</a></p>
+    </div>`
+
+  return {
+    from: FROM_EMAIL,
+    subject: `Capital Watch: ${totalCount} deadline${totalCount === 1 ? '' : 's'} approaching`,
+    html,
+  }
+}
+
+module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail }

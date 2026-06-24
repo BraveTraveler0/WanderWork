@@ -25,6 +25,7 @@ const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
 const { initAdminWeeklyDigest } = require('./schedules/adminWeeklyDigest');
 const { initRemoteJobsImport } = require('./schedules/remoteJobsImport');
 const { initCapitalWatchImport } = require('./schedules/capitalWatchImport');
+const { initCapitalWatchDeadlines } = require('./schedules/capitalWatchDeadlines');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -447,6 +448,7 @@ const startServer = async () => {
     backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
     initRemoteJobsImport(); // after DB connects so the startup import has an active connection
     initCapitalWatchImport(); // weekly grant/funding-opportunity scrape
+    initCapitalWatchDeadlines(); // daily deadline check (2 weeks / 1 week / final days)
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

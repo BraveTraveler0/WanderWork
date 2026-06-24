@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Trash2, Plus, Triangle, Check, X, Loader2 } from "lucide-react";
+import { Trash2, Plus, Triangle, Check, X, Loader2, Archive } from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
@@ -17,7 +17,7 @@ type Grant = {
   summary?: string;
   requirements?: string;
   targetDemographics?: string[];
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "archived";
 };
 
 type Stats = { grants: number; angels: number; venture: number; loans: number };
@@ -75,7 +75,7 @@ export default function CapitalWatch() {
   const [stats, setStats] = useState<Stats>({ grants: 0, angels: 0, venture: 0, loans: 0 });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"pending" | "rejected" | "approved">("pending");
+  const [statusFilter, setStatusFilter] = useState<"pending" | "rejected" | "approved" | "archived">("pending");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "grants" | "angels" | "venture" | "loans">("all");
   const [loading, setLoading] = useState(false);
   const [popupGrantId, setPopupGrantId] = useState<string | null>(null);
@@ -111,7 +111,7 @@ export default function CapitalWatch() {
     load();
   }, [load]);
 
-  async function decide(id: string, status: "approved" | "rejected", companyId?: string) {
+  async function decide(id: string, status: "approved" | "rejected" | "archived", companyId?: string) {
     if (decidingId) return; // a request is already in flight — ignore repeat clicks
     setDecidingId(id);
     try {
@@ -207,6 +207,13 @@ export default function CapitalWatch() {
               <Check size={16} strokeWidth={2} />
             </button>
             <button
+              onClick={() => setStatusFilter((s) => (s === "archived" ? "pending" : "archived"))}
+              className={`transition-colors ${statusFilter === "archived" ? "text-black" : "text-gray-400 hover:text-black"}`}
+              title={statusFilter === "archived" ? "Back to pending" : "View archived"}
+            >
+              <Archive size={16} strokeWidth={1.5} />
+            </button>
+            <button
               onClick={() => setStatusFilter((s) => (s === "rejected" ? "pending" : "rejected"))}
               className={`transition-colors ${statusFilter === "rejected" ? "text-black" : "text-gray-400 hover:text-black"}`}
               title={statusFilter === "rejected" ? "Back to pending" : "View deleted"}
@@ -296,6 +303,13 @@ export default function CapitalWatch() {
                   title="Reject"
                 >
                   <X size={15} strokeWidth={3} />
+                </button>
+                <button
+                  onClick={() => decide(grant._id, "archived")}
+                  className="w-9 h-9 sm:w-8 sm:h-8 bg-white text-gray-600 ring-4 ring-white border border-gray-300 shadow-lg flex items-center justify-center transition-all hover:border-black hover:text-black hover:scale-110"
+                  title="Archive for later"
+                >
+                  <Archive size={15} strokeWidth={2} />
                 </button>
               </div>
             )}
