@@ -91,7 +91,7 @@ const asTextList = (value: unknown): string[] => {
 
 const asArray = (value: unknown): any[] => Array.isArray(value) ? value : []
 
-const WELCOME_MODAL_VERSION = 'tester-100-tokens-v1'
+const WELCOME_MODAL_VERSION = 'beta-welcome-tokens-v1'
 
 const getWelcomeStorageKey = (user: any) => {
   const identifier = user?._id || user?.id || user?.email || user?.displayName || 'guest'
