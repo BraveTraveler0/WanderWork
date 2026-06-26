@@ -266,7 +266,7 @@ app.get('/about', (req, res) => {
 </ul>
 
 <h2>How Jobs Are Sourced</h2>
-<p>Jobs are imported every 6 hours directly from ATS platforms: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, and Jobvite. Remotive serves as a fallback when direct ATS coverage is below threshold. All jobs are verified as remote before import. Stale or low-quality listings are purged automatically.</p>
+<p>Jobs are imported every 6 hours directly from ATS platforms: Greenhouse, Lever, Ashby, SmartRecruiters, and Workable. Remotive and The Muse fill in categories — like writing, PR, and social media marketing — that tech-company ATS boards rarely post. All jobs are verified as remote before import. Stale or low-quality listings are purged automatically.</p>
 
 <h2>How Remote Status Is Verified</h2>
 <p>Remote tags are assigned based on job content, location field values, and ATS metadata. Every job is tagged as worldwide, US-only, Europe timezone, LATAM timezone, hybrid, or async-friendly. Tags are set automatically and reviewed against content.</p>

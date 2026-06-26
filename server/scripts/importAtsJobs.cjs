@@ -158,6 +158,19 @@ const SEEDS = {
     'adyen', 'mollie', 'messagebird', 'sendcloud', 'picnic', 'coolblue',
     'spotify', 'king', 'mojang', 'paradox', 'izettle', 'klarna',
   ],
+  // Workable has no sitemap and job URLs (apply.workable.com/j/<shortcode>)
+  // don't embed the company slug, so unlike the other ATS providers this list
+  // is the *only* discovery mechanism — there's no sitemap/DB fallback to grow
+  // it automatically. Each slug below was verified live against Workable's
+  // public widget API (fake slugs 404; these all returned real accounts).
+  workable: [
+    'typeform', 'deliveroo', 'babbel', 'wagestream', 'paddle', 'blablacar',
+    'truelayer', 'onfido', 'thoughtmachine', 'trivago', 'tide', 'marshmallow',
+    'cleo', 'curve', 'multiverse', 'hopin', 'bloomandwild', 'treatwell',
+    'photobox', 'moneybox', 'capdesk', 'zopa', 'bulb', 'farewill', 'personio',
+    'depop', 'n26', 'monzo', 'wise', 'starling', 'revolut', 'skyscanner',
+    'algolia', 'zego',
+  ],
 };
 
 // ── Sitemap discovery ─────────────────────────────────────────────────────────
@@ -269,6 +282,8 @@ async function discoverAllSlugs(col) {
     lever:           new Set([...leverSitemap,  ...SEEDS.lever,           ...(dbSlugs.lever || [])]),
     ashby:           new Set([...ashbySitemap,  ...SEEDS.ashby,           ...(dbSlugs.ashby || [])]),
     smartrecruiters: new Set([...SEEDS.smartrecruiters, ...(dbSlugs.smartrecruiters || [])]),
+    // Seed-only — no sitemap, and job URLs don't embed the slug so DB discovery can't grow it.
+    workable:        new Set(SEEDS.workable),
   };
 }
 
@@ -353,6 +368,38 @@ async function fetchAshby(slug, company) {
     }));
 }
 
+// Workable's own `telecommuting` flag is the remote signal. Some companies
+// also mark traveling/field roles as telecommuting, so an empty `city` (i.e.
+// not tied to one office) is used as the stronger "actually remote" signal —
+// when a city is present we keep it as the location instead of mislabeling
+// the job "Remote".
+async function fetchWorkable(slug, company) {
+  const res = await get(`https://apply.workable.com/api/v1/widget/accounts/${slug}?details=true`);
+  const org = res.data?.name || company;
+  return (res.data?.jobs || [])
+    .filter(j => j.telecommuting)
+    .map(j => {
+      const loc = j.locations?.[0] || {};
+      const location = loc.city ? normalizeLocation([loc.city, loc.country].filter(Boolean).join(', ')) : 'Remote';
+      return {
+        title: stripHtml(j.title),
+        company: org,
+        url: j.url,
+        apply_url: j.application_url || j.url,
+        location,
+        job_type: j.employment_type || 'Full-time',
+        salary: 'Not Listed',
+        date_posted: j.published_on ? new Date(j.published_on) : new Date(),
+        description_short: truncateDesc(j.description || ''),
+        lang: 'en',
+        source: 'Workable',
+        ats: 'workable',
+        ats_direct: true,
+        tags: j.department ? [j.department] : [],
+      };
+    });
+}
+
 async function fetchSmartRecruiters(slug, company) {
   const res = await get(`https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=100`);
   return (res.data?.content || [])
@@ -380,6 +427,11 @@ const ATS_FETCHERS = {
   lever:           { fetch: fetchLever,           urlFragment: s => `lever.co/${s}` },
   ashby:           { fetch: fetchAshby,           urlFragment: s => `ashbyhq.com/${s}` },
   smartrecruiters: { fetch: fetchSmartRecruiters, urlFragment: s => `smartrecruiters.com/${s}` },
+  // Workable job URLs (apply.workable.com/j/<shortcode>) don't contain the slug,
+  // so a real urlFragment here would match every Workable job in the DB and return
+  // an unrelated company's name. fetchWorkable resolves the name from the API
+  // response itself, so this fragment is deliberately unmatchable.
+  workable:        { fetch: fetchWorkable,        urlFragment: s => `workable.com/__unused__/${s}` },
 };
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -392,6 +444,7 @@ const PER_CYCLE_CAP = {
   lever:           200,
   ashby:           150,
   smartrecruiters: 80,
+  workable:        SEEDS.workable.length,
 };
 
 const CONCURRENCY = 12; // parallel company fetches per batch
