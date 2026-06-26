@@ -2,25 +2,84 @@
 
 const FROM_EMAIL = { name: 'Capital Watch', email: process.env.EMAIL_FROM || 'support@wanderwork.io' }
 
+const MONO = "Menlo,Consolas,'Liberation Mono','Courier New',monospace"
+const YELLOW = '#FACC15'
+const LINE = '#e5e7eb'
+const SUBTLE = '#9ca3af'
+
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]))
 }
 
-function weeklyDigestEmail(newGrants, dashboardUrl) {
-  const rows = newGrants.map(g => `
-    <li style="margin-bottom:14px;">
-      <a href="${g.link}" style="color:#306770;font-weight:700;text-decoration:none;">${escapeHtml(g.title)}</a>
-      <div style="font-size:13px;color:#6b7280;">${escapeHtml(g.agency || '')} &middot; ${escapeHtml(g.fundingType || '')} &middot; ${g.amountUsd ? '$' + g.amountUsd : 'Amount not stated'}</div>
-    </li>`).join('')
+// --- Geometric accents, kept email-client-safe (border tricks + rotated squares, no SVG) ---
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;">
-      <h1 style="color:#1f2937;">Capital Watch — ${newGrants.length} new funding opportunit${newGrants.length === 1 ? 'y' : 'ies'}</h1>
-      <ul style="padding-left:18px;">${rows}</ul>
-      <p style="margin-top:24px;"><a href="${dashboardUrl}" style="background:#FACC15;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Review on the dashboard →</a></p>
+function shapeTriangle(color, size = 10) {
+  return `<span style="display:inline-block;width:0;height:0;border-left:${Math.round(size * 0.6)}px solid transparent;border-right:${Math.round(size * 0.6)}px solid transparent;border-bottom:${size}px solid ${color};vertical-align:middle;"></span>`
+}
+
+function shapeDiamond(color, size = 8, filled = true) {
+  const fill = filled ? `background:${color};` : `background:transparent;border:1.5px solid ${color};`
+  return `<span style="display:inline-block;width:${size}px;height:${size}px;${fill}transform:rotate(45deg);vertical-align:middle;"></span>`
+}
+
+function shapeRect(color, w = 11, h = 8, filled = false) {
+  const fill = filled ? `background:${color};` : `background:transparent;border:1.5px solid ${color};`
+  return `<span style="display:inline-block;width:${w}px;height:${h}px;${fill}vertical-align:middle;"></span>`
+}
+
+function header() {
+  return `
+    <div style="background:${YELLOW};border-bottom:1px solid #000;padding:18px 24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;">${shapeTriangle('rgba(0,0,0,.55)', 11)}<span style="margin-left:8px;">Capital Watch <span style="opacity:.55;">/</span></span></td>
+        <td align="right" style="font-family:${MONO};color:rgba(0,0,0,.35);font-size:15px;">+</td>
+      </tr></table>
     </div>`
+}
+
+function footer(dashboardUrl, label) {
+  const cta = dashboardUrl
+    ? `<div style="padding:24px 0 4px;"><a href="${dashboardUrl}" style="display:inline-block;background:${YELLOW};border:1px solid #000;color:#000;padding:11px 20px;text-decoration:none;font-weight:700;font-family:${MONO};font-size:13px;">${label || 'Review on the dashboard'} &rarr;</a></div>`
+    : ''
+  return `
+    ${cta}
+    <div style="margin-top:22px;padding-top:14px;border-top:1px solid ${LINE};font-family:${MONO};font-size:11px;color:${SUBTLE};text-transform:uppercase;letter-spacing:0.4px;">
+      ${shapeTriangle('#d1d5db', 7)}<span style="margin-left:6px;">Capital Watch &middot; Wanderwork</span>
+    </div>`
+}
+
+function shell(contentHtml) {
+  return `
+    <div style="background:#f4f4f5;padding:28px 12px;font-family:${MONO};">
+      <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid ${LINE};">
+        ${header()}
+        <div style="padding:26px 24px 24px;color:#111827;">${contentHtml}</div>
+      </div>
+    </div>`
+}
+
+function metaLine(g) {
+  return `<div style="font-size:12px;color:#6b7280;margin:4px 0 0;padding-left:16px;">${escapeHtml(g.agency || '')} &middot; ${escapeHtml(g.fundingType || '')} &middot; ${g.amountUsd ? '$' + g.amountUsd : 'Amount not stated'}</div>`
+}
+
+function grantLink(g) {
+  return `${shapeDiamond('#000', 7)}<a href="${g.link}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>`
+}
+
+function weeklyDigestEmail(newGrants, dashboardUrl) {
+  const rows = newGrants.map((g, i) => `
+    <div style="padding:14px 0;${i < newGrants.length - 1 ? `border-bottom:1px solid ${LINE};` : ''}">
+      <div>${grantLink(g)}</div>
+      ${metaLine(g)}
+    </div>`).join('')
+
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 18px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">${newGrants.length} new funding opportunit${newGrants.length === 1 ? 'y' : 'ies'}</span></h1>
+    ${rows}
+    ${footer(dashboardUrl)}
+  `)
 
   return {
     from: FROM_EMAIL,
@@ -44,25 +103,36 @@ function matchReasons(grant) {
   return reasons
 }
 
-function topMatchesDigestEmail(rankedGrants, dashboardUrl) {
-  const rows = rankedGrants.map((g, i) => {
-    const reasons = matchReasons(g)
-    return `
-    <li style="margin-bottom:16px;">
-      <div style="font-size:13px;color:#9ca3af;font-weight:700;">#${i + 1}</div>
-      <a href="${g.link}" style="color:#306770;font-weight:700;text-decoration:none;">${escapeHtml(g.title)}</a>
-      <div style="font-size:13px;color:#6b7280;">${escapeHtml(g.agency || '')} &middot; ${escapeHtml(g.fundingType || '')} &middot; ${g.amountUsd ? '$' + g.amountUsd : 'Amount not stated'}</div>
-      ${reasons.length ? `<div style="margin-top:4px;">${reasons.map(r => `<span style="display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;border:1px solid #e5e7eb;border-radius:4px;padding:2px 6px;margin-right:4px;color:#4b5563;">${escapeHtml(r)}</span>`).join('')}</div>` : ''}
-    </li>`
-  }).join('')
+function amountChip(amountUsd) {
+  if (!amountUsd) return ''
+  return `<span style="display:inline-block;background:${YELLOW};border:1px solid #000;padding:4px 9px;font-family:${MONO};font-size:12px;font-weight:700;color:#000;white-space:nowrap;">$${amountUsd.toLocaleString()}</span>`
+}
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;">
-      <h1 style="color:#1f2937;">Capital Watch — Top ${rankedGrants.length} Best Matches</h1>
-      <p style="color:#6b7280;font-size:14px;">Ranked for fit: Black-owned/veteran-owned eligibility, Atlanta/Georgia location, grants and angel funding over loans/accelerators/contests, and minimal paperwork to apply.</p>
-      <ol style="padding-left:18px;list-style:none;">${rows}</ol>
-      <p style="margin-top:24px;"><a href="${dashboardUrl}" style="background:#FACC15;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Review on the dashboard →</a></p>
+function matchCard(g, i) {
+  const reasons = matchReasons(g)
+  return `
+    <div style="border:1px solid #000;padding:18px;margin-bottom:14px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="font-family:${MONO};font-size:11px;color:${SUBTLE};font-weight:700;letter-spacing:0.3px;">${shapeDiamond('#000', 6)}<span style="margin-left:7px;">#${i + 1}</span></td>
+        <td align="right">${amountChip(g.amountUsd)}</td>
+      </tr></table>
+      <div style="margin-top:10px;">
+        <a href="${g.link}" style="font-family:${MONO};font-size:18px;font-weight:700;line-height:1.35;color:#000;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>
+      </div>
+      <div style="font-size:12.5px;color:#6b7280;margin-top:6px;">${escapeHtml(g.agency || '')}${g.agency && g.fundingType ? ' &middot; ' : ''}${escapeHtml(g.fundingType || '')}</div>
+      ${reasons.length ? `<div style="font-size:12px;color:#6b7280;margin-top:10px;padding-top:10px;border-top:1px solid ${LINE};">${reasons.map(escapeHtml).join(' &middot; ')}</div>` : ''}
     </div>`
+}
+
+function topMatchesDigestEmail(rankedGrants, dashboardUrl) {
+  const cards = rankedGrants.map((g, i) => matchCard(g, i)).join('')
+
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 8px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">Top ${rankedGrants.length} Best Matches</span></h1>
+    <p style="color:#6b7280;font-size:13px;margin:0 0 18px;">Ranked for fit: Black-owned/veteran-owned eligibility, Atlanta/Georgia location, grants and angel funding over loans/accelerators/contests, and minimal paperwork to apply.</p>
+    ${cards}
+    ${footer(dashboardUrl)}
+  `)
 
   return {
     from: FROM_EMAIL,
@@ -71,72 +141,63 @@ function topMatchesDigestEmail(rankedGrants, dashboardUrl) {
   }
 }
 
+const STATUS_SHAPE = {
+  drafted: { shape: shapeDiamond('#000', 8), label: 'Drafted' },
+  needs_input: { shape: shapeTriangle('#ca8a04', 10), label: 'Needs your input' },
+  not_applicable: { shape: shapeRect('#9ca3af', 10, 7, false), label: 'N/A' },
+}
+
 function applicationDraftEmail(grant, companyName) {
   const checklist = grant.requirementsChecklist || []
   const needsInput = checklist.filter(c => c.status === 'needs_input')
-  const statusBadge = { drafted: '✅ Drafted', needs_input: '⚠️ Needs your input', not_applicable: '➖ N/A' }
-  const checklistRows = checklist.map(c => `
-    <li style="margin-bottom:10px;">
-      <div><strong>${escapeHtml(c.requirement)}</strong> — ${statusBadge[c.status] || c.status}</div>
-      <div style="color:#555;font-size:13px;">${escapeHtml(c.detail || '')}</div>
-    </li>`).join('')
+  const checklistRows = checklist.map(c => {
+    const status = STATUS_SHAPE[c.status] || { shape: shapeRect('#9ca3af', 10, 7, false), label: c.status }
+    return `
+    <div style="margin-bottom:12px;">
+      <div><strong>${escapeHtml(c.requirement)}</strong> <span style="margin-left:6px;">${status.shape}</span> <span style="font-family:${MONO};font-size:11px;text-transform:uppercase;letter-spacing:0.3px;color:#4b5563;">${status.label}</span></div>
+      <div style="color:#6b7280;font-size:13px;margin-top:2px;">${escapeHtml(c.detail || '')}</div>
+    </div>`
+  }).join('')
 
-  const html = `
-<html>
-<head>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 30px; }
-    .section { margin-bottom: 30px; }
-    .detail-row { margin: 8px 0; }
-    .label { font-weight: bold; color: #555; }
-    .content { background-color: #f9f9f9; padding: 15px; border-left: 4px solid #3498db; margin: 15px 0; white-space: pre-wrap; }
-    .checklist { background-color: #fffbeb; padding: 15px; border-left: 4px solid #FACC15; margin: 15px 0; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #777; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <h1>📄 Application Draft Ready — ${escapeHtml(companyName)}</h1>
+  const sectionTitle = (label) => `<h2 style="font-family:${MONO};font-size:14px;font-weight:700;color:#000;border-bottom:2px solid #000;padding-bottom:8px;margin:28px 0 14px;">${shapeRect('#000', 9, 9, true)}<span style="margin-left:9px;">${label}</span></h2>`
 
-  <div class="section">
-    <h2>Opportunity Details</h2>
-    <div class="detail-row"><span class="label">Title:</span> ${escapeHtml(grant.title || 'Untitled')}</div>
-    <div class="detail-row"><span class="label">Agency:</span> ${escapeHtml(grant.agency || 'Unknown')}</div>
-    <div class="detail-row"><span class="label">Type:</span> ${escapeHtml(grant.fundingType || 'grant')}</div>
-    <div class="detail-row"><span class="label">Amount:</span> ${grant.amountUsd ? '$' + grant.amountUsd : 'N/A'}</div>
-    <div class="detail-row"><span class="label">Deadline:</span> ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}</div>
-    <div class="detail-row"><span class="label">Link:</span> <a href="${grant.link}">${escapeHtml(grant.link || 'N/A')}</a></div>
-    <div class="detail-row"><span class="label">Requirements (as stated):</span> ${escapeHtml(grant.requirements || 'Not stated')}</div>
-  </div>
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:18px;font-weight:700;color:#000;margin:0 0 4px;">${shapeDiamond('#000', 9)}<span style="margin-left:9px;">Application Draft Ready</span></h1>
+    <p style="color:#6b7280;font-size:13px;margin:0;">for ${escapeHtml(companyName)}</p>
 
-  <div class="section">
-    <h2>${needsInput.length ? `⚠️ ${needsInput.length} Item${needsInput.length === 1 ? '' : 's'} Need Your Input` : '✅ Everything Drafted — Ready to Review'}</h2>
-    <div class="checklist">
-      <ul style="padding-left:18px;margin:0;">${checklistRows || '<li>No requirements checklist generated.</li>'}</ul>
+    ${sectionTitle('Opportunity Details')}
+    <div style="font-size:13px;line-height:1.7;">
+      <div><span style="color:#6b7280;">Title:</span> <strong>${escapeHtml(grant.title || 'Untitled')}</strong></div>
+      <div><span style="color:#6b7280;">Agency:</span> ${escapeHtml(grant.agency || 'Unknown')}</div>
+      <div><span style="color:#6b7280;">Type:</span> ${escapeHtml(grant.fundingType || 'grant')}</div>
+      <div><span style="color:#6b7280;">Amount:</span> ${grant.amountUsd ? '$' + grant.amountUsd : 'N/A'}</div>
+      <div><span style="color:#6b7280;">Deadline:</span> ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}</div>
+      <div><span style="color:#6b7280;">Link:</span> <a href="${grant.link}" style="color:#000;border-bottom:2px solid ${YELLOW};text-decoration:none;">${escapeHtml(grant.link || 'N/A')}</a></div>
+      <div><span style="color:#6b7280;">Requirements (as stated):</span> ${escapeHtml(grant.requirements || 'Not stated')}</div>
     </div>
-  </div>
 
-  <div class="section">
-    <h2>Outreach Email</h2>
-    <div class="content">${escapeHtml(grant.outreachEmail || 'N/A')}</div>
-  </div>
+    ${sectionTitle(needsInput.length ? `${needsInput.length} Item${needsInput.length === 1 ? '' : 's'} Need Your Input` : 'Everything Drafted — Ready to Review')}
+    <div style="background:#fffbeb;border-left:3px solid ${YELLOW};padding:14px 16px;">
+      ${checklistRows || '<div style="color:#6b7280;font-size:13px;">No requirements checklist generated.</div>'}
+    </div>
 
-  <div class="section">
-    <h2>Application Narrative</h2>
-    <div class="content">${escapeHtml(grant.applicationNarrative || 'N/A')}</div>
-  </div>
+    ${sectionTitle('Outreach Email')}
+    <div style="background:#f9fafb;border-left:3px solid #000;padding:14px 16px;font-size:13px;white-space:pre-wrap;">${escapeHtml(grant.outreachEmail || 'N/A')}</div>
 
-  <div class="footer">
-    <p><strong>Next Steps:</strong></p>
-    <ul>
-      <li>Review the drafted sections above and the checklist for anything marked "Needs your input"</li>
-      <li>Gather/attach whatever's flagged above (documents, signatures, etc.)</li>
-      <li>Copy/paste into the application portal and submit before the deadline</li>
-    </ul>
-    <p style="margin-top: 20px;">Generated by Capital Watch for ${escapeHtml(companyName)}</p>
-  </div>
-</body>
-</html>`
+    ${sectionTitle('Application Narrative')}
+    <div style="background:#f9fafb;border-left:3px solid #000;padding:14px 16px;font-size:13px;white-space:pre-wrap;">${escapeHtml(grant.applicationNarrative || 'N/A')}</div>
+
+    <div style="margin-top:26px;font-size:13px;color:#374151;">
+      <strong>Next steps:</strong>
+      <ul style="padding-left:18px;margin:8px 0;">
+        <li>Review the drafted sections above and the checklist for anything marked "Needs your input"</li>
+        <li>Gather/attach whatever's flagged above (documents, signatures, etc.)</li>
+        <li>Copy/paste into the application portal and submit before the deadline</li>
+      </ul>
+    </div>
+
+    ${footer(null)}
+  `)
 
   return {
     from: FROM_EMAIL,
@@ -147,34 +208,34 @@ function applicationDraftEmail(grant, companyName) {
 
 // dueByTier: { '3d': [grant...], '7d': [...], '14d': [...] } -- keys match the tier
 // keys used by the deadline-check cron in server/schedules/capitalWatchDeadlines.js.
+// Shape per tier maps to urgency: triangle (warning) > diamond (mid) > rectangle (low).
 function deadlineAlertEmail(dueByTier, dashboardUrl) {
   const sections = [
-    { key: '3d', label: 'Final days, apply now', color: '#dc2626' },
-    { key: '7d', label: '1 week left', color: '#ea580c' },
-    { key: '14d', label: '2 weeks left', color: '#ca8a04' },
+    { key: '3d', label: 'Final days, apply now', color: '#dc2626', shape: (c) => shapeTriangle(c, 12) },
+    { key: '7d', label: '1 week left', color: '#ea580c', shape: (c) => shapeDiamond(c, 9) },
+    { key: '14d', label: '2 weeks left', color: '#ca8a04', shape: (c) => shapeRect(c, 11, 8, false) },
   ]
 
   const sectionHtml = sections
     .filter((s) => dueByTier[s.key]?.length)
     .map((s) => {
-      const rows = dueByTier[s.key].map((g) => `
-        <li style="margin-bottom:12px;">
-          <a href="${g.link}" style="color:#306770;font-weight:700;text-decoration:none;">${escapeHtml(g.title)}</a>
-          <div style="font-size:13px;color:#6b7280;">${escapeHtml(g.agency || '')} &middot; Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied/in progress' : 'Still pending review'}</div>
-        </li>`).join('')
+      const rows = dueByTier[s.key].map((g, i) => `
+        <div style="padding:12px 0;${i < dueByTier[s.key].length - 1 ? `border-bottom:1px solid ${LINE};` : ''}">
+          <div>${shapeDiamond('#000', 6)}<a href="${g.link}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a></div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px;padding-left:14px;">${escapeHtml(g.agency || '')} &middot; Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied/in progress' : 'Still pending review'}</div>
+        </div>`).join('')
       return `
-        <h2 style="color:${s.color};border-bottom:2px solid ${s.color};padding-bottom:6px;">${s.label} (${dueByTier[s.key].length})</h2>
-        <ul style="padding-left:18px;list-style:none;">${rows}</ul>`
+        <h2 style="font-family:${MONO};font-size:14px;font-weight:700;color:${s.color};border-bottom:2px solid ${s.color};padding-bottom:8px;margin:24px 0 4px;">${s.shape(s.color)}<span style="margin-left:9px;">${s.label} (${dueByTier[s.key].length})</span></h2>
+        ${rows}`
     }).join('')
 
   const totalCount = sections.reduce((n, s) => n + (dueByTier[s.key]?.length || 0), 0)
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;">
-      <h1 style="color:#1f2937;">Capital Watch: Deadline Alert</h1>
-      ${sectionHtml}
-      <p style="margin-top:24px;"><a href="${dashboardUrl}" style="background:#FACC15;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;">Review on the dashboard →</a></p>
-    </div>`
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 4px;">${shapeTriangle('#dc2626', 12)}<span style="margin-left:9px;">Deadline Alert</span></h1>
+    ${sectionHtml}
+    ${footer(dashboardUrl)}
+  `)
 
   return {
     from: FROM_EMAIL,
