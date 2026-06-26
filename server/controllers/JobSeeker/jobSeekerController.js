@@ -2019,7 +2019,8 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
     const { firstName, lastName, jobId, jobTitle, company, jobUrl, resume, coverLetter } = payload;
     const fileFormat = normalizeCustomDocumentFormat(payload.fileFormat || payload.documentFormat || payload.outputFormat);
-    const totalCost = (resume ? 1 : 0) + (coverLetter ? 1 : 0);
+    const DOCUMENT_TOKEN_COST = 2;
+    const totalCost = (resume ? DOCUMENT_TOKEN_COST : 0) + (coverLetter ? DOCUMENT_TOKEN_COST : 0);
     if (totalCost === 0) return res.status(400).json({ message: 'No items requested.' });
 
     const sgApiKey = process.env.SENDGRID_API_KEY

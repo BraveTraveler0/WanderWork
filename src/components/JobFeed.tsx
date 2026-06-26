@@ -92,6 +92,7 @@ interface JobFeedProps {
 }
 
 const BATCH = 15
+const DOCUMENT_CREDIT_COST = 2
 
 function getJobTime(job: any): number {
   return getJobDate(job)?.getTime() ?? 0
@@ -1659,7 +1660,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
   const handleCustomRequest = async (options: CustomJobRequestOptions) => {
     if (!showCustomRequestModal) return
-    const totalCost = (options.resume ? 1 : 0) + (options.coverLetter ? 1 : 0)
+    const totalCost = (options.resume ? DOCUMENT_CREDIT_COST : 0) + (options.coverLetter ? DOCUMENT_CREDIT_COST : 0)
     if (totalCost <= 0) return
 
     const webhookPayload = {

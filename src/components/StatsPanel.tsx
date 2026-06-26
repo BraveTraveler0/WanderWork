@@ -11,6 +11,8 @@ function loadInterestedOverrides(): Record<number, boolean> {
 import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJobRequestModal'
 import RecruiterOutreach from './RecruiterOutreach'
 
+const DOCUMENT_CREDIT_COST = 2
+
 const asText = (value: unknown, fallback = ''): string => {
   if (typeof value === 'string') return value
   if (value == null) return fallback
@@ -249,7 +251,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
 
   const handleCustomRequest = async (options: CustomJobRequestOptions) => {
     if (!showCustomRequestModal) return
-    const totalCost = (options.resume ? 1 : 0) + (options.coverLetter ? 1 : 0)
+    const totalCost = (options.resume ? DOCUMENT_CREDIT_COST : 0) + (options.coverLetter ? DOCUMENT_CREDIT_COST : 0)
     if (totalCost <= 0) return
 
     const webhookPayload = {

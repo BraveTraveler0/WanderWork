@@ -106,7 +106,8 @@ router.post('/request-document', async (req, res) => {
     }
 
     const { jobTitle, company, jobUrl, resume = true, coverLetter = false, fileFormat = 'pdf' } = req.body || {};
-    const totalCost = (resume ? 1 : 0) + (coverLetter ? 1 : 0);
+    const DOCUMENT_TOKEN_COST = 2;
+    const totalCost = (resume ? DOCUMENT_TOKEN_COST : 0) + (coverLetter ? DOCUMENT_TOKEN_COST : 0);
     if (totalCost === 0) return res.status(400).json({ message: 'Select at least one document.' });
 
     // Re-use submitCustomRequest logic via internal controller call

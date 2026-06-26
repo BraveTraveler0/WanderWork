@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, FileText, Mail, Users, Check } from 'lucide-react'
 
 export type CustomDocumentFormat = 'pdf' | 'doc'
+const DOCUMENT_CREDIT_COST = 2
 
 export interface CustomJobRequestOptions {
   resume: boolean
@@ -46,7 +47,7 @@ export default function CustomJobRequestModal({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const docCost = (selectedResume ? 1 : 0) + (selectedCoverLetter ? 1 : 0)
+  const docCost = (selectedResume ? DOCUMENT_CREDIT_COST : 0) + (selectedCoverLetter ? DOCUMENT_CREDIT_COST : 0)
   const hasDocs = selectedResume || selectedCoverLetter
   const hasSelection = hasDocs || selectedRecruiter
   const canAfford = currentCredits >= docCost
@@ -224,7 +225,7 @@ export default function CustomJobRequestModal({
               icon={<FileText size={16} style={{ color: selectedResume ? '#306770' : '#9CA3AF' }} />}
               label="Custom Resume"
               description="AI-optimized for this specific role"
-              cost="1 Credit"
+              cost="2 Credits"
             />
             <OptionRow
               selected={selectedCoverLetter}
@@ -232,7 +233,7 @@ export default function CustomJobRequestModal({
               icon={<Mail size={16} style={{ color: selectedCoverLetter ? '#306770' : '#9CA3AF' }} />}
               label="Cover Letter"
               description="Personalized to highlight your fit"
-              cost="1 Credit"
+              cost="2 Credits"
             />
           </div>
 
