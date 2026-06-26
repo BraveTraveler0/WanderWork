@@ -243,8 +243,13 @@ export async function submitCustomRequest(payload: Record<string, any>): Promise
   return data;
 }
 
-export function getJobs(init?: RequestInit & { signal?: AbortSignal }): Promise<Job[]> {
-  return fetchJson<Job[]>('/jobseeker/job', init);
+export function getJobs(options: (RequestInit & { signal?: AbortSignal }) & { query?: string; limit?: number } = {}): Promise<Job[]> {
+  const { query, limit, ...init } = options;
+  const params = new URLSearchParams();
+  if (query && query.trim()) params.set('q', query.trim());
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return fetchJson<Job[]>(`/jobseeker/job${qs ? `?${qs}` : ''}`, init);
 }
 
 export function getJobById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<Job> {

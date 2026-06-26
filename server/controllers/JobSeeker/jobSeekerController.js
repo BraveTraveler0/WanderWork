@@ -904,7 +904,10 @@ const getAllCandidates = asyncHandler(async (req, res) => {
 });
 
 const getAllJobs = asyncHandler(async (req, res) => {
-    const results = await getAllJobsPure();
+    const results = await getAllJobsPure({
+        search: req.query.q || req.query.search || '',
+        limit: req.query.limit,
+    });
     res.json(results);
 });
 
@@ -988,29 +991,63 @@ const JOB_CACHE_TTL = 5 * 60 * 1000
 
 function _invalidateJobsCache() { _jobsCache = null; _jobsCacheAt = 0 }
 
-async function getAllJobsPure() {
-    if (_jobsCache && Date.now() - _jobsCacheAt < JOB_CACHE_TTL) return _jobsCache
+function parseJobDate(job) {
+    const raw = job?.date_posted || job?.datePosted || job?.postedAt || job?.postedDate || job?.rawDate;
+    if (!raw) return null;
+    const direct = new Date(raw);
+    if (!Number.isNaN(direct.getTime())) return direct.getTime();
+    if (typeof raw === 'string') {
+        const withZ = new Date(`${raw}Z`);
+        if (!Number.isNaN(withZ.getTime())) return withZ.getTime();
+    }
+    if (!Number.isNaN(Number(raw))) {
+        const asNum = new Date(Number(raw));
+        if (!Number.isNaN(asNum.getTime())) return asNum.getTime();
+    }
+    return null;
+}
+
+function escapeRegex(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function buildJobSearchFilter(search) {
+    const terms = String(search || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9+#.]+/g, ' ')
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 2)
+        .slice(0, 8)
+
+    if (!terms.length) return null
+
+    const searchableFields = [
+        'title', 'job_title', 'name', 'company',
+        'description', 'description_short', 'shortDescription', 'summary', 'why_matched',
+        'skills', 'tags', 'jobType', 'job_type', 'source',
+        'location.city', 'location.state', 'location.country',
+    ]
+
+    return {
+        $and: terms.map((term) => {
+            const regex = { $regex: escapeRegex(term), $options: 'i' }
+            return { $or: searchableFields.map((field) => ({ [field]: regex })) }
+        }),
+    }
+}
+
+async function getAllJobsPure(options = {}) {
+    const searchFilter = buildJobSearchFilter(options.search)
+    const isSearch = Boolean(searchFilter)
+    const limit = Math.min(Math.max(parseInt(options.limit, 10) || 200, 1), 500)
+
+    if (!isSearch && _jobsCache && Date.now() - _jobsCacheAt < JOB_CACHE_TTL) return _jobsCache
 
     const JobDynamic = mongoose.models.JobDynamic ||
         mongoose.model('JobDynamic', new mongoose.Schema({}, { strict: false, collection: 'jobseeker.jobs' }));
-    const jobs = await JobDynamic.find({}, JOB_PROJECTION).lean().exec();
+    const jobs = await JobDynamic.find(searchFilter || {}, JOB_PROJECTION).lean().exec();
     const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
-
-    const parseJobDate = (job) => {
-        const raw = job?.date_posted || job?.datePosted || job?.postedAt || job?.postedDate || job?.rawDate;
-        if (!raw) return null;
-        const direct = new Date(raw);
-        if (!Number.isNaN(direct.getTime())) return direct.getTime();
-        if (typeof raw === 'string') {
-            const withZ = new Date(`${raw}Z`);
-            if (!Number.isNaN(withZ.getTime())) return withZ.getTime();
-        }
-        if (!Number.isNaN(Number(raw))) {
-            const asNum = new Date(Number(raw));
-            if (!Number.isNaN(asNum.getTime())) return asNum.getTime();
-        }
-        return null;
-    };
 
     const filtered = jobs.filter((job) => {
         if (isJunkJobRecord(job)) return false
@@ -1040,6 +1077,8 @@ async function getAllJobsPure() {
             console.warn('Backfill job companies failed', error.message);
         });
     });
+
+    if (isSearch) return filtered.slice(0, limit)
 
     _jobsCache = filtered
     _jobsCacheAt = Date.now()

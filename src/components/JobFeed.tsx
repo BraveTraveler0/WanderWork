@@ -88,6 +88,7 @@ interface JobFeedProps {
   onTopJobChange?: (id: number | null) => void
   onRecruiterContactsClick?: () => void
   onBuyCredits?: () => void
+  onSearchJobs?: (query: string) => Promise<any[]>
 }
 
 const BATCH = 15
@@ -1124,7 +1125,7 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
   return LOW_LEVEL_JOB_RE.test(text)
 }
 
-const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick, onBuyCredits }: JobFeedProps) => {
+const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick, onBuyCredits, onSearchJobs }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
@@ -1189,6 +1190,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchLoading, setSearchLoading] = useState(false)
+  const [serverSearchJobs, setServerSearchJobs] = useState<any[]>([])
 
   useEffect(() => {
     if (showNewOnly) setShowMatchedOnly(false)
@@ -1204,6 +1206,32 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     }, 300)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (!onSearchJobs || query.length < 2) {
+      setServerSearchJobs([])
+      return
+    }
+
+    let cancelled = false
+    setSearchLoading(true)
+    onSearchJobs(query)
+      .then((results) => {
+        if (!cancelled) setServerSearchJobs(Array.isArray(results) ? results : [])
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn('Database job search failed', error)
+          setServerSearchJobs([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSearchLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [searchQuery, onSearchJobs])
 
   // Reset visible count whenever filters change
   useEffect(() => {
@@ -1221,9 +1249,26 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     return () => obs.disconnect()
   }, [])
 
-  // ALWAYS use jobs from props - they're already transformed and safe
-  // Never fall back to data?.Jobs which may have untransformed objects
-  const visibleJobsList = jobs || []
+  // ALWAYS use jobs from props - they're already transformed and safe.
+  // Database search results are transformed upstream and merged in here.
+  const visibleJobsListBase = jobs || []
+  const visibleJobsList = useMemo(() => {
+    const query = searchQuery.trim()
+    if (query.length < 2 || serverSearchJobs.length === 0) return visibleJobsListBase
+
+    const keyFor = (job: any) => String(job?.backendId || job?._id || job?.job_code || job?.url || '')
+    const seen = new Set(visibleJobsListBase.map(keyFor).filter(Boolean))
+    let nextId = Math.max(0, ...visibleJobsListBase.map((job: any) => Number(job?.id) || 0)) + 1
+
+    const additions = serverSearchJobs.flatMap((job: any) => {
+      const key = keyFor(job)
+      if (key && seen.has(key)) return []
+      if (key) seen.add(key)
+      return [{ ...job, id: nextId++ }]
+    })
+
+    return additions.length ? [...additions, ...visibleJobsListBase] : visibleJobsListBase
+  }, [visibleJobsListBase, serverSearchJobs, searchQuery])
 
   const handleDiscardJob = (jobId: number) => {
     const shouldAdvanceSelection = selectedJobId === jobId
@@ -1424,7 +1469,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     const jobs = visibleJobsList.filter((job: any) => {
       if (!jobHasUsableUrl(job)) return false
       if (discardedJobs.has(job.id)) return false
-      if (showMatchedOnly && !matchedSet.has(job.id)) return false
+      if (showMatchedOnly && searchTerms.length === 0 && !matchedSet.has(job.id)) return false
       if (showInterestedOnly && !isJobInterested(job)) return false
       if (showNewOnly && !isNewJob(job)) return false
 

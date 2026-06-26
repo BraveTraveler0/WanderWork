@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
@@ -942,6 +942,11 @@ function App() {
     } catch (_) {}
   }
 
+  const searchJobsFromDatabase = useCallback(async (query: string) => {
+    const results = await getJobs({ query, limit: 200 })
+    return results.map((job, index) => transformJob(job as Job, 50000 + index))
+  }, [])
+
   // Defensive default to avoid null data usage
   const fallbackCandidate = buildFallbackCandidate()
   const safeDataBase: JobSeekerData = (data ?? {
@@ -1581,6 +1586,7 @@ function App() {
                   onToggleNewFilter={() => setShowNewOnly((v) => !v)}
                   loading={_token ? loading : publicJobsLoading}
                   isAuthenticated={!!_token}
+                  onSearchJobs={searchJobsFromDatabase}
                   onSignIn={() => setShowLogin(true)}
                   onSignUp={() => setShowSignup(true)}
                   onTopJobChange={setTopVisibleJobId}
