@@ -177,19 +177,22 @@ async function fetchRemotive() {
   });
 }
 
-// The Muse — free public API. Categories confirmed against their live taxonomy:
-// "Media, PR, and Communications" and "Advertising and Marketing" cover writing,
-// PR, and social media marketing roles that the ATS company-board sweep misses.
+// The Muse — free public API. Categories confirmed against their live taxonomy
+// (plausible-sounding strings like "Editor and Writer" or "Software and
+// Engineering" 404/empty — always verify a category string returns results
+// before adding it). "Internship" is a `level` facet, not a category, and
+// cuts across all categories. There's no dedicated "Paralegal" category;
+// "Legal Services" is the closest match and includes other legal roles too.
 // The Muse mixes onsite and remote postings, so remote eligibility is filtered
 // by checking for their "Flexible / Remote" location marker.
 const MUSE_REMOTE_RE = /flexible|remote|anywhere/i;
 
-async function fetchTheMuse(category, pages = 3) {
+async function fetchTheMuse({ category, level } = {}, pages = 3) {
   const allJobs = [];
   for (let page = 0; page < pages; page++) {
     try {
       const res = await get('https://www.themuse.com/api/public/jobs', {
-        params: { category, page, descending: true },
+        params: { category, level, page, descending: true },
         timeout: 15000,
       });
       const jobs = (res.data?.results || []).flatMap(j => {
@@ -259,10 +262,22 @@ async function fetchWorkingNomads(category = null) {
 const SOURCES = [
   { name: 'Remotive', fetch: () => fetchRemotive() },
 
-  // The Muse — covers writing, PR, and social media marketing roles that
-  // tech-company ATS boards rarely post.
-  { name: 'TheMuse (PR/Comms)',  fetch: () => fetchTheMuse('Media, PR, and Communications') },
-  { name: 'TheMuse (Marketing)', fetch: () => fetchTheMuse('Advertising and Marketing') },
+  // The Muse — covers roles that tech-company ATS boards rarely post.
+  { name: 'TheMuse (PR/Comms)',  fetch: () => fetchTheMuse({ category: 'Media, PR, and Communications' }) },
+  { name: 'TheMuse (Marketing)', fetch: () => fetchTheMuse({ category: 'Advertising and Marketing' }) },
+  { name: 'TheMuse (Customer Service)', fetch: () => fetchTheMuse({ category: 'Customer Service' }) },
+  { name: 'TheMuse (Admin/Assistants)', fetch: () => fetchTheMuse({ category: 'Administration and Office' }) },
+  { name: 'TheMuse (Legal/Paralegal)', fetch: () => fetchTheMuse({ category: 'Legal Services' }) },
+  { name: 'TheMuse (HR/Recruitment)', fetch: () => fetchTheMuse({ category: 'Human Resources and Recruitment' }) },
+  { name: 'TheMuse (Accounting/Finance)', fetch: () => fetchTheMuse({ category: 'Accounting and Finance' }) },
+  { name: 'TheMuse (Sales)', fetch: () => fetchTheMuse({ category: 'Sales' }) },
+  { name: 'TheMuse (Product Management)', fetch: () => fetchTheMuse({ category: 'Product Management' }) },
+  { name: 'TheMuse (Project Management)', fetch: () => fetchTheMuse({ category: 'Project Management' }) },
+  { name: 'TheMuse (Writing/Content)', fetch: () => fetchTheMuse({ category: 'Writing and Editing' }) },
+  { name: 'TheMuse (Data/AI)', fetch: () => fetchTheMuse({ category: 'Data and Analytics' }) },
+  { name: 'TheMuse (Design/UX)', fetch: () => fetchTheMuse({ category: 'Design and UX' }) },
+  { name: 'TheMuse (Education/Teaching)', fetch: () => fetchTheMuse({ category: 'Education' }) },
+  { name: 'TheMuse (Internships)', fetch: () => fetchTheMuse({ level: 'Internship' }) },
 ];
 
 async function importRemoteJobs() {

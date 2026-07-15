@@ -1011,6 +1011,79 @@ function escapeRegex(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Clusters of interchangeable search terms so a query like "designer" also
+// matches jobs only tagged/titled "UX", and "us" also matches "United States"
+// in location fields. Each cluster expands to a single regex alternation, so
+// one query term still ANDs against the rest of the query but ORs across its
+// whole synonym group. Add a cluster here for any new sourced category so its
+// jobs stay reachable by the words people actually type.
+const SEARCH_SYNONYM_CLUSTERS = [
+    ['ux', 'ui', 'user experience', 'user interface', 'product design', 'designer', 'design'],
+    ['customer service', 'customer support', 'support agent', 'help desk', 'client support'],
+    ['virtual assistant', 'executive assistant', 'admin assistant', 'administrative assistant', 'assistant', 'admin'],
+    ['paralegal', 'legal assistant', 'legal services', 'law clerk', 'legal'],
+    ['hr', 'human resources', 'recruiter', 'recruiting', 'talent acquisition'],
+    ['accounting', 'finance', 'accountant', 'bookkeeper', 'financial analyst', 'financial'],
+    ['sales', 'account executive', 'sdr', 'business development', 'account manager'],
+    ['product manager', 'product management', 'pm'],
+    ['project manager', 'project management', 'pmo'],
+    ['writer', 'writing', 'content', 'copywriter', 'editor', 'content creation'],
+    ['data', 'analytics', 'data analyst', 'data scientist', 'ai', 'artificial intelligence', 'machine learning'],
+    ['intern', 'internship', 'entry level'],
+    ['teacher', 'teaching', 'tutor', 'instructor', 'education', 'online teaching'],
+    ['pr', 'public relations', 'communications', 'media relations'],
+    ['marketing', 'social media', 'social media marketing', 'growth marketing'],
+    ['us', 'usa', 'united states', 'american', 'u.s.'],
+    ['remote', 'work from home', 'wfh', 'anywhere'],
+]
+
+const SEARCH_SYNONYM_LOOKUP = new Map()
+for (const cluster of SEARCH_SYNONYM_CLUSTERS) {
+    for (const phrase of cluster) {
+        SEARCH_SYNONYM_LOOKUP.set(phrase, cluster)
+    }
+}
+
+// Expands a single lowercased query word to every synonym cluster it belongs
+// to (matched as a whole word so "us" doesn't fire on "used" or "bus"). Falls
+// back to the literal term when it isn't part of any known cluster.
+function expandSearchTerm(term) {
+    const related = new Set([term])
+    for (const [phrase, cluster] of SEARCH_SYNONYM_LOOKUP) {
+        const phraseRe = new RegExp(`(^|\\s)${escapeRegex(phrase)}(\\s|$)`)
+        if (phraseRe.test(` ${term} `)) {
+            cluster.forEach((p) => related.add(p))
+        }
+    }
+    return [...related]
+}
+
+// Short, curated fields — safe to match against the full synonym cluster
+// since there's no room for a word like "design" to show up incidentally.
+const STRUCTURED_SEARCH_FIELDS = [
+    'title', 'job_title', 'name', 'company',
+    'skills', 'tags', 'jobType', 'job_type', 'source',
+    'location.city', 'location.state', 'location.country',
+]
+
+// Free-text fields — matched on the literal typed term only. Expanding a
+// generic cluster member like "design" or "data" against full descriptions
+// pulls in unrelated jobs that merely mention the word in passing (e.g. a
+// "Tax Senior" role whose blurb says "help design our processes").
+const FREETEXT_SEARCH_FIELDS = [
+    'description', 'description_short', 'shortDescription', 'summary', 'why_matched',
+]
+
+// Short tokens (us, ai, pm, hr, pr, ux, ui...) need word-boundary anchoring —
+// unanchored, "us" matches inside "business"/"focus" on nearly every job.
+// Longer terms stay unanchored on purpose so "engineer" still finds jobs
+// titled "Engineering" and "market" still finds "Marketing" — anchoring
+// those would break prefix/plural matching people rely on today.
+function regexForPhrase(phrase) {
+    const escaped = escapeRegex(phrase)
+    return phrase.length <= 3 ? `\\b${escaped}\\b` : escaped
+}
+
 function buildJobSearchFilter(search) {
     const terms = String(search || '')
         .toLowerCase()
@@ -1022,17 +1095,17 @@ function buildJobSearchFilter(search) {
 
     if (!terms.length) return null
 
-    const searchableFields = [
-        'title', 'job_title', 'name', 'company',
-        'description', 'description_short', 'shortDescription', 'summary', 'why_matched',
-        'skills', 'tags', 'jobType', 'job_type', 'source',
-        'location.city', 'location.state', 'location.country',
-    ]
-
     return {
         $and: terms.map((term) => {
-            const regex = { $regex: escapeRegex(term), $options: 'i' }
-            return { $or: searchableFields.map((field) => ({ [field]: regex })) }
+            const expanded = expandSearchTerm(term)
+            const expandedRegex = { $regex: expanded.map(regexForPhrase).join('|'), $options: 'i' }
+            const literalRegex = { $regex: regexForPhrase(term), $options: 'i' }
+            return {
+                $or: [
+                    ...STRUCTURED_SEARCH_FIELDS.map((field) => ({ [field]: expandedRegex })),
+                    ...FREETEXT_SEARCH_FIELDS.map((field) => ({ [field]: literalRegex })),
+                ],
+            }
         }),
     }
 }

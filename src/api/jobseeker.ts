@@ -15,6 +15,8 @@ export interface Job {
   salary?: string;
   location: Location[];
   url: string;
+  apply_url?: string | null;
+  company_url?: string | null;
   jobType: string;
   datePosted: string;
   shortDescription: string;
