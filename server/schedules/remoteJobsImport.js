@@ -35,7 +35,7 @@ async function runImport() {
     // Capture jobs about to be purged so we can notify search engines of their removal
     try {
       const expiredJobs = await col.find(
-        { datePosted: { $lt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) } },
+        { datePosted: { $lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
         { projection: { _id: 1, title: 1, company: 1 } }
       ).toArray();
       await purgeJobs();

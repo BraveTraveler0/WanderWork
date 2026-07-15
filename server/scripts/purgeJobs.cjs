@@ -42,7 +42,7 @@ const AGGREGATOR_HOSTS = [
   'smartremotejobs.com', 'remote.co', 'weworkremotely.com',
   'jobboard.io', 'remotejobs.world', 'nodesk.co',
   'himalayas.app', 'himalayas.com', 'otta.com', 'getro.com',
-  'wellfound.com', 'angel.co',
+  'wellfound.com', 'angel.co', 'themuse.com',
   'builtin.com', 'builtinsf.com', 'builtinnyc.com', 'builtinla.com',
   'builtinboston.com', 'builtinchicago.com', 'builtincolorado.com',
   'builtinaustin.com', 'builtinseattle.com',
@@ -52,6 +52,7 @@ const ATS_HOSTS = [
   'greenhouse.io', 'lever.co', 'ashbyhq.com', 'smartrecruiters.com',
   'workable.com', 'bamboohr.com', 'jobvite.com', 'icims.com',
   'taleo.net', 'successfactors.com', 'myworkdayjobs.com',
+  'recruitee.com', 'breezy.hr', 'personio.de', 'personio.com',
 ];
 
 function isAggregatorUrl(url) {
@@ -175,8 +176,8 @@ async function purgeJobs() {
     const dateRef = job.date_posted || job.createdAt;
     if (dateRef) {
       const ageDays = (Date.now() - new Date(dateRef).getTime()) / 86400000;
-      if (ageDays > 60) {
-        recordHard(job._id, 'stale_60d'); continue;
+      if (ageDays > 90) {
+        recordHard(job._id, 'stale_90d'); continue;
       }
     }
   }

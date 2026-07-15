@@ -134,7 +134,7 @@ ${urls}
 router.get('/feeds/jobs.json', async (req, res) => {
   try {
     const col = mongoose.connection.collection('jobseeker.jobs')
-    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) // match purge window
+    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) // match purge window
 
     const jobs = await col.find(
       { datePosted: { $gte: cutoff } },

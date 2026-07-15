@@ -115,23 +115,13 @@ const SEEDS = {
     'plaid', 'yodlee', 'finicity', 'mx', 'akoya',
     'carta', 'capdesk', 'pulley', 'angellist',
   ],
+  // Lever's sitemap (jobs.lever.co/sitemap.xml) 404s as of 2026-07, so unlike
+  // Greenhouse/Ashby there's no auto-discovery fallback — this list is the
+  // only source and was fully revalidated live (most of the old list had
+  // migrated off Lever entirely and 404'd; only slugs confirmed live below).
   lever: [
-    'reddit', 'discord', 'yelp', 'weebly', 'opendoor', 'cruise', 'scale', 'anduril',
-    'ramp', 'mercury', 'benchling', 'devoted', 'transcarent', 'waymo', 'nuro',
-    'flexport', 'shipbob', 'stord', 'project44', 'motive', 'samsara', 'verkada',
-    'vanta', 'drata', 'secureframe', 'tugboat', 'karat', 'andela', 'toptal',
-    'legalzoom', 'classy', 'givebutter', 'benevity', 'groundtruth', 'foursquare',
-    'yotpo', 'attentive', 'iterate', 'narvar', 'shipstation', 'shippo', 'easypost',
-    'gladly', 'kustomer', 'gorgias', 'recharge', 'rechargepayments',
-    // Design / creative agencies on Lever
-    'huge', 'razorfish', 'sapient', 'ideo', 'frog', 'thoughtworks',
-    'designit', 'fjord', 'ustwo', 'werk', 'instrument',
-    // PR / communications on Lever
-    'edelman', 'webershandwick', 'ketchum', 'flieshman-hillard', 'bcw',
-    'porternovelli', 'golin', 'hs2', 'praytell', 'coyne', 'shift',
-    // Finance on Lever
-    'chime', 'varo', 'current', 'dave', 'albert', 'brigit', 'moneylion',
-    'greenlight', 'copper', 'step', 'gohenry',
+    'secureframe', 'toptal', 'instrument', 'greenlight', 'transcarent',
+    'netflix', 'palantir', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
   ],
   ashby: [
     'anthropic', 'linear', 'vercel', 'supabase', 'neon', 'planetscale', 'turso',
@@ -171,6 +161,12 @@ const SEEDS = {
     'depop', 'n26', 'monzo', 'wise', 'starling', 'revolut', 'skyscanner',
     'algolia', 'zego',
   ],
+  // Recruitee/Breezy/Personio have no public sitemap either, so like Workable
+  // these seeds were verified live against each platform's public API before
+  // being added (fake/former slugs 404 or redirect to the platform homepage).
+  recruitee: ['channable', 'sendcloud', 'bunq', 'personio'],
+  breezy: ['vetsez', '20four7va', 'bettersource', 'urrly', 'drips', 'new-incentives'],
+  personio: ['personio', 'deskbird', 'pitch', 'wolt', 'clark'],
 };
 
 // ── Sitemap discovery ─────────────────────────────────────────────────────────
@@ -244,14 +240,20 @@ const DISCOVER_RES = {
   lever:           /jobs\.lever\.co\/([a-z0-9_-]+)/i,
   ashby:           /jobs\.ashbyhq\.com\/([a-z0-9_-]+)/i,
   smartrecruiters: /jobs\.smartrecruiters\.com\/([A-Za-z0-9_-]+)/i,
+  recruitee:       /([a-z0-9_-]+)\.recruitee\.com/i,
+  breezy:          /([a-z0-9_-]+)\.breezy\.hr/i,
+  personio:        /([a-z0-9_-]+)\.jobs\.personio\.(?:de|com)/i,
 };
 
 async function discoverSlugsFromDb(col) {
-  const slugs = { greenhouse: new Set(), lever: new Set(), ashby: new Set(), smartrecruiters: new Set() };
+  const slugs = {
+    greenhouse: new Set(), lever: new Set(), ashby: new Set(), smartrecruiters: new Set(),
+    recruitee: new Set(), breezy: new Set(), personio: new Set(),
+  };
   const jobs = await col.find(
     { $or: [
-      { apply_url: { $regex: 'greenhouse\\.io|lever\\.co|ashbyhq\\.com|smartrecruiters\\.com', $options: 'i' } },
-      { url:       { $regex: 'greenhouse\\.io|lever\\.co|ashbyhq\\.com|smartrecruiters\\.com', $options: 'i' } },
+      { apply_url: { $regex: 'greenhouse\\.io|lever\\.co|ashbyhq\\.com|smartrecruiters\\.com|recruitee\\.com|breezy\\.hr|jobs\\.personio\\.', $options: 'i' } },
+      { url:       { $regex: 'greenhouse\\.io|lever\\.co|ashbyhq\\.com|smartrecruiters\\.com|recruitee\\.com|breezy\\.hr|jobs\\.personio\\.', $options: 'i' } },
     ]},
     { projection: { apply_url: 1, url: 1 } }
   ).toArray();
@@ -282,6 +284,9 @@ async function discoverAllSlugs(col) {
     lever:           new Set([...leverSitemap,  ...SEEDS.lever,           ...(dbSlugs.lever || [])]),
     ashby:           new Set([...ashbySitemap,  ...SEEDS.ashby,           ...(dbSlugs.ashby || [])]),
     smartrecruiters: new Set([...SEEDS.smartrecruiters, ...(dbSlugs.smartrecruiters || [])]),
+    recruitee:       new Set([...SEEDS.recruitee, ...(dbSlugs.recruitee || [])]),
+    breezy:          new Set([...SEEDS.breezy,    ...(dbSlugs.breezy || [])]),
+    personio:        new Set([...SEEDS.personio,  ...(dbSlugs.personio || [])]),
     // Seed-only — no sitemap, and job URLs don't embed the slug so DB discovery can't grow it.
     workable:        new Set(SEEDS.workable),
   };
@@ -348,17 +353,20 @@ async function fetchLever(slug, company) {
 async function fetchAshby(slug, company) {
   const res = await get(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
   const org = res.data?.organization?.name || company;
-  return (res.data?.jobPostings || [])
-    .filter(j => j.isRemote || REMOTE_RE.test(j.locationName || ''))
+  // Ashby's response field is `jobs` (verified live 2026-07); the previous
+  // `jobPostings` key doesn't exist in their schema at all, so this fetcher
+  // silently returned zero jobs for every seeded Ashby company until now.
+  return (res.data?.jobs || [])
+    .filter(j => j.isRemote || REMOTE_RE.test(j.location || ''))
     .map(j => ({
       title: stripHtml(j.title),
       company: org,
-      url: j.applyLink?.url || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      apply_url: j.applyLink?.url || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      location: j.isRemote ? 'Remote' : normalizeLocation(j.locationName),
+      url: j.jobUrl || j.applyUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+      apply_url: j.applyUrl || j.jobUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+      location: j.isRemote ? 'Remote' : normalizeLocation(j.location),
       job_type: j.employmentType || 'Full-time',
       salary: 'Not Listed',
-      date_posted: j.publishedDate ? new Date(j.publishedDate) : new Date(),
+      date_posted: j.publishedAt ? new Date(j.publishedAt) : new Date(),
       description_short: truncateDesc(j.descriptionHtml || ''),
       lang: 'en',
       source: 'Ashby',
@@ -422,11 +430,112 @@ async function fetchSmartRecruiters(slug, company) {
     }));
 }
 
+async function fetchRecruitee(slug, company) {
+  const res = await get(`https://${slug}.recruitee.com/api/offers/`);
+  return (res.data?.offers || [])
+    .filter(j => j.remote === true || REMOTE_RE.test([j.city, j.state_name].filter(Boolean).join(' ')))
+    .map(j => ({
+      title: stripHtml(j.title),
+      company: j.company_name || company,
+      url: j.careers_url,
+      apply_url: j.careers_apply_url || j.careers_url,
+      location: j.remote ? 'Remote' : normalizeLocation([j.city, j.country_code].filter(Boolean).join(', ')),
+      job_type: j.employment_type_code || 'Full-time',
+      salary: 'Not Listed',
+      date_posted: j.published_at ? new Date(j.published_at) : new Date(),
+      description_short: truncateDesc(j.description || j.requirements || ''),
+      lang: 'en',
+      source: 'Recruitee',
+      ats: 'recruitee',
+      ats_direct: true,
+      tags: j.department ? [j.department] : [],
+    }));
+}
+
+async function fetchBreezy(slug, company) {
+  const res = await get(`https://${slug}.breezy.hr/json?verbose=true`, {
+    maxRedirects: 0,
+    validateStatus: s => s === 200,
+  });
+  const jobs = Array.isArray(res.data) ? res.data : [];
+  return jobs
+    .filter(j => j.location?.is_remote || REMOTE_RE.test(j.location?.name || ''))
+    .map(j => ({
+      title: stripHtml(j.name),
+      company: j.company?.name || company,
+      url: j.url,
+      apply_url: j.url,
+      location: j.location?.is_remote ? 'Remote' : normalizeLocation(j.location?.name),
+      job_type: j.type?.name || 'Full-time',
+      salary: j.salary ? stripHtml(j.salary) : 'Not Listed',
+      date_posted: j.published_date ? new Date(j.published_date) : new Date(),
+      description_short: truncateDesc(j.description || ''),
+      lang: 'en',
+      source: 'BreezyHR',
+      ats: 'breezy',
+      ats_direct: true,
+      tags: j.department ? [j.department] : [],
+    }));
+}
+
+// Personio only exposes an XML export (no JSON API), and unlike the other
+// ATS providers doesn't put company jobs behind a single "offers" array —
+// each <position> block's description is split across several <jobDescription>
+// sections (e.g. "Your mission", "Your profile") that get concatenated below.
+function extractXmlTag(block, tag) {
+  const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+  return m ? m[1].trim() : '';
+}
+function decodeXmlEntities(str) {
+  return String(str)
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+async function fetchPersonio(slug, company) {
+  const res = await get(`https://${slug}.jobs.personio.de/xml`, {
+    maxRedirects: 0,
+    validateStatus: s => s === 200,
+  });
+  const xml = String(res.data);
+  const blocks = [...xml.matchAll(/<position>([\s\S]*?)<\/position>/g)].map(m => m[1]);
+  return blocks.flatMap(block => {
+    const id = extractXmlTag(block, 'id');
+    const office = decodeXmlEntities(extractXmlTag(block, 'office'));
+    const title = decodeXmlEntities(extractXmlTag(block, 'name'));
+    const department = decodeXmlEntities(extractXmlTag(block, 'department'));
+    const employmentType = extractXmlTag(block, 'employmentType');
+    const createdAt = extractXmlTag(block, 'createdAt');
+    if (!title || !id || !REMOTE_RE.test(office)) return [];
+    const descParts = [...block.matchAll(/<value>([\s\S]*?)<\/value>/g)]
+      .map(m => stripHtml(decodeXmlEntities(m[1])));
+    return [{
+      title: stripHtml(title),
+      company,
+      url: `https://${slug}.jobs.personio.de/job/${id}`,
+      apply_url: `https://${slug}.jobs.personio.de/job/${id}`,
+      location: 'Remote',
+      job_type: employmentType || 'Full-time',
+      salary: 'Not Listed',
+      date_posted: createdAt ? new Date(createdAt) : new Date(),
+      description_short: truncateDesc(descParts.join(' ') || `${title} — ${department}`),
+      lang: 'en',
+      source: 'Personio',
+      ats: 'personio',
+      ats_direct: true,
+      tags: department ? [department] : [],
+    }];
+  });
+}
+
 const ATS_FETCHERS = {
   greenhouse:      { fetch: fetchGreenhouse,      urlFragment: s => `greenhouse.io/${s}` },
   lever:           { fetch: fetchLever,           urlFragment: s => `lever.co/${s}` },
   ashby:           { fetch: fetchAshby,           urlFragment: s => `ashbyhq.com/${s}` },
   smartrecruiters: { fetch: fetchSmartRecruiters, urlFragment: s => `smartrecruiters.com/${s}` },
+  recruitee:       { fetch: fetchRecruitee,       urlFragment: s => `${s}.recruitee.com` },
+  breezy:          { fetch: fetchBreezy,          urlFragment: s => `${s}.breezy.hr` },
+  personio:        { fetch: fetchPersonio,        urlFragment: s => `${s}.jobs.personio.` },
   // Workable job URLs (apply.workable.com/j/<shortcode>) don't contain the slug,
   // so a real urlFragment here would match every Workable job in the DB and return
   // an unrelated company's name. fetchWorkable resolves the name from the API
@@ -445,6 +554,9 @@ const PER_CYCLE_CAP = {
   ashby:           150,
   smartrecruiters: 80,
   workable:        SEEDS.workable.length,
+  recruitee:       200,
+  breezy:          200,
+  personio:        200,
 };
 
 const CONCURRENCY = 12; // parallel company fetches per batch
