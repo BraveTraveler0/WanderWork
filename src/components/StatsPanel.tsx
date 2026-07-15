@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, ArrowRight, Users, ChevronDown, Share2, Linkedin, Facebook, Twitter, Link2 } from 'lucide-react'
+import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 import { isNewJob } from '../utils/jobUtils'
@@ -12,6 +12,41 @@ import CustomJobRequestModal, { type CustomJobRequestOptions } from './CustomJob
 import RecruiterOutreach from './RecruiterOutreach'
 
 const DOCUMENT_CREDIT_COST = 2
+
+// Solid/filled icons for the share popover — lucide-react is stroke-only, and
+// generic outline glyphs read poorly as brand marks anyway. These are the
+// standard filled brand paths (Material "share"/"link"/"check_circle" for the
+// generic ones).
+const IconShareFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L7.04 9.81C6.5 9.31 5.79 9 5 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" />
+  </svg>
+)
+const IconLinkedInFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+)
+const IconFacebookFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+  </svg>
+)
+const IconXFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+)
+const IconLinkFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+  </svg>
+)
+const IconCheckFilled = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+  </svg>
+)
 
 const asText = (value: unknown, fallback = ''): string => {
   if (typeof value === 'string') return value
@@ -516,7 +551,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                             onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#306770'; e.currentTarget.style.color = '#306770' }}
                             onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#DCDCDC'; e.currentTarget.style.color = '#AAAAAA' }}
                           >
-                            <Share2 size={13} />
+                            <IconShareFilled size={13} />
                           </button>
                           {isShareOpen && (
                             <div
@@ -530,7 +565,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                                 style={{ color: '#0A66C2' }}
                               >
-                                <Linkedin size={16} />
+                                <IconLinkedInFilled size={16} />
                               </a>
                               <a
                                 href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
@@ -538,7 +573,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                                 style={{ color: '#1877F2' }}
                               >
-                                <Facebook size={16} />
+                                <IconFacebookFilled size={16} />
                               </a>
                               <a
                                 href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTitle)}`}
@@ -546,7 +581,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                                 style={{ color: '#000000' }}
                               >
-                                <Twitter size={16} />
+                                <IconXFilled size={16} />
                               </a>
                               <button
                                 onClick={async () => {
@@ -560,7 +595,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
                                 style={{ color: '#787878' }}
                               >
-                                {shareCopied ? <Check size={16} /> : <Link2 size={16} />}
+                                {shareCopied ? <IconCheckFilled size={16} /> : <IconLinkFilled size={16} />}
                               </button>
                             </div>
                           )}
