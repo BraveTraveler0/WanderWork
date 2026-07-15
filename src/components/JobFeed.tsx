@@ -1188,6 +1188,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const [keywords, setKeywords] = useState<string[]>([])
   const [keywordInput, setKeywordInput] = useState('')
   const [dateRange, setDateRange] = useState('all')
+  const [sortMode, setSortMode] = useState<'relevance' | 'latest'>('relevance')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchLoading, setSearchLoading] = useState(false)
@@ -1237,7 +1238,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   // Reset visible count whenever filters change
   useEffect(() => {
     setVisibleCount(BATCH)
-  }, [showMatchedOnly, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords.join(','), searchQuery])
+  }, [showMatchedOnly, showInterestedOnly, showNewOnly, locationQuery, dateRange, sortMode, keywords.join(','), searchQuery])
 
   // Load more as user scrolls to the sentinel
   useEffect(() => {
@@ -1553,6 +1554,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     }
 
     jobs.sort((a: any, b: any) => {
+      if (sortMode === 'latest') return getJobTime(b) - getJobTime(a)
       if (searchTerms.length > 0) {
         const exactDiff = (exactIds.has(b.id) ? 1 : 0) - (exactIds.has(a.id) ? 1 : 0)
         if (exactDiff !== 0) return exactDiff
@@ -1576,7 +1578,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
 
     return { visibleJobs: jobs, exactSearchCount: searchTerms.length > 0 ? exactIds.size : jobs.length }
-  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
+  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, sortMode, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Report the top visible job to the parent whenever the list changes
@@ -1631,6 +1633,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const clearFilters = () => {
     setLocationQuery('')
     setDateRange('all')
+    setSortMode('relevance')
     setKeywords([])
     setKeywordInput('')
   }
@@ -1902,6 +1905,18 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
                   <option value="this_week">This week</option>
                   <option value="this_month">This month</option>
                   <option value="all">All</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <select
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as 'relevance' | 'latest')}
+                  className="px-3 py-2 rounded-[10px] text-[12px] border w-[150px] sm:w-[170px] lg:w-[160px] outline-none"
+                  style={{ borderColor: '#306770', background: 'white', color: '#306770' }}
+                >
+                  <option value="relevance">Best match</option>
+                  <option value="latest">Latest</option>
                 </select>
               </div>
             </div>
