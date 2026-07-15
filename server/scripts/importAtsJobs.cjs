@@ -54,75 +54,43 @@ const REMOTE_RE = /remote|worldwide|anywhere|work.?from.?home|\bwfh\b/i;
 // seeds ensure coverage for platforms whose sitemaps are unavailable.
 
 const SEEDS = {
+  // Greenhouse's sitemap 404s (see comment on `lever` below — same underlying
+  // issue), so this list was fully revalidated live on 2026-07: of ~277
+  // unique seeded companies, only 94 still resolve. Most of the "dead" 66%
+  // migrated to Workday, Ashby, or an in-house ATS. Only survivors kept below.
   greenhouse: [
     // Core tech / SaaS
-    'stripe', 'airbnb', 'snowflake', 'twilio', 'figma', 'hubspot', 'lyft', 'pinterest',
-    'zendesk', 'mongodb', 'elastic', 'hashicorp', 'datadog', 'confluent', 'segment',
-    'brex', 'rippling', 'checkr', 'lattice', 'loom', 'notion', 'retool', 'airtable',
-    'gusto', 'plaid', 'chime', 'carta', 'deel', 'remote', 'workos', 'squarespace',
-    'intercom', 'pagerduty', 'splunk', 'okta', 'cloudflare', 'fastly', 'asana',
-    'coinbase', 'doordash', 'instacart', 'etsy', 'eventbrite', 'glassdoor', 'spotify',
-    'adobe', 'canva', 'atlassian', 'gitlab', 'box', 'dropbox', 'slack', 'zoom',
-    'robinhood', 'faire', 'clearbit', 'sendgrid', 'postman', 'zapier', 'mixpanel',
-    'amplitude', 'contentful', 'algolia', 'grafana', 'netlify', 'sentry', 'tailscale',
-    'benchling', 'joinhomebase', 'klaviyo', 'affirm', 'nerdwallet', 'betterment',
-    'wealthfront', 'headspace', 'calm', 'duolingo', 'coursera', 'udemy', 'masterclass',
-    'lever', 'greenhouse', 'ashby', 'gem', 'teamtailor',
+    'stripe', 'airbnb', 'twilio', 'figma', 'hubspot', 'lyft', 'pinterest',
+    'mongodb', 'elastic', 'datadog', 'brex', 'checkr', 'lattice', 'airtable',
+    'gusto', 'chime', 'carta', 'remote', 'squarespace', 'intercom', 'pagerduty',
+    'okta', 'cloudflare', 'fastly', 'asana', 'coinbase', 'instacart', 'glassdoor',
+    'gitlab', 'dropbox', 'robinhood', 'faire', 'postman', 'mixpanel', 'amplitude',
+    'contentful', 'algolia', 'netlify', 'tailscale', 'klaviyo', 'affirm',
+    'betterment', 'calm', 'duolingo', 'coursera', 'udemy', 'masterclass', 'greenhouse',
     // Fintech / payments
-    'adyen', 'marqeta', 'mambu', 'patreon', 'gocardless', 'checkout', 'spreedly',
-    'tabapay', 'finix', 'unit', 'moderntreasury', 'ramp', 'divvy', 'expensify',
+    'adyen', 'marqeta', 'gocardless', 'tabapay',
     // Infrastructure / DevOps / security
-    'lacework', 'wiz', 'orca', 'snyk', 'cyberark', 'illumio', 'exabeam',
-    'panw', 'sailpoint', 'drata', 'vanta', 'secureframe', 'anvilogic',
-    'honeycomb', 'observe', 'chronosphere', 'coralogix', 'logz',
+    'orca', 'exabeam', 'honeycomb',
     // Data / AI / ML
-    'databricks', 'dbt', 'fivetran', 'airbyte', 'rudderstack', 'census',
-    'hightouch', 'hex', 'lightdash', 'preset', 'metabase', 'sigma', 'mode',
-    'cohere', 'scale', 'labelbox', 'weights-biases', 'huggingface', 'together',
+    'databricks', 'fivetran', 'hightouch', 'labelbox',
     // Product / design / marketing tools
-    'figma', 'invision', 'maze', 'usertesting', 'fullstory', 'hotjar', 'pendo',
-    'appcues', 'chameleon', 'intercom', 'customerio', 'braze', 'iterable',
-    'sprout', 'hootsuite', 'buffer', 'later', 'semrush', 'ahrefs',
-    // HR / Recruiting tools
-    'workday', 'rippling', 'gusto', 'bamboohr', 'namely', 'paylocity', 'paycom',
-    'lattice', 'culture-amp', 'leapsome', 'betterworks', '15five', 'reflektive',
+    'pendo', 'customerio', 'braze', 'iterable', 'hootsuite', 'later',
     // E-commerce / logistics
-    'shopify', 'bigcommerce', 'recharge', 'gorgias', 'gladly', 'kustomer',
-    'shipbob', 'shipstation', 'narvar', 'returnly', 'loop', 'aftership',
+    'narvar', 'aftership',
     // Healthcare / biotech
-    'oscar', 'cityblock', 'color', 'nuvation', 'tempus', 'veracyte',
-    'recursion', 'insitro', 'relay', 'mammoth', 'arc-institute',
+    'oscar', 'veracyte',
     // Telehealth
     'talkspace', 'betterhelp', 'cerebral', 'amwell', 'twochairs',
     // Logistics/ops (moved off Lever)
     'flexport',
     // Education / creator economy
-    'outschool', 'synthesis', 'bereal', 'patreon', 'substack', 'circle',
-    'teachable', 'thinkific', 'podia', 'kajabi', 'learnworlds',
-    'khanacademy', 'goguardian', 'udacity', 'nerdy',
+    'outschool', 'thinkific', 'khanacademy', 'goguardian', 'udacity', 'nerdy',
     // Climate / sustainability
-    'watershed', 'patch', 'arcadia', 'energyvault', 'form-energy',
-    'twelve', 'heirloom', 'charm', 'carboncure',
-    // Enterprise / CRM / ops
-    'salesforce', 'servicenow', 'veeva', 'medallia', 'qualtrics', 'sprinklr',
-    'gainsight', 'totango', 'churnzero', 'vitally',
-    // Design-focused companies
-    'figma', 'invision', 'canva', 'sketch', 'zeplin', 'marvel', 'framer',
-    'abstract', 'maze', 'useberry', 'lyssna', 'sprig', 'usertesting',
-    'airbnb', 'pinterest', 'etsy', 'squarespace', 'wix', 'webflow', 'cargo',
-    'adobe', 'shutterstock', 'getty', 'unsplash', 'noun-project',
-    // PR, comms & media agencies / companies
-    'businesswire', 'prnewswire', 'cision', 'meltwater', 'mention',
-    'brandwatch', 'talkwalker', 'prowly', 'prezly', 'coveragebook',
-    'voxmedia', 'buzzfeed', 'vice', 'refinery29', 'theatlantic', 'vox',
-    'axios', 'politico', 'thehill', 'rollcall',
+    'watershed', 'patch',
+    // PR, comms & media
+    'cision', 'brandwatch', 'voxmedia', 'buzzfeed', 'axios',
     // Finance / accounting / fintech
-    'pilot', 'bench', 'botkeeper', 'taxjar', 'avalara', 'vertex', 'sovos',
-    'brex', 'ramp', 'expensify', 'concur', 'coupa', 'tipalti', 'airbase',
-    'bill', 'melio', 'routable', 'stampli', 'lightyear', 'spendesk',
-    'freshbooks', 'wave', 'xero', 'quickbooks', 'sage',
-    'plaid', 'yodlee', 'finicity', 'mx', 'akoya',
-    'carta', 'capdesk', 'pulley', 'angellist',
+    'melio', 'sage', 'akoya', 'pulley',
   ],
   // Lever's sitemap (jobs.lever.co/sitemap.xml) 404s as of 2026-07, so unlike
   // Greenhouse/Ashby there's no auto-discovery fallback — this list is the
@@ -133,24 +101,20 @@ const SEEDS = {
     'netflix', 'palantir', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
     'lyrahealth', 'includedhealth', 'loadsmart',
   ],
+  // Also revalidated live 2026-07: of 94 unique seeded companies, only 45
+  // still resolve (Anthropic, PlanetScale, and Sourcegraph among the dead —
+  // moved to Greenhouse/in-house). Only survivors kept below.
   ashby: [
-    'anthropic', 'linear', 'vercel', 'supabase', 'neon', 'planetscale', 'turso',
-    'dbtlabs', 'getcensus', 'hightouch', 'polytomic', 'rudderstack', 'segment',
-    'airbyte', 'fivetran', 'starburst', 'trino', 'dremio', 'motherduck',
-    'qdrant', 'weaviate', 'chroma', 'pinecone', 'milvus',
-    'replit', 'codeium', 'tabnine', 'sourcegraph', 'swimm', 'graphite',
-    'posthog', 'june', 'heap', 'logrocket', 'highlight', 'openreplay',
-    'incident', 'rootly', 'firehydrant', 'blameless', 'opslevel', 'cortex',
-    'launchdarkly', 'unleash', 'statsig', 'eppo', 'split',
-    'merge', 'apideck', 'nango', 'kombo', 'knit',
-    'descript', 'runway', 'pika', 'krea', 'ideogram',
-    'resend', 'loops', 'postmark', 'sendgrid',
+    'linear', 'vercel', 'supabase', 'neon', 'hightouch', 'polytomic',
+    'airbyte', 'motherduck', 'weaviate', 'pinecone',
+    'replit', 'graphite', 'posthog',
+    'incident', 'opslevel', 'launchdarkly',
+    'merge', 'nango', 'kombo',
+    'runway', 'pika', 'krea', 'ideogram', 'resend',
     // Design tools / creative on Ashby
-    'loom', 'pitch', 'mmhmm', 'miro', 'whimsical', 'lucid', 'mural',
-    'passionfroot', 'beehiiv', 'ghost', 'substack',
+    'loom', 'miro', 'mural', 'ghost', 'substack',
     // Finance / accounting on Ashby
-    'deel', 'remote', 'rippling', 'sequoia', 'mercury', 'rho', 'found',
-    'onelane', 'ampla', 'settle', 'clearco', 'capchase', 'pipe',
+    'deel', 'sequoia', 'mercury', 'rho', 'found', 'clearco', 'capchase',
     // Online tutoring / language teaching on Ashby
     'preply', 'cambly', 'multiverse', 'babbel', 'brainly', 'brightwheel',
     // Telehealth on Ashby
