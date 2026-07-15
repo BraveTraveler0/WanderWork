@@ -1,5 +1,5 @@
 export const NEW_JOB_WINDOW_DAYS = 3
-export const JOB_PURGE_DAYS = 60
+export const JOB_PURGE_DAYS = 90
 export const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 export function getJobDate(job: any): Date | null {

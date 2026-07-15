@@ -118,7 +118,7 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
             <LI>De-identified, aggregated data derived from your usage may be retained indefinitely for analytics.</LI>
           </UL>
           <P>
-            Job listing data that is publicly available and does not contain personal information may be retained for operational purposes including job matching and search indexing. Stale job listings are automatically purged after 60 days.
+            Job listing data that is publicly available and does not contain personal information may be retained for operational purposes including job matching and search indexing. Stale job listings are automatically purged after 90 days.
           </P>
 
           <H2>6. Security</H2>

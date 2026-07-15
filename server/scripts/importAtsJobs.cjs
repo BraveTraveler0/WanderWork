@@ -14,10 +14,14 @@ function get(url, opts = {}) {
 
 function stripHtml(html) {
   if (!html) return '';
+  // Entities decoded BEFORE tag-stripping: Greenhouse's content=true API
+  // returns doubly-encoded markup (&lt;h2&gt; not <h2>), so stripping tags
+  // first finds nothing to strip and the later entity-decode re-creates
+  // literal tags that never get removed.
   return String(html)
-    .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
     .replace(/\s{2,}/g, ' ').trim();
 }
 
@@ -88,9 +92,14 @@ const SEEDS = {
     // Healthcare / biotech
     'oscar', 'cityblock', 'color', 'nuvation', 'tempus', 'veracyte',
     'recursion', 'insitro', 'relay', 'mammoth', 'arc-institute',
+    // Telehealth
+    'talkspace', 'betterhelp', 'cerebral', 'amwell', 'twochairs',
+    // Logistics/ops (moved off Lever)
+    'flexport',
     // Education / creator economy
     'outschool', 'synthesis', 'bereal', 'patreon', 'substack', 'circle',
     'teachable', 'thinkific', 'podia', 'kajabi', 'learnworlds',
+    'khanacademy', 'goguardian', 'udacity', 'nerdy',
     // Climate / sustainability
     'watershed', 'patch', 'arcadia', 'energyvault', 'form-energy',
     'twelve', 'heirloom', 'charm', 'carboncure',
@@ -122,6 +131,7 @@ const SEEDS = {
   lever: [
     'secureframe', 'toptal', 'instrument', 'greenlight', 'transcarent',
     'netflix', 'palantir', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
+    'lyrahealth', 'includedhealth', 'loadsmart',
   ],
   ashby: [
     'anthropic', 'linear', 'vercel', 'supabase', 'neon', 'planetscale', 'turso',
@@ -141,6 +151,10 @@ const SEEDS = {
     // Finance / accounting on Ashby
     'deel', 'remote', 'rippling', 'sequoia', 'mercury', 'rho', 'found',
     'onelane', 'ampla', 'settle', 'clearco', 'capchase', 'pipe',
+    // Online tutoring / language teaching on Ashby
+    'preply', 'cambly', 'multiverse', 'babbel', 'brainly', 'brightwheel',
+    // Telehealth on Ashby
+    'headway', 'grow-therapy', 'sondermind',
   ],
   smartrecruiters: [
     'bosch', 'visa', 'linkedin', 'ericsson', 'koninklijke', 'sap',

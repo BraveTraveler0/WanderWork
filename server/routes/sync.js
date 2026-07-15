@@ -57,13 +57,17 @@ function requireSyncSecret(req, res, next) {
 }
 
 function stripHtml(str) {
+  // Entities decoded BEFORE tag-stripping — some sources return doubly-encoded
+  // markup (&lt;h2&gt; not <h2>), so stripping tags first finds nothing to
+  // strip and the later entity-decode re-creates literal tags that never
+  // get removed.
   return String(str || '')
-    .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
+    .replace(/<[^>]*>/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }

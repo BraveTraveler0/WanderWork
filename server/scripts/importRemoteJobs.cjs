@@ -11,10 +11,14 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPE
 
 function stripHtml(html) {
   if (!html) return '';
+  // Entities decoded BEFORE tag-stripping — some sources (e.g. Greenhouse)
+  // return doubly-encoded markup (&lt;h2&gt; not <h2>), so stripping tags
+  // first finds nothing to strip and the later entity-decode re-creates
+  // literal tags that never get removed.
   return String(html)
-    .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
     .replace(/\s{2,}/g, ' ').trim();
 }
 
@@ -276,8 +280,12 @@ const SOURCES = [
   { name: 'TheMuse (Writing/Content)', fetch: () => fetchTheMuse({ category: 'Writing and Editing' }) },
   { name: 'TheMuse (Data/AI)', fetch: () => fetchTheMuse({ category: 'Data and Analytics' }) },
   { name: 'TheMuse (Design/UX)', fetch: () => fetchTheMuse({ category: 'Design and UX' }) },
-  { name: 'TheMuse (Education/Teaching)', fetch: () => fetchTheMuse({ category: 'Education' }) },
+  { name: 'TheMuse (Operations)', fetch: () => fetchTheMuse({ category: 'Business Operations' }) },
   { name: 'TheMuse (Internships)', fetch: () => fetchTheMuse({ level: 'Internship' }) },
+  // "Education"/"Healthcare" were tried and dropped — verified live (300+ job
+  // sample each) that both categories on The Muse are ~0% remote-eligible;
+  // online tutoring and telehealth roles are sourced via ATS company seeds
+  // in importAtsJobs.cjs instead (Preply, Cambly, Lyra Health, BetterHelp...).
 ];
 
 async function importRemoteJobs() {
