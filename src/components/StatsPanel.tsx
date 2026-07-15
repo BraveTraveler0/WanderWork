@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
+import { Check, ArrowRight, Users, ChevronDown, Share2, Linkedin, Facebook, Twitter, Link2 } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 import { isNewJob } from '../utils/jobUtils'
@@ -57,6 +57,25 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const selectedCompany = asText(selectedJobForCompany?.company).trim() || undefined
 
   const [interestedOverrides, setInterestedOverrides] = useState<Record<number, boolean>>(loadInterestedOverrides)
+
+  const [shareMenuOpenId, setShareMenuOpenId] = useState<string | number | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
+  const shareMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (shareMenuOpenId == null) return
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) {
+        setShareMenuOpenId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [shareMenuOpenId])
+
+  useEffect(() => {
+    setShareMenuOpenId(null)
+  }, [jobId])
 
   const toggleInterested = async (job: any) => {
     let nextValue = false
@@ -479,27 +498,94 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
                   {(() => {
                     const override = interestedOverrides[(selectedJob as any).id]
                     const isInterested = override !== undefined ? override : Boolean((selectedJob as any).interested)
+                    const slugify = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+                    const backendId = String((selectedJob as any).backendId || (selectedJob as any)._id || '')
+                    const shareUrl = backendId
+                      ? `https://wanderwork.io/jobs/${slugify(asText(selectedJob.title))}-at-${slugify(asText(selectedJob.company))}-${backendId}`
+                      : 'https://wanderwork.io'
+                    const shareTitle = `${asText(selectedJob.title, 'Job')} at ${asText(selectedJob.company, 'this company')}`
+                    const isShareOpen = shareMenuOpenId === (selectedJob as any).id
                     return (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleInterested(selectedJob) }}
-                        className="flex items-center justify-end gap-2 mb-2 rounded-full px-3 py-1 transition-all duration-200"
-                        style={{
-                          border: isInterested ? '1px solid #306770' : '1px solid #DCDCDC',
-                          background: isInterested ? '#EEF6F7' : 'transparent',
-                          color: isInterested ? '#306770' : '#AAAAAA',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#306770'; e.currentTarget.style.color = '#306770' }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = isInterested ? '#306770' : '#DCDCDC'
-                          e.currentTarget.style.color = isInterested ? '#306770' : '#AAAAAA'
-                        }}
-                      >
-                        <Check size={13} />
-                        <span className="whitespace-nowrap text-[11px] font-medium">
-                          {isInterested ? "I'm Interested" : 'Mark Interested'}
-                        </span>
-                      </button>
+                      <div className="flex items-center justify-end gap-2 mb-2">
+                        <div className="relative" ref={isShareOpen ? shareMenuRef : undefined}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShareMenuOpenId(isShareOpen ? null : (selectedJob as any).id) }}
+                            aria-label="Share this job"
+                            className="flex items-center justify-center w-7 h-7 rounded-full transition-all duration-200"
+                            style={{ border: '1px solid #DCDCDC', color: '#AAAAAA', background: 'transparent', cursor: 'pointer' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#306770'; e.currentTarget.style.color = '#306770' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#DCDCDC'; e.currentTarget.style.color = '#AAAAAA' }}
+                          >
+                            <Share2 size={13} />
+                          </button>
+                          {isShareOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 top-full mt-2 z-20 bg-white rounded-[12px] p-1.5 flex items-center gap-1"
+                              style={{ boxShadow: '0 4px 14px rgba(0,0,0,0.12)', border: '1px solid #EEEEEE' }}
+                            >
+                              <a
+                                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`}
+                                target="_blank" rel="noreferrer" title="Share on LinkedIn"
+                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                                style={{ color: '#0A66C2' }}
+                              >
+                                <Linkedin size={16} />
+                              </a>
+                              <a
+                                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
+                                target="_blank" rel="noreferrer" title="Share on Facebook"
+                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                                style={{ color: '#1877F2' }}
+                              >
+                                <Facebook size={16} />
+                              </a>
+                              <a
+                                href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTitle)}`}
+                                target="_blank" rel="noreferrer" title="Share on X"
+                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                                style={{ color: '#000000' }}
+                              >
+                                <Twitter size={16} />
+                              </a>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(shareUrl)
+                                    setShareCopied(true)
+                                    setTimeout(() => setShareCopied(false), 1500)
+                                  } catch {}
+                                }}
+                                title="Copy link"
+                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                                style={{ color: '#787878' }}
+                              >
+                                {shareCopied ? <Check size={16} /> : <Link2 size={16} />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleInterested(selectedJob) }}
+                          className="flex items-center justify-end gap-2 rounded-full px-3 py-1 transition-all duration-200"
+                          style={{
+                            border: isInterested ? '1px solid #306770' : '1px solid #DCDCDC',
+                            background: isInterested ? '#EEF6F7' : 'transparent',
+                            color: isInterested ? '#306770' : '#AAAAAA',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#306770'; e.currentTarget.style.color = '#306770' }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = isInterested ? '#306770' : '#DCDCDC'
+                            e.currentTarget.style.color = isInterested ? '#306770' : '#AAAAAA'
+                          }}
+                        >
+                          <Check size={13} />
+                          <span className="whitespace-nowrap text-[11px] font-medium">
+                            {isInterested ? "I'm Interested" : 'Mark Interested'}
+                          </span>
+                        </button>
+                      </div>
                     )
                   })()}
                   <p className="mb-1">{formatPostedDate(selectedJob.postedAt ?? selectedJob.rawDate)}</p>
