@@ -1019,7 +1019,14 @@ function escapeRegex(value) {
 // jobs stay reachable by the words people actually type.
 const SEARCH_SYNONYM_CLUSTERS = [
     ['ux', 'ui', 'user experience', 'user interface', 'product design', 'designer', 'design'],
-    ['customer service', 'customer support', 'support agent', 'help desk', 'client support'],
+    // 'support' is a deliberate single-word member: expandSearchTerm only
+    // activates a cluster when one of its phrases occurs INSIDE the (single-
+    // word) query term, never the reverse — a cluster built entirely from
+    // multi-word phrases can never be triggered by anything a user actually
+    // types. Every other cluster already has a one-word member; this one
+    // didn't, so searching "support" or "customer service" (split into two
+    // AND'd single-word terms) never matched this cluster at all.
+    ['customer service', 'customer support', 'support agent', 'help desk', 'client support', 'support'],
     ['virtual assistant', 'executive assistant', 'admin assistant', 'administrative assistant', 'assistant', 'admin'],
     ['paralegal', 'legal assistant', 'legal services', 'law clerk', 'legal'],
     ['hr', 'human resources', 'recruiter', 'recruiting', 'talent acquisition'],
@@ -1081,7 +1088,14 @@ const FREETEXT_SEARCH_FIELDS = [
 // those would break prefix/plural matching people rely on today.
 function regexForPhrase(phrase) {
     const escaped = escapeRegex(phrase)
-    return phrase.length <= 3 ? `\\b${escaped}\\b` : escaped
+    if (phrase.length > 3) return escaped
+    // \b only fires at a word/non-word transition, so a naive \b on both
+    // sides breaks terms that start or end in punctuation — "c++" would
+    // never match "C++ Developer" because nothing is a "word char" after
+    // the trailing "+". Only anchor the side that's actually alphanumeric.
+    const startsWord = /^[a-z0-9]/i.test(phrase)
+    const endsWord = /[a-z0-9]$/i.test(phrase)
+    return `${startsWord ? '\\b' : ''}${escaped}${endsWord ? '\\b' : ''}`
 }
 
 function buildJobSearchFilter(search) {

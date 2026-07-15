@@ -480,11 +480,15 @@ async function fetchPersonio(slug, company) {
   return blocks.flatMap(block => {
     const id = extractXmlTag(block, 'id');
     const office = decodeXmlEntities(extractXmlTag(block, 'office'));
+    // A job's primary office can be "Hybrid - Paris" while its
+    // <additionalOffices> lists a remote option — checking only `office`
+    // wrongly excludes those, so both get tested for the remote signal.
+    const additionalOffices = decodeXmlEntities(extractXmlTag(block, 'additionalOffices'));
     const title = decodeXmlEntities(extractXmlTag(block, 'name'));
     const department = decodeXmlEntities(extractXmlTag(block, 'department'));
     const employmentType = extractXmlTag(block, 'employmentType');
     const createdAt = extractXmlTag(block, 'createdAt');
-    if (!title || !id || !REMOTE_RE.test(office)) return [];
+    if (!title || !id || !(REMOTE_RE.test(office) || REMOTE_RE.test(additionalOffices))) return [];
     const descParts = [...block.matchAll(/<value>([\s\S]*?)<\/value>/g)]
       .map(m => stripHtml(decodeXmlEntities(m[1])));
     return [{
