@@ -2760,7 +2760,15 @@ function isLikelyEnglish(text) {
     return true;
 }
 
+const FEATURED_JOBS_DEFAULT_LIMIT = 60;
+const FEATURED_JOBS_MAX_LIMIT = 200;
+
 const getFeaturedJobs = asyncHandler(async (req, res) => {
+    const requestedLimit = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(requestedLimit, FEATURED_JOBS_MAX_LIMIT)
+        : FEATURED_JOBS_DEFAULT_LIMIT;
+
     const all = await getAllJobsPure();
     const now = Date.now();
 
@@ -2806,7 +2814,7 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
     }
 
     scored.sort((a, b) => b.score - a.score);
-    res.json(scored.map(({ job }) => job));
+    res.json(scored.slice(0, limit).map(({ job }) => job));
 });
 
 module.exports =

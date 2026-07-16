@@ -846,6 +846,7 @@ function App() {
                 return { j, score }
               })
               .sort((a, b) => b.score - a.score)
+              .slice(0, 60)
               .map(({ j }) => j)
             setPublicJobs(mapJobs(filtered))
           })
