@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy } from 'react'
 import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
@@ -6,9 +6,6 @@ import JobFeed from './components/JobFeed'
 import StatsPanel from './components/StatsPanel'
 import ParticleProfile from './components/ParticleProfile'
 import SettingsPage from './components/SettingsPage'
-import LoginPage from './components/LoginPage'
-import SignupPage from './components/SignupPage'
-import ForgotPasswordPage from './components/ForgotPasswordPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import TermsOfServicePage from './components/TermsOfServicePage'
 import PlansPage from './components/PlansPage'
@@ -16,8 +13,15 @@ import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
 import JoinTeamPage from './components/JoinTeamPage'
-import LandingPage from './landing/LandingPage'
 import { API_BASE_URL } from './api/config'
+
+// Guest-only entry points, lazy-loaded so logged-in users (the common case)
+// never download them — LandingPage alone pulls in `motion`, used nowhere
+// else in the app.
+const LoginPage = lazy(() => import('./components/LoginPage'))
+const SignupPage = lazy(() => import('./components/SignupPage'))
+const ForgotPasswordPage = lazy(() => import('./components/ForgotPasswordPage'))
+const LandingPage = lazy(() => import('./landing/LandingPage'))
 import {
   getAllJobSeekerData,
   getJobs,

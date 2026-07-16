@@ -9,6 +9,28 @@ import '@fontsource/manrope/800.css'
 
 inject()
 
+const suspenseFallback = (
+  <div style={{
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    background: 'linear-gradient(145.48deg,#F9FAFB 0%,#F0F2F5 100%)',
+  }}>
+    <div style={{
+      width: 48,
+      height: 48,
+      borderRadius: '50%',
+      border: '4px solid #C8DDE0',
+      borderTopColor: '#1e5560',
+      animation: 'ww-spin 0.75s linear infinite',
+    }} />
+    <p style={{ color: '#787878', fontFamily: 'Manrope, sans-serif', fontSize: 14, margin: 0 }}>Putting in Work</p>
+  </div>
+)
+
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -74,7 +96,9 @@ class ErrorBoundary extends React.Component<
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <React.Suspense fallback={suspenseFallback}>
+        <App />
+      </React.Suspense>
     </ErrorBoundary>
   </React.StrictMode>,
 )
