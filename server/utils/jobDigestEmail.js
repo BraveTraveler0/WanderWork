@@ -33,13 +33,13 @@ function jobDigestEmail({ firstName, jobs = [] }) {
                 <p style="margin:0 0 2px; font-size:16px; font-weight:800; color:#1a1a2e;">${job.title || 'Remote Role'}</p>
                 <p style="margin:0 0 8px; font-size:13px; color:#306770; font-weight:600;">${job.company || ''} &middot; ${location}${posted ? ` &middot; Posted ${posted}` : ''}</p>
                 ${desc ? `<p style="margin:0 0 14px; font-size:13px; color:#4b5563; line-height:1.6;">${desc.length > 140 ? desc.slice(0, 140).trim() + '...' : desc}</p>` : '<p style="margin:0 0 14px;"></p>'}
-                <table cellpadding="0" cellspacing="0">
+                <table cellpadding="0" cellspacing="0" width="100%">
                   <tr>
-                    <td style="padding-right:10px;">
-                      <a href="${applyUrl}" target="_blank" style="display:inline-block; background-color:#306770; color:#ffffff; font-family:Manrope,Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:800; line-height:38px; text-align:center; border-radius:8px; padding:0 20px; border:1px solid #306770; text-decoration:none;">Apply Now</a>
+                    <td class="stack-column-mobile" style="padding:0 10px 0 0;">
+                      <a href="${applyUrl}" target="_blank" class="btn-mobile-full" style="display:inline-block; background-color:#306770; color:#ffffff; font-family:Manrope,Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:800; line-height:38px; text-align:center; border-radius:8px; padding:0 20px; border:1px solid #306770; text-decoration:none;">Apply Now</a>
                     </td>
-                    <td>
-                      <a href="${coverLetterUrl}" target="_blank" style="display:inline-block; background-color:#FFFFFF; color:#306770; font-family:Manrope,Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:800; line-height:38px; text-align:center; border-radius:8px; padding:0 20px; border:1.5px solid #306770; text-decoration:none;">Send My Cover Letter</a>
+                    <td class="stack-column-mobile">
+                      <a href="${coverLetterUrl}" target="_blank" class="btn-mobile-full" style="display:inline-block; background-color:#FFFFFF; color:#306770; font-family:Manrope,Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:800; line-height:38px; text-align:center; border-radius:8px; padding:0 20px; border:1.5px solid #306770; text-decoration:none;">Send My Cover Letter</a>
                     </td>
                   </tr>
                 </table>
@@ -66,6 +66,8 @@ function jobDigestEmail({ firstName, jobs = [] }) {
     @media screen and (max-width:600px) {
       .container { width:100% !important; }
       .px-24 { padding-left:16px !important; padding-right:16px !important; }
+      .stack-column-mobile { display:block !important; width:100% !important; padding:0 0 10px 0 !important; }
+      .btn-mobile-full { display:block !important; width:100% !important; box-sizing:border-box !important; }
     }
   </style>
 </head>
