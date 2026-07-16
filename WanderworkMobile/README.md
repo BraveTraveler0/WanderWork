@@ -29,6 +29,19 @@ npm run cap:ios       # build, sync, open Xcode (requires a Mac)
 iOS can only be built/run on a Mac (Xcode + CocoaPods). Android can be built
 on Windows once Android Studio/SDK is installed.
 
+## App icon & splash screen
+
+`resources/icon-source.png` is the WanderWork enso mark, extracted from the
+web app's `public/favicon.svg` (which embeds it as a base64 PNG). Run
+`node resources/build-icons.cjs` to recomposite `icon.png` /
+`icon-background.png` / `icon-foreground.png` / `splash.png` if the brand
+background color or padding ever changes, then regenerate everything with:
+
+```
+npx capacitor-assets generate
+npx cap sync
+```
+
 ## Native Google sign-in — setup required
 
 The web app's Google login (`@react-oauth/google`, popup-based) doesn't work
