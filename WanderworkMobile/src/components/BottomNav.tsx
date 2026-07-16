@@ -67,9 +67,9 @@ export default function BottomNav({ active, unseenCount, onNavigate, onOpenRecru
       }}
     >
       <NavButton active={active === 'dashboard'} label="Jobs" onClick={() => onNavigate('dashboard')} icon={<Briefcase size={20} />} />
-      <NavButton active={false} label="Recruiters" onClick={() => guarded(onOpenRecruiters)} icon={<Users size={20} />} />
-      <NavButton active={active === 'messages'} label="Messages" onClick={() => guarded(() => onNavigate('messages'))} icon={<MessageCircle size={20} />} badge={unseenCount} />
       <NavButton active={active === 'profile'} label="Profile" onClick={() => guarded(() => onNavigate('profile'))} icon={<User size={20} />} />
+      <NavButton active={active === 'messages'} label="Messages" onClick={() => guarded(() => onNavigate('messages'))} icon={<MessageCircle size={20} />} badge={unseenCount} />
+      <NavButton active={false} label="Recruiters" onClick={() => guarded(onOpenRecruiters)} icon={<Users size={20} />} />
       <NavButton active={active === 'more'} label="More" onClick={onOpenMore} icon={<Menu size={20} />} />
     </nav>
   )

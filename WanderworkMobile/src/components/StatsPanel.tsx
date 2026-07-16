@@ -527,11 +527,11 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               <div className="flex flex-col gap-6">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="flex-1 min-w-0 sm:pr-3 lg:pr-4">
+                <div className="order-2 sm:order-1 flex-1 min-w-0 sm:pr-3 lg:pr-4">
                   <h3 className="text-[18px] xl:text-[22px] 2xl:text-[24px] text-black mb-2 line-clamp-2">{asText(selectedJob.title, 'Job Title')}</h3>
                   <p className="text-[18px] xl:text-[22px] 2xl:text-[24px] mb-3 xl:mb-4 line-clamp-2" style={{ color: '#787878' }}>{asText(selectedJob.company, 'Company')}</p>
                 </div>
-                <div className="shrink-0 text-right text-[12px]" style={{ color: '#787878' }}>
+                <div className="order-1 sm:order-2 shrink-0 text-right text-[12px]" style={{ color: '#787878' }}>
                   {(() => {
                     const override = interestedOverrides[(selectedJob as any).id]
                     const isInterested = override !== undefined ? override : Boolean((selectedJob as any).interested)
