@@ -17,6 +17,7 @@ import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
 import JoinTeamPage from './components/JoinTeamPage'
 import LandingPage from './landing/LandingPage'
+import BottomNav, { type BottomNavPage } from './components/BottomNav'
 import { API_BASE_URL } from './api/config'
 import { registerBackHandler, exitApp } from './native'
 import {
@@ -1199,6 +1200,12 @@ function App() {
 
   const displayedJobId = selectedJobId ?? topVisibleJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
 
+  const handleBottomNavigate = (page: BottomNavPage) => {
+    if (page === 'messages') setUnseenAppCount(0)
+    if (page === 'dashboard') setSelectedJobId(null)
+    navigateTo(page)
+  }
+
   // Menu dropdown component
   const menuItems = [
     { label: 'My Profile',      action: () => { setCurrentPage('profile'); setShowMenu(false) } },
@@ -1216,7 +1223,7 @@ function App() {
 
   const MenuDropdown = () => (
     <div
-      className="absolute top-full right-0 mt-2 w-[210px] rounded-[14px] z-40 overflow-hidden"
+      className="hidden lg:block absolute top-full right-0 mt-2 w-[210px] rounded-[14px] z-40 overflow-hidden"
       style={{
         background: 'rgba(255,255,255,0.90)',
         backdropFilter: 'blur(20px) saturate(160%)',
@@ -1255,6 +1262,41 @@ function App() {
           </span>
         </button>
       ))}
+    </div>
+  )
+
+  // Same menuItems, presented as a bottom sheet for the BottomNav's "More"
+  // button on phone widths — MenuDropdown above stays desktop/tablet-only.
+  const MobileMoreSheet = () => (
+    <div className="lg:hidden fixed inset-0 z-40" onClick={() => setShowMenu(false)}>
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.25)' }} />
+      <div
+        className="absolute left-3 right-3 rounded-[16px] overflow-hidden safe-area-bottom"
+        style={{
+          bottom: 'calc(64px + env(safe-area-inset-bottom, 0px) + 12px)',
+          background: 'rgba(255,255,255,0.96)',
+          backdropFilter: 'blur(20px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+          border: '1px solid rgba(210,220,224,0.7)',
+          boxShadow: '0 8px 32px rgba(48,103,112,0.13), 0 2px 8px rgba(0,0,0,0.07)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {menuItems.map((item, i) => (
+          <button
+            key={item.label}
+            onClick={item.action}
+            className="w-full text-left px-5 py-3 text-[14px] font-medium"
+            style={{
+              color: '#306770',
+              fontFamily: 'Manrope',
+              borderTop: i > 0 ? '1px solid rgba(220,220,220,0.35)' : 'none',
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 
@@ -1325,7 +1367,12 @@ function App() {
 
   // Render different pages
   if (currentPage === 'settings') {
-    return <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} onSaved={refreshPairings} />
+    return <>
+      <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} onSaved={refreshPairings} />
+      <div className="lg:hidden h-20" />
+      {_token && <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'reportbug') {
@@ -1345,7 +1392,12 @@ function App() {
   }
 
   if (currentPage === 'plans') {
-    return <PlansPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
+    return <>
+      <PlansPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
+      <div className="lg:hidden h-20" />
+      {_token && <BottomNav active={null} unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'profile') {
@@ -1373,7 +1425,12 @@ function App() {
         skills: [], urls: [], resume: {}, status: 'active',
         paidUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
       } : null))
-    return <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} onSaved={refreshPairings} />
+    return <>
+      <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} onSaved={refreshPairings} />
+      <div className="lg:hidden h-20" />
+      {_token && <BottomNav active="profile" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   return (
@@ -1676,7 +1733,18 @@ function App() {
             </div>
           </div>
         </footer>
+        {_token && <div className="lg:hidden h-20" />}
       </div>
+      {_token && (
+        <BottomNav
+          active={currentPage === 'messages' ? 'messages' : 'dashboard'}
+          unseenCount={unseenAppCount}
+          onNavigate={handleBottomNavigate}
+          onOpenRecruiters={() => setShowRecruiterNavModal(true)}
+          onOpenMore={() => setShowMenu(true)}
+        />
+      )}
+      {showMenu && <MobileMoreSheet />}
     </div>
   )
 }
