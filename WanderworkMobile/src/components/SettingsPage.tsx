@@ -4,6 +4,9 @@ import { changePassword, updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
 import { getExtensionKey, regenerateExtensionKey } from '../api/extension'
+import { Capacitor } from '@capacitor/core'
+import { isNative } from '../native'
+import { purchaseSubscription } from '../native-iap'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -154,9 +157,17 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
   const handleUpgrade = async (plan: StripePlan) => {
     setUpgradeLoading(plan)
     try {
+      // App Store/Play Store require native in-app purchase for
+      // subscriptions bought inside the app — Stripe checkout can't be
+      // shown on native builds.
+      if (isNative) {
+        await purchaseSubscription(plan)
+        return
+      }
       const url = await createCheckoutSession(plan, profile.email)
       window.location.href = url
     } catch (err: any) {
+      if (err?.userCancelled) return
       await showAlert('Checkout Failed', err?.message || 'Could not start checkout. Please try again.')
     } finally {
       setUpgradeLoading(null)
@@ -876,6 +887,19 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     className="px-4 py-2 rounded-[10px] border transition-colors"
                     style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
                     onClick={() => {
+                      // Native subscriptions are billed and managed entirely
+                      // by Apple/Google — there's no Stripe/PayPal "payment
+                      // method" to add, so this deep-links to the OS's own
+                      // subscription settings instead.
+                      if (isNative) {
+                        window.open(
+                          Capacitor.getPlatform() === 'ios'
+                            ? 'itms-apps://apps.apple.com/account/subscriptions'
+                            : 'https://play.google.com/store/account/subscriptions',
+                          '_blank'
+                        )
+                        return
+                      }
                       if (paymentProvider === 'stripe') {
                         openCustomerPortal(profile.email).catch(() =>
                           window.open('https://billing.stripe.com/p/login/7sY28s8860Dgg4ufHo3Ru00', '_blank', 'noopener,noreferrer')
@@ -885,7 +909,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       }
                     }}
                   >
-                    + Add {paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method
+                    {isNative ? 'Manage Subscription' : `+ Add ${paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method`}
                   </button>
 
                   <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
