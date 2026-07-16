@@ -707,6 +707,9 @@ function App() {
 
   useEffect(() => {
     return registerBackHandler(() => {
+      if (showMenu) return setShowMenu(false)
+      if (showRecruiterNavModal) return setShowRecruiterNavModal(false)
+      if (selectedJobId !== null) return setSelectedJobId(null)
       if (showForgotPassword) return setShowForgotPassword(false)
       if (showSignup) return setShowSignup(false)
       if (showLogin) return setShowLogin(false)
@@ -715,7 +718,7 @@ function App() {
       if (showLandingPage) return exitApp()
       exitApp()
     })
-  }, [showForgotPassword, showSignup, showLogin, showPlans, currentPage, showLandingPage])
+  }, [showMenu, showRecruiterNavModal, selectedJobId, showForgotPassword, showSignup, showLogin, showPlans, currentPage, showLandingPage])
 
   useEffect(() => {
     if (pendingCoverLetterJobId && !_token) {
