@@ -95,7 +95,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many requests. Please try again later.' },
 });
-app.use(['/auth/login', '/auth/signup', '/auth/forgotPassword', '/auth/resetPassword', '/oauth/google'], authLimiter);
+app.use(['/auth/login', '/auth/signup', '/auth/forgotPassword', '/auth/resetPassword', '/oauth/google', '/account-deletion/request'], authLimiter);
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -398,6 +398,7 @@ const routes = {
   '/tally': './routes/tallyWebhook',
   '/oauth': './routes/oauthRoutes',
   '/capitalwatch': './routes/capitalWatchRoutes',
+  '/account-deletion': './routes/accountDeletionRoutes',
 };
 
 // Register routes

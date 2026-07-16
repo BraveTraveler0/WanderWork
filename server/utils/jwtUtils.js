@@ -12,10 +12,11 @@ if (!process.env.JWT_SECRET && !process.env.AUTH_SECRET) {
 }
 
 // Function to generate a JWT
-function generateToken(user, expiresIn = '30d', emailOnly = false) {
+function generateToken(user, expiresIn = '30d', emailOnly = false, extraClaims = {}) {
     const payload = emailOnly ? {
         id: user._id,
         email: user.email,
+        ...extraClaims,
     } : {
         _id: user._id,
         email: user.email,

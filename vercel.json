@@ -4,6 +4,8 @@
     { "source": "/privacy", "destination": "https://wanderwork-backend-server.onrender.com/privacy" },
     { "source": "/terms", "destination": "https://wanderwork-backend-server.onrender.com/terms" },
     { "source": "/support", "destination": "https://wanderwork-backend-server.onrender.com/support" },
+    { "source": "/account-deletion", "destination": "https://wanderwork-backend-server.onrender.com/account-deletion" },
+    { "source": "/account-deletion/:path*", "destination": "https://wanderwork-backend-server.onrender.com/account-deletion/:path*" },
     { "source": "/sitemap.xml", "destination": "https://wanderwork-backend-server.onrender.com/sitemap.xml" },
     { "source": "/sitemaps/:path*", "destination": "https://wanderwork-backend-server.onrender.com/sitemaps/:path*" },
     { "source": "/feeds/:path*", "destination": "https://wanderwork-backend-server.onrender.com/feeds/:path*" },
