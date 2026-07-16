@@ -1386,23 +1386,23 @@ function App() {
       {/* Full-width sticky header */}
       <div className="sticky top-0 z-50 w-full" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
         <header className="max-w-[1460px] mx-auto px-4 sm:px-6 flex items-center justify-between py-4">
-          <h1 className="font-bold text-[24px]" style={{ color: '#306770', fontFamily: 'Manrope', letterSpacing: '3.6px' }}>
+          <h1 className="font-bold text-[16px] sm:text-[24px] tracking-[1.6px] sm:tracking-[3.6px] shrink-0" style={{ color: '#306770', fontFamily: 'Manrope' }}>
             {logoText.length <= 6 ? logoText : 'WANDER'}
             {logoText.length >= 7 && <span style={{ opacity: 0.45 }}>/</span>}
             {logoText.length > 7 ? logoText.slice(7) : ''}
           </h1>
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {!_token ? (
               <>
                 <button
                   onClick={() => setShowLogin(true)}
-                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 10, color: '#306770', background: 'transparent', border: '2px solid #306770', cursor: 'pointer', fontFamily: 'Manrope' }}
+                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 12px', borderRadius: 10, color: '#306770', background: 'transparent', border: '2px solid #306770', cursor: 'pointer', fontFamily: 'Manrope', whiteSpace: 'nowrap' }}
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => setShowSignup(true)}
-                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 10, color: 'white', background: '#306770', border: 'none', cursor: 'pointer', fontFamily: 'Manrope' }}
+                  style={{ fontSize: 13, fontWeight: 600, padding: '8px 12px', borderRadius: 10, color: 'white', background: '#306770', border: 'none', cursor: 'pointer', fontFamily: 'Manrope', whiteSpace: 'nowrap' }}
                 >
                   Sign Up
                 </button>
