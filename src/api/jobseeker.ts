@@ -266,33 +266,12 @@ export function getContacts(init?: RequestInit & { signal?: AbortSignal }): Prom
   return fetchJson<Contact[]>('/jobseeker/contact', init);
 }
 
-export function getContactById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<Contact> {
-  return fetchJson<Contact>(`/jobseeker/contact/${encodeURIComponent(id)}`, init);
-}
-
 export function getCandidateJobPairings(init?: RequestInit & { signal?: AbortSignal }): Promise<CandidateJobPairing[]> {
   return fetchJson<CandidateJobPairing[]>('/jobseeker/jobCandidatePairing', init);
 }
 
-export function getCandidateJobPairingById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<CandidateJobPairing> {
-  return fetchJson<CandidateJobPairing>(`/jobseeker/jobCandidatePairing/${encodeURIComponent(id)}`, init);
-}
-
-export function pairCandidateJobs(id: string, options: { limit?: number; minScore?: number } = {}, init?: RequestInit & { signal?: AbortSignal }): Promise<any> {
-  return fetchJson(`/jobseeker/candidate/${encodeURIComponent(id)}/pair-jobs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options),
-    ...init,
-  });
-}
-
 export function getContactJobPairings(init?: RequestInit & { signal?: AbortSignal }): Promise<ContactJobPairing[]> {
   return fetchJson<ContactJobPairing[]>('/jobseeker/contactJobPairing', init);
-}
-
-export function getContactJobPairingById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<ContactJobPairing> {
-  return fetchJson<ContactJobPairing>(`/jobseeker/contactJobPairing/${encodeURIComponent(id)}`, init);
 }
 
 export interface RecruiterRecord {
@@ -332,8 +311,6 @@ export function sendRecruiterDraft(
     ...init,
   });
 }
-
-export const sendRecruiterEmail = sendRecruiterDraft;
 
 export function getRecruiterContactHistory(
   candidateId: string,

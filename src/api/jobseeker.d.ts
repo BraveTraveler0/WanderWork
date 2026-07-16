@@ -119,9 +119,5 @@ export function getJobs(init?: RequestInit & { signal?: AbortSignal }): Promise<
 export function getJobById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<Job>;
 export function getApplicationsById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<Application>;
 export function getContacts(init?: RequestInit & { signal?: AbortSignal }): Promise<Contact[]>;
-export function getContactById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<Contact>;
 export function getCandidateJobPairings(init?: RequestInit & { signal?: AbortSignal }): Promise<CandidateJobPairing[]>;
-export function getCandidateJobPairingById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<CandidateJobPairing>;
-export function pairCandidateJobs(id: string, options?: { limit?: number; minScore?: number }, init?: RequestInit & { signal?: AbortSignal }): Promise<any>;
 export function getContactJobPairings(init?: RequestInit & { signal?: AbortSignal }): Promise<ContactJobPairing[]>;
-export function getContactJobPairingById(id: string, init?: RequestInit & { signal?: AbortSignal }): Promise<ContactJobPairing>;

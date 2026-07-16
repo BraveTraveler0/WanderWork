@@ -1260,7 +1260,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
     const keyFor = (job: any) => String(job?.backendId || job?._id || job?.job_code || job?.url || '')
     const seen = new Set(visibleJobsListBase.map(keyFor).filter(Boolean))
-    let nextId = Math.max(0, ...visibleJobsListBase.map((job: any) => Number(job?.id) || 0)) + 1
+    let nextId = visibleJobsListBase.reduce((max, job: any) => Math.max(max, Number(job?.id) || 0), 0) + 1
 
     const additions = serverSearchJobs.flatMap((job: any) => {
       const key = keyFor(job)

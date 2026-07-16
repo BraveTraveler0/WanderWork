@@ -268,7 +268,6 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       if (saveDebounceRef.current) {
         clearTimeout(saveDebounceRef.current)
       }
-      // @ts-ignore
       saveDebounceRef.current = window.setTimeout(async () => {
         try {
           if (userId) {
