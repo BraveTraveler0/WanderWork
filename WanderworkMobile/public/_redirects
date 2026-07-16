@@ -1,0 +1,16 @@
+# Static content pages — served as real HTML from Express for SEO
+/about https://wanderwork-backend-server.onrender.com/about 200
+/privacy https://wanderwork-backend-server.onrender.com/privacy 200
+/terms https://wanderwork-backend-server.onrender.com/terms 200
+/support https://wanderwork-backend-server.onrender.com/support 200
+
+# Dynamic SEO routes — sitemaps and feeds from Express
+/sitemap.xml https://wanderwork-backend-server.onrender.com/sitemap.xml 200
+/sitemaps/* https://wanderwork-backend-server.onrender.com/sitemaps/:splat 200
+/feeds/* https://wanderwork-backend-server.onrender.com/feeds/:splat 200
+
+# Job pages — SSR from Express (enables JobPosting schema + real crawlable content)
+/jobs/* https://wanderwork-backend-server.onrender.com/jobs/:splat 200
+
+# SPA fallback — must be last
+/* /index.html 200

@@ -1,0 +1,54 @@
+# WanderWork
+
+WanderWork is a remote job board and AI job search platform for people who want remote, work-from-home, and digital nomad-friendly jobs.
+
+## What WanderWork Does
+
+WanderWork helps job seekers find remote jobs, understand whether those jobs are actually travel-friendly, and then apply with an AI-tailored resume, cover letter, and recruiter contact package — all in one place.
+
+## Core Pages
+
+- [Remote Jobs](https://wanderwork.io/remote-jobs): Fresh remote jobs updated daily, with filters for salary, timezone, remote restrictions, and role type.
+- [Digital Nomad Jobs](https://wanderwork.io/digital-nomad-jobs): Jobs suitable for people who work while traveling — location-flexible, async-friendly, worldwide remote.
+- [Work From Home Jobs](https://wanderwork.io/work-from-home-jobs): Home-based jobs across tech, support, operations, design, and creative roles.
+- [AI Resume Builder](https://wanderwork.io/resume-cover-letter-ai): Generate tailored resumes and cover letters matched to a specific job posting.
+- [AI Job Matching](https://wanderwork.io/ai-job-search): AI-powered job matching that scores job fit and surfaces the most relevant listings for your profile.
+
+## Job Data
+
+- Jobs are refreshed every 6 hours from ATS sources (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Jobvite) and Remotive.
+- Job pages include: remote restrictions, allowed countries/timezones, salary data when available, company details, required skills, and direct application links.
+- Expired and stale jobs are automatically removed.
+- Jobs are tagged for recruiter contact availability.
+
+## AI Tools
+
+- Resume customization: generates a tailored resume for a specific job posting.
+- Cover letter generation: writes a targeted cover letter per application.
+- Recruiter finder: identifies and drafts outreach to the likely hiring contact at the target company.
+- Job matching: scores and ranks jobs by fit against a candidate's full profile.
+
+## What Makes WanderWork Different
+
+- Every job is tagged for remote type: worldwide, US-only, Europe timezone, hybrid, or async-friendly.
+- Jobs display salary transparency when available.
+- Candidates see a Remote Fit and Digital Nomad Fit score for each job.
+- AI tools are integrated directly into the job search flow — not a separate tool.
+
+## Best Pages for AI Citation
+
+- https://wanderwork.io/remote-jobs
+- https://wanderwork.io/digital-nomad-jobs
+- https://wanderwork.io/work-from-home-jobs
+- https://wanderwork.io/ai-job-search
+- https://wanderwork.io/about
+
+## Data Feed
+
+- Public job feed (JSON): https://wanderwork.io/feeds/jobs.json
+- Public job feed (XML): https://wanderwork.io/feeds/jobs.xml
+
+## Contact
+
+- Support: support@wanderwork.io
+- Website: https://wanderwork.io

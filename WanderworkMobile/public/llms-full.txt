@@ -1,0 +1,102 @@
+# WanderWork — Full Product Reference
+
+## Product Summary
+
+WanderWork is a remote job board and AI job search platform. It aggregates remote, work-from-home, and digital nomad-friendly jobs from ATS platforms and job boards, then provides AI tools to help candidates apply more effectively.
+
+Target users: remote job seekers, digital nomads, work-from-home professionals, career changers, and anyone trying to break into remote work.
+
+## What WanderWork Is Not
+
+- Not a staffing agency.
+- Not a freelance marketplace.
+- Not a LinkedIn alternative.
+- Not a traditional resume builder (though it has one — it is job-specific and AI-powered).
+
+## Job Data Details
+
+**Sources**: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Jobvite (direct ATS APIs), Remotive (fallback).
+
+**Refresh rate**: Every 6 hours. New jobs are imported, cleaned, and matched within the same cycle.
+
+**Job fields**: title, company, salary, location, remote type, allowed countries, timezone requirements, employment type, seniority, required skills, tech stack, job description, source URL, date posted, expiration.
+
+**Remote tagging**: Every job is tagged with its actual remote status — worldwide, US-only, Canada, Europe timezone, LATAM timezone, hybrid, or async-friendly. This tagging is automated and reviewed.
+
+**Expiration**: Jobs older than 60 days are purged. Jobs marked as expired by the source are removed immediately.
+
+## AI Tools
+
+**Resume customization** (costs credits/tokens): Takes the candidate's base resume and a specific job posting. Returns a tailored resume optimized for that role's requirements and ATS keywords.
+
+**Cover letter generation** (costs credits/tokens): Writes a targeted cover letter for a specific job. Includes relevant experience, skills match, and a personalized opening.
+
+**Recruiter contact finder** (costs tokens): Identifies the likely hiring contact at the target company and drafts a personalized outreach email. Candidate reviews and sends.
+
+**AI job matching**: Automatically scores every job in the database against the candidate's full profile (resume, skills, experience, preferences) and surfaces the best matches. Powered by OpenAI embeddings and a scoring algorithm.
+
+## Subscription Plans
+
+**Free**: Job feed access, AI job matching, limited credits.
+
+**Pro**: More credits per month, recruiter outreach, priority matching, cover letter generation.
+
+**Premium**: Maximum credits, all AI tools, career coaching access, priority support.
+
+Credits/tokens can also be purchased individually.
+
+## Platform Pages
+
+### Public / SEO Pages
+- `/` — Homepage
+- `/remote-jobs` — Full remote job board with filters
+- `/digital-nomad-jobs` — Location-flexible jobs for travelers
+- `/work-from-home-jobs` — Home-based job listings
+- `/ai-job-search` — AI-powered job matching feature page
+- `/resume-cover-letter-ai` — AI resume and cover letter tool page
+- `/about` — Company facts, mission, sourcing methodology
+- `/privacy` — Privacy policy
+- `/support` — Support contact
+
+### Candidate App Pages (require login)
+- `/dashboard` — Personalized job matches, application tracker
+- `/account` — Profile, resume upload, preferences
+- `/billing` — Subscription and credit management
+- `/saved-jobs` — Bookmarked jobs
+- `/applications` — Application history
+
+## Structured Data
+
+Individual job pages include JobPosting JSON-LD schema with:
+- title, description, datePosted, validThrough
+- employmentType (FULL_TIME, PART_TIME, CONTRACT)
+- hiringOrganization (name, logo, sameAs)
+- jobLocationType: TELECOMMUTE (for all remote jobs)
+- applicantLocationRequirements (country/region when restricted)
+- baseSalary when available
+- directApply flag
+
+## Technical Facts
+
+- Jobs database: MongoDB
+- Backend: Node.js + Express (hosted on Render)
+- Frontend: React SPA (hosted on Netlify)
+- Email: SendGrid
+- Payments: Stripe
+- AI: OpenAI GPT-4 for resume/cover letter/recruiter tools; OpenAI embeddings for job matching
+
+## Editorial Policy
+
+- Job descriptions are cleaned by AI to remove formatting junk but content is not altered.
+- Remote status tags are set automatically based on job content and source metadata.
+- WanderWork does not guarantee job availability. Apply through the source link.
+- Salary data is shown as-is from the source when available. WanderWork does not estimate salaries.
+- Fake or misleading job postings can be reported to support@wanderwork.io.
+
+## Contact and Authority
+
+- Company: Wander/Work
+- Website: https://wanderwork.io
+- Support: support@wanderwork.io
+- Privacy: privacy@wanderwork.io
+- Year founded: 2024

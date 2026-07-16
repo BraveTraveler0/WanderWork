@@ -1,0 +1,173 @@
+import { Capacitor } from '@capacitor/core'
+import { App as CapacitorApp } from '@capacitor/app'
+import { Browser } from '@capacitor/browser'
+import { SplashScreen } from '@capacitor/splash-screen'
+import { StatusBar, Style } from '@capacitor/status-bar'
+
+export const isNative = Capacitor.isNativePlatform()
+
+export async function initNativeApp() {
+  if (!isNative) return
+
+  try {
+    await StatusBar.setStyle({ style: Style.Light })
+    if (Capacitor.getPlatform() === 'android') {
+      await StatusBar.setBackgroundColor({ color: '#F9FAFB' })
+    }
+  } catch {
+    // status bar plugin unavailable on this platform/build
+  }
+
+  await SplashScreen.hide()
+}
+
+/**
+ * Wires the Android hardware/gesture back button to an app-supplied handler.
+ * The handler owns the decision of what "back" means for the current screen
+ * (close a modal, pop to dashboard, or exit the app) since there is no router.
+ */
+export function registerBackHandler(onBack: () => void) {
+  if (!isNative) return () => {}
+
+  const listenerPromise = CapacitorApp.addListener('backButton', onBack)
+  return () => {
+    listenerPromise.then((listener) => listener.remove())
+  }
+}
+
+export function exitApp() {
+  if (isNative) CapacitorApp.exitApp()
+}
+
+const DEEP_LINK_REDIRECT_URI = 'io.wanderwork.app://oauth-callback'
+
+// Native (iOS/Android) OAuth client IDs from Google Cloud Console. These are
+// separate from VITE_GOOGLE_CLIENT_ID (the "Web application" client used by
+// the browser build) because Google only allows a custom URL scheme redirect
+// for the iOS/Android client types. Sign-in with Google is disabled on native
+// until these are configured — see WanderworkMobile/README.md.
+const GOOGLE_NATIVE_CLIENT_ID: Record<string, string | undefined> = {
+  ios: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID as string | undefined,
+  android: import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID as string | undefined,
+}
+
+function base64UrlEncode(bytes: Uint8Array) {
+  let binary = ''
+  bytes.forEach((b) => { binary += String.fromCharCode(b) })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function createPkcePair() {
+  const verifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)))
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  const challenge = base64UrlEncode(new Uint8Array(digest))
+  return { verifier, challenge }
+}
+
+let pendingGoogleAuth: { verifier: string; resolve: (idToken: string) => void; reject: (err: Error) => void } | null = null
+
+/**
+ * Starts Google sign-in via the system browser using the OAuth 2.0
+ * authorization-code + PKCE flow for installed apps (no client secret
+ * needed). Resolves with a Google ID token to hand to the existing
+ * POST /oauth/google backend endpoint as `credential`.
+ */
+export async function signInWithGoogleNative(): Promise<string> {
+  const platform = Capacitor.getPlatform() as 'ios' | 'android'
+  const clientId = GOOGLE_NATIVE_CLIENT_ID[platform]
+  if (!clientId) {
+    throw new Error('Google sign-in isn’t set up for this app build yet.')
+  }
+
+  const { verifier, challenge } = await createPkcePair()
+
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  authUrl.searchParams.set('client_id', clientId)
+  authUrl.searchParams.set('redirect_uri', DEEP_LINK_REDIRECT_URI)
+  authUrl.searchParams.set('response_type', 'code')
+  authUrl.searchParams.set('scope', 'openid email profile')
+  authUrl.searchParams.set('code_challenge', challenge)
+  authUrl.searchParams.set('code_challenge_method', 'S256')
+
+  const idTokenPromise = new Promise<string>((resolve, reject) => {
+    pendingGoogleAuth = { verifier, resolve, reject }
+  })
+
+  await Browser.open({ url: authUrl.toString() })
+  return idTokenPromise
+}
+
+async function handleGoogleNativeCallback(code: string) {
+  const pending = pendingGoogleAuth
+  if (!pending) return
+  pendingGoogleAuth = null
+  Browser.close().catch(() => {})
+
+  try {
+    const platform = Capacitor.getPlatform() as 'ios' | 'android'
+    const clientId = GOOGLE_NATIVE_CLIENT_ID[platform] || ''
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        code,
+        code_verifier: pending.verifier,
+        grant_type: 'authorization_code',
+        redirect_uri: DEEP_LINK_REDIRECT_URI,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.id_token) {
+      throw new Error(data.error_description || 'Google sign-in failed')
+    }
+    pending.resolve(data.id_token)
+  } catch (err) {
+    pending.reject(err instanceof Error ? err : new Error('Google sign-in failed'))
+  }
+}
+
+/**
+ * Handles the io.wanderwork.app:// custom-scheme deep link that OAuth
+ * callbacks (Google/LinkedIn) redirect to on native platforms.
+ *
+ * Two shapes come through here:
+ *  - `?code=...`  -> mid-flight Google native sign-in, resolved locally via
+ *                    handleGoogleNativeCallback and never touches app state.
+ *  - `?token=&user=...` -> LinkedIn (or a completed Google exchange) already
+ *                    has a session; hand it to a full in-app navigation and
+ *                    let the existing App.tsx effect (which parses
+ *                    window.location.search) log the user in.
+ */
+export function registerDeepLinkHandler() {
+  if (!isNative) return () => {}
+
+  const listenerPromise = CapacitorApp.addListener('appUrlOpen', (event) => {
+    try {
+      const url = new URL(event.url)
+      const code = url.searchParams.get('code')
+      if (code && pendingGoogleAuth) {
+        handleGoogleNativeCallback(code)
+        return
+      }
+      if (url.search) {
+        window.location.href = `/${url.search}`
+      }
+    } catch {
+      // malformed or unrelated deep link, ignore
+    }
+  })
+  return () => {
+    listenerPromise.then((listener) => listener.remove())
+  }
+}
+
+/**
+ * Opens a server-driven OAuth flow (LinkedIn) in the system browser, tagged
+ * so the backend redirects back to the app's deep link instead of the website.
+ */
+export async function openOAuthInSystemBrowser(authUrl: string) {
+  const url = new URL(authUrl)
+  url.searchParams.set('platform', 'mobile')
+  await Browser.open({ url: url.toString() })
+}

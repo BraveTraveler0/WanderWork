@@ -1,0 +1,39 @@
+User-agent: *
+Allow: /
+
+# Private app pages
+Disallow: /dashboard
+Disallow: /account
+Disallow: /billing
+Disallow: /saved-jobs
+Disallow: /applications
+Disallow: /resume-builder
+Disallow: /cover-letter-builder
+
+# Filter/session URLs that create duplicate content
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?pageSize=
+Disallow: /*?utm_
+Disallow: /*?page=
+Disallow: /*?tab=
+
+# Private API
+Disallow: /api/private/
+
+# Allow ChatGPT search discovery (not training)
+User-agent: OAI-SearchBot
+Allow: /
+
+# Block OpenAI training crawler
+User-agent: GPTBot
+Disallow: /
+
+# Block other AI training crawlers
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+Sitemap: https://wanderwork.io/sitemap.xml

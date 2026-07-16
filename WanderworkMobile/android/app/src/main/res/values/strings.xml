@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WanderWork</string>
+    <string name="title_activity_main">WanderWork</string>
+    <string name="package_name">io.wanderwork.app</string>
+    <string name="custom_url_scheme">io.wanderwork.app</string>
+</resources>

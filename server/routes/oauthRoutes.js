@@ -30,13 +30,28 @@ function getLinkedInCallbackUrl(req) {
   return `${SERVER_URL}/oauth/linkedin/callback`;
 }
 
+// The mobile app opens OAuth in the system browser (required by Google/Apple/
+// LinkedIn policy for embedded WebViews) and can't receive an https redirect
+// back into itself, so it asks for the app's custom-scheme deep link instead.
+const MOBILE_DEEP_LINK_BASE = 'io.wanderwork.app://oauth-callback';
+
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
+// The web client ID is the historical default; the iOS/Android client IDs are
+// only present once the mobile app's native Google sign-in has been set up in
+// Google Cloud Console (see WanderworkMobile README). Accepting all of them as
+// valid audiences lets one endpoint serve both the web app and the mobile app.
+const GOOGLE_AUDIENCES = [
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_IOS_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+].filter(Boolean);
+
 async function resolveGoogleIdentity({ credential, accessToken }) {
-  if (credential && process.env.GOOGLE_CLIENT_ID) {
+  if (credential && GOOGLE_AUDIENCES.length) {
     const { OAuth2Client } = require('google-auth-library');
-    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-    const ticket = await client.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
+    const client = new OAuth2Client();
+    const ticket = await client.verifyIdToken({ idToken: credential, audience: GOOGLE_AUDIENCES });
     const payload = ticket.getPayload();
     return {
       email: normalizeEmail(payload.email),
@@ -75,7 +90,10 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
       scope: 'openid profile email',
     });
 
-    if (req.session) req.session.linkedinOAuthState = state;
+    if (req.session) {
+      req.session.linkedinOAuthState = state;
+      req.session.linkedinOAuthPlatform = req.query.platform === 'mobile' ? 'mobile' : undefined;
+    }
 
     // URLSearchParams encodes spaces as +. LinkedIn's OAuth screen is more reliable
     // with %20 for scope separators, so normalize it before redirecting.
@@ -87,18 +105,20 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
   // Step 2: handle LinkedIn callback, exchange code for token, fetch user info
   router.get('/linkedin/callback', async (req, res) => {
     const { code, error, error_description, state } = req.query;
+    const appTarget = req.session?.linkedinOAuthPlatform === 'mobile' ? MOBILE_DEEP_LINK_BASE : APP_URL;
+    delete req.session?.linkedinOAuthPlatform;
 
     if (error) {
       if (error === 'invalid_scope' || (String(error_description || '')).toLowerCase().includes('scope')) {
-        return res.redirect(`${APP_URL}?error=linkedin_scope`);
+        return res.redirect(`${appTarget}?error=linkedin_scope`);
       }
-      return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      return res.redirect(`${appTarget}?login=true&error=linkedin`);
     }
 
-    if (!code) return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+    if (!code) return res.redirect(`${appTarget}?login=true&error=linkedin`);
     if (req.session?.linkedinOAuthState && state !== req.session.linkedinOAuthState) {
       delete req.session.linkedinOAuthState;
-      return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      return res.redirect(`${appTarget}?login=true&error=linkedin`);
     }
     if (req.session?.linkedinOAuthState) delete req.session.linkedinOAuthState;
 
@@ -120,7 +140,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
       const tokenData = await tokenRes.json();
       if (!tokenData.access_token) {
         console.error('LinkedIn token exchange failed:', tokenData);
-        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+        return res.redirect(`${appTarget}?login=true&error=linkedin`);
       }
 
       const accessToken = tokenData.access_token;
@@ -132,13 +152,13 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 
       if (!userInfoRes.ok) {
         console.error('LinkedIn userinfo failed:', userInfoRes.status);
-        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+        return res.redirect(`${appTarget}?login=true&error=linkedin`);
       }
 
       const userInfo = await userInfoRes.json();
       const email = normalizeEmail(userInfo.email);
 
-      if (!email) return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      if (!email) return res.redirect(`${appTarget}?login=true&error=linkedin`);
 
       const linkedinData = {
         firstName: userInfo.given_name || '',
@@ -161,7 +181,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
       }
 
       if (user.active === false) {
-        return res.redirect(`${APP_URL}?login=true&error=linkedin`);
+        return res.redirect(`${appTarget}?login=true&error=linkedin`);
       }
 
       // Upsert Candidate document
@@ -220,10 +240,10 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 
       const token = jwtUtils.generateToken(user);
       const userData = encodeURIComponent(JSON.stringify({ ...user._doc, password: undefined }));
-      res.redirect(`${APP_URL}?token=${token}&user=${userData}&source=linkedin`);
+      res.redirect(`${appTarget}?token=${token}&user=${userData}&source=linkedin`);
     } catch (err) {
       console.error('LinkedIn OAuth error:', err);
-      res.redirect(`${APP_URL}?login=true&error=linkedin`);
+      res.redirect(`${appTarget}?login=true&error=linkedin`);
     }
   });
 } else {
