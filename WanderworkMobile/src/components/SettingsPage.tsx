@@ -6,7 +6,7 @@ import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } fr
 import { getExtensionKey, regenerateExtensionKey } from '../api/extension'
 import { Capacitor } from '@capacitor/core'
 import { isNative } from '../native'
-import { purchaseSubscription } from '../native-iap'
+import { purchaseSubscription, restorePurchases } from '../native-iap'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -127,6 +127,8 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     return getSavedJson('wanderworkNotifications', { jobAlerts: true, weeklyDigest: true })
   })
   const [upgradeLoading, setUpgradeLoading] = useState<StripePlan | null>(null)
+  const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null)
+  const [restoring, setRestoring] = useState(false)
   const [extKey, setExtKey] = useState<string | null>(null)
   const [extKeyLoading, setExtKeyLoading] = useState(false)
   const [extKeyError, setExtKeyError] = useState<string | null>(null)
@@ -156,12 +158,14 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
   const handleUpgrade = async (plan: StripePlan) => {
     setUpgradeLoading(plan)
+    setUpgradeSuccess(null)
     try {
       // App Store/Play Store require native in-app purchase for
       // subscriptions bought inside the app — Stripe checkout can't be
       // shown on native builds.
       if (isNative) {
         await purchaseSubscription(plan)
+        setUpgradeSuccess('Subscription active! It may take a moment to reflect in your account.')
         return
       }
       const url = await createCheckoutSession(plan, profile.email)
@@ -171,6 +175,18 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       await showAlert('Checkout Failed', err?.message || 'Could not start checkout. Please try again.')
     } finally {
       setUpgradeLoading(null)
+    }
+  }
+
+  const handleRestorePurchases = async () => {
+    setRestoring(true)
+    try {
+      await restorePurchases()
+      setUpgradeSuccess('Purchases restored! It may take a moment to reflect in your account.')
+    } catch (err: any) {
+      await showAlert('Restore Failed', err?.message || 'Could not restore purchases. Please try again.')
+    } finally {
+      setRestoring(false)
     }
   }
 
@@ -930,6 +946,12 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                 <h2 className="text-[24px] font-semibold mb-2" style={{ color: '#306770' }}>Upgrade Your Plan</h2>
                 <p className="text-[14px] mb-6" style={{ color: '#787878' }}>Currently on <strong>Starter</strong> plan</p>
 
+                {upgradeSuccess && (
+                  <div className="mb-6 px-4 py-3 rounded-[10px] text-[13px] bg-green-50 text-green-700" style={{ border: '1px solid #DCDCDC' }}>
+                    {upgradeSuccess}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Starter — current plan */}
                   <div className="border-2 rounded-[18px] p-6 flex flex-col" style={{ borderColor: '#306770', borderStyle: 'dashed' }}>
@@ -969,7 +991,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                         disabled={!!upgradeLoading}
                         onClick={() => handleUpgrade('pro')}
                       >
-                        {upgradeLoading === 'pro' ? 'Redirecting...' : 'Upgrade to Pro'}
+                        {upgradeLoading === 'pro' ? (isNative ? 'Purchasing...' : 'Redirecting...') : 'Upgrade to Pro'}
                       </button>
                     </div>
                   </div>
@@ -998,11 +1020,24 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                         disabled={!!upgradeLoading}
                         onClick={() => handleUpgrade('premium')}
                       >
-                        {upgradeLoading === 'premium' ? 'Redirecting...' : 'Upgrade to Premium'}
+                        {upgradeLoading === 'premium' ? (isNative ? 'Purchasing...' : 'Redirecting...') : 'Upgrade to Premium'}
                       </button>
                     </div>
                   </div>
                 </div>
+
+                {isNative && (
+                  <div className="text-center mt-6">
+                    <button
+                      onClick={handleRestorePurchases}
+                      disabled={restoring}
+                      className="text-[13px]"
+                      style={{ color: '#306770', textDecoration: 'underline', background: 'none', border: 'none', cursor: restoring ? 'not-allowed' : 'pointer', opacity: restoring ? 0.6 : 1 }}
+                    >
+                      {restoring ? 'Restoring…' : 'Restore Purchases'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

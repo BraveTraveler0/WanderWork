@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { Briefcase, Coins, MailPlus, Sparkles, Users, Zap } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import RecruiterOutreach from './components/RecruiterOutreach'
@@ -6,9 +6,6 @@ import JobFeed from './components/JobFeed'
 import StatsPanel from './components/StatsPanel'
 import ParticleProfile from './components/ParticleProfile'
 import SettingsPage from './components/SettingsPage'
-import LoginPage from './components/LoginPage'
-import SignupPage from './components/SignupPage'
-import ForgotPasswordPage from './components/ForgotPasswordPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import TermsOfServicePage from './components/TermsOfServicePage'
 import PlansPage from './components/PlansPage'
@@ -16,8 +13,18 @@ import ProfilePage from './components/ProfilePage'
 import MessagesPage, { getUnseenCount } from './components/MessagesPage'
 import ReportBugPage from './components/ReportBugPage'
 import JoinTeamPage from './components/JoinTeamPage'
-import LandingPage from './landing/LandingPage'
 import BottomNav, { type BottomNavPage } from './components/BottomNav'
+
+// Guest-only screens split out of the main bundle — signed-in users never
+// pay for their code, matching the same split applied to the root web app.
+const LoginPage = lazy(() => import('./components/LoginPage'))
+const SignupPage = lazy(() => import('./components/SignupPage'))
+const ForgotPasswordPage = lazy(() => import('./components/ForgotPasswordPage'))
+const LandingPage = lazy(() => import('./landing/LandingPage'))
+
+const suspenseFallback = (
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145.48deg,#F9FAFB 0%,#F0F2F5 100%)' }} />
+)
 import { API_BASE_URL } from './api/config'
 import { registerBackHandler, exitApp } from './native'
 import { configureIAP, resetIAPUser } from './native-iap'
@@ -715,7 +722,6 @@ function App() {
       if (showLogin) return setShowLogin(false)
       if (showPlans) return setShowPlans(false)
       if (currentPage !== 'dashboard') return setCurrentPage('dashboard')
-      if (showLandingPage) return exitApp()
       exitApp()
     })
   }, [showMenu, showRecruiterNavModal, selectedJobId, showForgotPassword, showSignup, showLogin, showPlans, currentPage, showLandingPage])
@@ -1325,18 +1331,20 @@ function App() {
   // Marketing landing page — always shown at /landing regardless of auth state
   if (showLandingPage) {
     return (
-      <LandingPage
-        onSignIn={() => {
-          setShowLandingPage(false)
-          setShowLogin(true)
-          window.history.pushState({}, '', '/?login=true')
-        }}
-        onSignUp={() => {
-          setShowLandingPage(false)
-          setShowSignup(true)
-          window.history.pushState({}, '', '/?signup=true')
-        }}
-      />
+      <Suspense fallback={suspenseFallback}>
+        <LandingPage
+          onSignIn={() => {
+            setShowLandingPage(false)
+            setShowLogin(true)
+            window.history.pushState({}, '', '/?login=true')
+          }}
+          onSignUp={() => {
+            setShowLandingPage(false)
+            setShowSignup(true)
+            window.history.pushState({}, '', '/?signup=true')
+          }}
+        />
+      </Suspense>
     )
   }
 
@@ -1352,39 +1360,51 @@ function App() {
   }
 
   if (showSignup) {
-    return <SignupPage
-      onSignup={(userData, authToken) => {
-        setUser(userData)
-        setToken(authToken)
-        setShowSignup(false)
-        setShowLogin(false)
-        if (window.location.search.includes('signup=true')) {
-          window.history.replaceState({}, '', window.location.pathname)
-        }
-      }}
-      onSignIn={() => { setShowSignup(false); setShowLogin(true) }}
-      onBackToLanding={() => setShowSignup(false)}
-    />
+    return (
+      <Suspense fallback={suspenseFallback}>
+        <SignupPage
+          onSignup={(userData, authToken) => {
+            setUser(userData)
+            setToken(authToken)
+            setShowSignup(false)
+            setShowLogin(false)
+            if (window.location.search.includes('signup=true')) {
+              window.history.replaceState({}, '', window.location.pathname)
+            }
+          }}
+          onSignIn={() => { setShowSignup(false); setShowLogin(true) }}
+          onBackToLanding={() => setShowSignup(false)}
+        />
+      </Suspense>
+    )
   }
 
   // Show login / forgot-password pages
   if (showLogin) {
     if (showForgotPassword) {
-      return <ForgotPasswordPage onBack={() => setShowForgotPassword(false)} />
+      return (
+        <Suspense fallback={suspenseFallback}>
+          <ForgotPasswordPage onBack={() => setShowForgotPassword(false)} />
+        </Suspense>
+      )
     }
-    return <LoginPage
-      onLogin={(userData, authToken) => {
-        setUser(userData)
-        setToken(authToken)
-        setShowLogin(false)
-        if (window.location.search.includes('login=true')) {
-          window.history.replaceState({}, '', window.location.pathname)
-        }
-      }}
-      onForgotPassword={() => setShowForgotPassword(true)}
-      onBackToLanding={() => setShowLogin(false)}
-      onCreateAccount={() => { setShowLogin(false); setShowSignup(true) }}
-    />
+    return (
+      <Suspense fallback={suspenseFallback}>
+        <LoginPage
+          onLogin={(userData, authToken) => {
+            setUser(userData)
+            setToken(authToken)
+            setShowLogin(false)
+            if (window.location.search.includes('login=true')) {
+              window.history.replaceState({}, '', window.location.pathname)
+            }
+          }}
+          onForgotPassword={() => setShowForgotPassword(true)}
+          onBackToLanding={() => setShowLogin(false)}
+          onCreateAccount={() => { setShowLogin(false); setShowSignup(true) }}
+        />
+      </Suspense>
+    )
   }
 
   // Render different pages
@@ -1398,19 +1418,39 @@ function App() {
   }
 
   if (currentPage === 'reportbug') {
-    return <ReportBugPage onBack={navigateBack} userEmail={_user?.email} />
+    return <>
+      <ReportBugPage onBack={navigateBack} userEmail={_user?.email} />
+      <div className="lg:hidden h-20" />
+      <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'jointeam') {
-    return <JoinTeamPage onBack={() => setCurrentPage('dashboard')} />
+    return <>
+      <JoinTeamPage onBack={() => setCurrentPage('dashboard')} />
+      <div className="lg:hidden h-20" />
+      <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'privacy') {
-    return <PrivacyPolicyPage onBack={navigateBack} />
+    return <>
+      <PrivacyPolicyPage onBack={navigateBack} />
+      <div className="lg:hidden h-20" />
+      <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'terms') {
-    return <TermsOfServicePage onBack={navigateBack} />
+    return <>
+      <TermsOfServicePage onBack={navigateBack} />
+      <div className="lg:hidden h-20" />
+      <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
+      {showMenu && <MobileMoreSheet />}
+    </>
   }
 
   if (currentPage === 'plans') {

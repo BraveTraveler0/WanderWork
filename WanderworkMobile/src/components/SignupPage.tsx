@@ -4,7 +4,7 @@ import { ArrowLeft, Briefcase, Eye, EyeOff, Link2, Lock, Mail, MapPin, Phone, Up
 import { AnimatePresence, motion } from 'motion/react'
 import { parseSignupResume, uploadCandidateResume } from '../api/jobseeker'
 import { API_BASE_URL } from '../api/config'
-import { isNative, openOAuthInSystemBrowser } from '../native'
+import { startLinkedInAuth } from '../native'
 import GoogleAuthButton from './GoogleAuthButton'
 import TermsOfServicePage from './TermsOfServicePage'
 
@@ -54,12 +54,7 @@ function SocialSignupBox({
       onRequireTerms()
       return
     }
-    const linkedinUrl = `${BASE_URL}/oauth/linkedin`
-    if (isNative) {
-      openOAuthInSystemBrowser(linkedinUrl)
-      return
-    }
-    window.location.href = linkedinUrl
+    startLinkedInAuth(`${BASE_URL}/oauth/linkedin`)
   }
 
   return (

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { API_BASE_URL } from '../api/config'
-import { isNative, openOAuthInSystemBrowser } from '../native'
+import { startLinkedInAuth } from '../native'
 
 const TEAL = '#306770'
 const FONT = 'Manrope, sans-serif'
@@ -174,11 +174,7 @@ export default function ParticleProfile({ onSignUp, onSignIn }: { onSignUp?: () 
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
-          onClick={() => {
-            const linkedinUrl = `${API_BASE}/oauth/linkedin`
-            if (isNative) { openOAuthInSystemBrowser(linkedinUrl); return }
-            window.location.href = linkedinUrl
-          }}
+          onClick={() => startLinkedInAuth(`${API_BASE}/oauth/linkedin`)}
           style={{ width: '100%', background: 'white', color: '#333', border: '1px solid #d1d5db', borderRadius: 12, padding: '12px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'transform 0.2s, box-shadow 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)' }}
           onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
 import { isNative } from '../native'
-import { purchaseSubscription, purchaseTokenPack, TOKEN_PACK_PRODUCTS } from '../native-iap'
+import { purchaseSubscription, purchaseTokenPack, restorePurchases, TOKEN_PACK_PRODUCTS } from '../native-iap'
 
 const LS_URLS: Record<string, string> = {
   tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
@@ -416,6 +416,7 @@ const PlansPage = ({
   const [nativePurchasing, setNativePurchasing] = useState<string | null>(null)
   const [nativeError, setNativeError] = useState<string | null>(null)
   const [nativeSuccess, setNativeSuccess] = useState<string | null>(null)
+  const [restoring, setRestoring] = useState(false)
   const faqSection = useInView(0.1)
 
   useEffect(() => {
@@ -466,6 +467,19 @@ const PlansPage = ({
       setNativeError(err?.message || 'Purchase failed. Please try again.')
     } finally {
       setNativePurchasing(null)
+    }
+  }
+
+  const handleRestore = async () => {
+    setRestoring(true)
+    setNativeError(null)
+    try {
+      await restorePurchases()
+      setNativeSuccess('Purchases restored! It may take a moment to reflect in your account.')
+    } catch (err: any) {
+      setNativeError(err?.message || 'Could not restore purchases. Please try again.')
+    } finally {
+      setRestoring(false)
     }
   }
 
@@ -683,6 +697,22 @@ const PlansPage = ({
             />
           ))}
         </div>
+
+        {isNative && (
+          <div style={{ textAlign: 'center', marginBottom: checkoutError || nativeError || nativeSuccess ? 24 : 56 }}>
+            <button
+              onClick={handleRestore}
+              disabled={restoring}
+              style={{
+                background: 'none', border: 'none', cursor: restoring ? 'not-allowed' : 'pointer',
+                color: '#306770', fontSize: 13, fontFamily: 'Manrope', fontWeight: 600,
+                textDecoration: 'underline', opacity: restoring ? 0.6 : 1,
+              }}
+            >
+              {restoring ? 'Restoring…' : 'Restore Purchases'}
+            </button>
+          </div>
+        )}
 
         {checkoutError && (
           <div

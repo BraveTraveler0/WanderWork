@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { API_BASE_URL } from '../api/config'
-import { isNative, openOAuthInSystemBrowser } from '../native'
+import { startLinkedInAuth } from '../native'
 import GoogleAuthButton from './GoogleAuthButton'
 
 const BASE_URL = API_BASE_URL
@@ -15,14 +15,7 @@ interface LoginPageProps {
 
 // ── Social buttons section ────────────────────────────────────────────────────
 function SocialButtons({ onLogin, onError }: { onLogin: (user: any, token: string) => void; onError: (msg: string) => void }) {
-  const handleLinkedIn = () => {
-    const linkedinUrl = `${BASE_URL}/oauth/linkedin`
-    if (isNative) {
-      openOAuthInSystemBrowser(linkedinUrl)
-      return
-    }
-    window.location.href = linkedinUrl
-  }
+  const handleLinkedIn = () => startLinkedInAuth(`${BASE_URL}/oauth/linkedin`)
 
   return (
     <div className="flex flex-col gap-3 mt-2">

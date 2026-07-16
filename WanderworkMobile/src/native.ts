@@ -130,8 +130,25 @@ export async function signInWithGoogleNative(): Promise<string> {
     pendingGoogleAuth = { verifier, resolve, reject }
   })
 
-  await Browser.open({ url: authUrl.toString() })
-  return idTokenPromise
+  // If the user closes the system browser without completing sign-in (no
+  // deep-link callback ever arrives), the promise would otherwise hang
+  // forever and the caller's loading state would spin indefinitely.
+  const finishedListener = await Browser.addListener('browserFinished', () => {
+    if (pendingGoogleAuth) {
+      const pending = pendingGoogleAuth
+      pendingGoogleAuth = null
+      const err: any = new Error('Sign-in cancelled')
+      err.userCancelled = true
+      pending.reject(err)
+    }
+  })
+
+  try {
+    await Browser.open({ url: authUrl.toString() })
+    return await idTokenPromise
+  } finally {
+    finishedListener.remove()
+  }
 }
 
 async function handleGoogleNativeCallback(code: string) {
@@ -207,4 +224,17 @@ export async function openOAuthInSystemBrowser(authUrl: string) {
   const url = new URL(authUrl)
   url.searchParams.set('platform', 'mobile')
   await Browser.open({ url: url.toString() })
+}
+
+/**
+ * Starts the LinkedIn login redirect — system browser + deep-link tagging on
+ * native, a plain navigation on web. Shared so LoginPage/SignupPage/
+ * ParticleProfile don't each repeat the isNative branch themselves.
+ */
+export function startLinkedInAuth(linkedinUrl: string) {
+  if (isNative) {
+    openOAuthInSystemBrowser(linkedinUrl)
+    return
+  }
+  window.location.href = linkedinUrl
 }
