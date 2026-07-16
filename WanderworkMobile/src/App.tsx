@@ -670,13 +670,30 @@ function App() {
 
   type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'
   const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report' }
+
+  // Tracks how many history entries navigateTo/the auth-screen effect below
+  // have pushed but not yet had popped (via a real back-navigation or the
+  // history.back() calls below). Without this, the Android hardware back
+  // button — which changes screens by setting state directly rather than
+  // navigating history — leaves those entries stranded, so the WebView's
+  // history stack silently grows out of sync with what's on screen.
+  const pushedHistoryDepth = useRef(0)
+
   const navigateTo = (page: Page) => {
     const url = PAGE_URLS[page] ?? '/'
     window.history.pushState({ wanderPage: page }, '', url)
+    pushedHistoryDepth.current += 1
     setCurrentPage(page)
   }
+  // Pops the history entry navigateTo pushed to get here, if one is open,
+  // so the stack stays balanced; falls back to a direct state change when
+  // this screen was reached some other way (e.g. bottom nav / menu, which
+  // never push) and there's nothing to unwind.
   const navigateBack = () => {
-    window.history.pushState({ wanderPage: 'dashboard' }, '', '/')
+    if (pushedHistoryDepth.current > 0) {
+      window.history.back()
+      return
+    }
     setCurrentPage('dashboard')
   }
 
@@ -718,10 +735,19 @@ function App() {
       if (showRecruiterNavModal) return setShowRecruiterNavModal(false)
       if (selectedJobId !== null) return setSelectedJobId(null)
       if (showForgotPassword) return setShowForgotPassword(false)
-      if (showSignup) return setShowSignup(false)
-      if (showLogin) return setShowLogin(false)
+      if (showSignup || showLogin) {
+        // The auth-screen effect below pushed a history entry to get here —
+        // pop it so the stack stays balanced, and let the popstate handler
+        // apply the actual state change instead of doing it here too.
+        if (pushedHistoryDepth.current > 0) { window.history.back(); return }
+        if (showSignup) return setShowSignup(false)
+        return setShowLogin(false)
+      }
       if (showPlans) return setShowPlans(false)
-      if (currentPage !== 'dashboard') return setCurrentPage('dashboard')
+      if (currentPage !== 'dashboard') {
+        if (pushedHistoryDepth.current > 0) { window.history.back(); return }
+        return setCurrentPage('dashboard')
+      }
       exitApp()
     })
   }, [showMenu, showRecruiterNavModal, selectedJobId, showForgotPassword, showSignup, showLogin, showPlans, currentPage, showLandingPage])
@@ -737,6 +763,7 @@ function App() {
   useEffect(() => {
     if (showLogin || showSignup) {
       window.history.pushState({ wanderAuth: true }, '')
+      pushedHistoryDepth.current += 1
     }
   }, [showLogin, showSignup])
 
@@ -875,6 +902,7 @@ function App() {
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
+      pushedHistoryDepth.current = Math.max(0, pushedHistoryDepth.current - 1)
       setShowLogin(false)
       setShowSignup(false)
       setShowForgotPassword(false)

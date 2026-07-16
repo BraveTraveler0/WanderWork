@@ -4,9 +4,8 @@ import { changePassword, updateUser } from '../api/users'
 import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, type JobSeekerData } from '../api/jobseeker'
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
 import { getExtensionKey, regenerateExtensionKey } from '../api/extension'
-import { Capacitor } from '@capacitor/core'
-import { isNative } from '../native'
-import { purchaseSubscription, restorePurchases } from '../native-iap'
+import { getNativePlatform, isNative } from '../native'
+import { purchaseSubscription, restorePurchases, withNativePurchase } from '../native-iap'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -164,14 +163,15 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       // subscriptions bought inside the app — Stripe checkout can't be
       // shown on native builds.
       if (isNative) {
-        await purchaseSubscription(plan)
-        setUpgradeSuccess('Subscription active! It may take a moment to reflect in your account.')
+        await withNativePurchase(async () => {
+          await purchaseSubscription(plan)
+          setUpgradeSuccess('Subscription active! It may take a moment to reflect in your account.')
+        }, (message) => showAlert('Checkout Failed', message))
         return
       }
       const url = await createCheckoutSession(plan, profile.email)
       window.location.href = url
     } catch (err: any) {
-      if (err?.userCancelled) return
       await showAlert('Checkout Failed', err?.message || 'Could not start checkout. Please try again.')
     } finally {
       setUpgradeLoading(null)
@@ -180,14 +180,11 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
   const handleRestorePurchases = async () => {
     setRestoring(true)
-    try {
+    await withNativePurchase(async () => {
       await restorePurchases()
       setUpgradeSuccess('Purchases restored! It may take a moment to reflect in your account.')
-    } catch (err: any) {
-      await showAlert('Restore Failed', err?.message || 'Could not restore purchases. Please try again.')
-    } finally {
-      setRestoring(false)
-    }
+    }, (message) => showAlert('Restore Failed', message), 'Could not restore purchases. Please try again.')
+    setRestoring(false)
   }
 
   const handleNotificationChange = (key: 'jobAlerts' | 'weeklyDigest', value: boolean) => {
@@ -909,7 +906,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       // subscription settings instead.
                       if (isNative) {
                         window.open(
-                          Capacitor.getPlatform() === 'ios'
+                          getNativePlatform() === 'ios'
                             ? 'itms-apps://apps.apple.com/account/subscriptions'
                             : 'https://play.google.com/store/account/subscriptions',
                           '_blank'

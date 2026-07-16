@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
 import { isNative } from '../native'
-import { purchaseSubscription, purchaseTokenPack, restorePurchases, TOKEN_PACK_PRODUCTS } from '../native-iap'
+import { purchaseSubscription, purchaseTokenPack, restorePurchases, withNativePurchase, TOKEN_PACK_PRODUCTS } from '../native-iap'
 
 const LS_URLS: Record<string, string> = {
   tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
@@ -444,43 +444,32 @@ const PlansPage = ({
   const handleNativeSubscription = async (plan: StripePlan) => {
     setNativePurchasing(plan)
     setNativeError(null)
-    try {
+    await withNativePurchase(async () => {
       await purchaseSubscription(plan)
       setNativeSuccess('Subscription active! It may take a moment to reflect in your account.')
-    } catch (err: any) {
-      if (err?.userCancelled) return
-      setNativeError(err?.message || 'Purchase failed. Please try again.')
-    } finally {
-      setNativePurchasing(null)
-    }
+    }, setNativeError)
+    setNativePurchasing(null)
   }
 
   const handleNativeTokenPurchase = async (productId: string, tokens: number) => {
     setNativePurchasing(productId)
     setNativeError(null)
-    try {
+    await withNativePurchase(async () => {
       await purchaseTokenPack(productId)
       setShowNativeTokenModal(false)
       setNativeSuccess(`${tokens} tokens purchased! They may take a moment to appear.`)
-    } catch (err: any) {
-      if (err?.userCancelled) return
-      setNativeError(err?.message || 'Purchase failed. Please try again.')
-    } finally {
-      setNativePurchasing(null)
-    }
+    }, setNativeError)
+    setNativePurchasing(null)
   }
 
   const handleRestore = async () => {
     setRestoring(true)
     setNativeError(null)
-    try {
+    await withNativePurchase(async () => {
       await restorePurchases()
       setNativeSuccess('Purchases restored! It may take a moment to reflect in your account.')
-    } catch (err: any) {
-      setNativeError(err?.message || 'Could not restore purchases. Please try again.')
-    } finally {
-      setRestoring(false)
-    }
+    }, setNativeError, 'Could not restore purchases. Please try again.')
+    setRestoring(false)
   }
 
   const openPaymentModal = (planKey: string, stripePlan?: StripePlan) => {

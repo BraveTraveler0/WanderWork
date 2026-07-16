@@ -6,12 +6,17 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 
 export const isNative = Capacitor.isNativePlatform()
 
-export async function initNativeApp() {
+/** Capacitor.getPlatform() narrowed to the two native targets this app ships. */
+export function getNativePlatform(): 'ios' | 'android' {
+  return Capacitor.getPlatform() as 'ios' | 'android'
+}
+
+export async function initNativeApp(): Promise<void> {
   if (!isNative) return
 
   try {
     await StatusBar.setStyle({ style: Style.Light })
-    if (Capacitor.getPlatform() === 'android') {
+    if (getNativePlatform() === 'android') {
       await StatusBar.setBackgroundColor({ color: '#F9FAFB' })
     }
   } catch {
@@ -31,7 +36,7 @@ export async function initNativeApp() {
  * would otherwise be silently broken (the single most important user
  * journey in the app) on native builds.
  */
-export function interceptExternalLinks() {
+export function interceptExternalLinks(): () => void {
   if (!isNative) return () => {}
 
   const originalOpen = window.open.bind(window)
@@ -63,7 +68,7 @@ export function interceptExternalLinks() {
  * The handler owns the decision of what "back" means for the current screen
  * (close a modal, pop to dashboard, or exit the app) since there is no router.
  */
-export function registerBackHandler(onBack: () => void) {
+export function registerBackHandler(onBack: () => void): () => void {
   if (!isNative) return () => {}
 
   const listenerPromise = CapacitorApp.addListener('backButton', onBack)
@@ -72,7 +77,7 @@ export function registerBackHandler(onBack: () => void) {
   }
 }
 
-export function exitApp() {
+export function exitApp(): void {
   if (isNative) CapacitorApp.exitApp()
 }
 
@@ -88,13 +93,13 @@ const GOOGLE_NATIVE_CLIENT_ID: Record<string, string | undefined> = {
   android: import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID as string | undefined,
 }
 
-function base64UrlEncode(bytes: Uint8Array) {
+function base64UrlEncode(bytes: Uint8Array): string {
   let binary = ''
   bytes.forEach((b) => { binary += String.fromCharCode(b) })
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-async function createPkcePair() {
+async function createPkcePair(): Promise<{ verifier: string; challenge: string }> {
   const verifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)))
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
   const challenge = base64UrlEncode(new Uint8Array(digest))
@@ -110,7 +115,7 @@ let pendingGoogleAuth: { verifier: string; resolve: (idToken: string) => void; r
  * POST /oauth/google backend endpoint as `credential`.
  */
 export async function signInWithGoogleNative(): Promise<string> {
-  const platform = Capacitor.getPlatform() as 'ios' | 'android'
+  const platform = getNativePlatform()
   const clientId = GOOGLE_NATIVE_CLIENT_ID[platform]
   if (!clientId) {
     throw new Error('Google sign-in isn’t set up for this app build yet.')
@@ -151,14 +156,14 @@ export async function signInWithGoogleNative(): Promise<string> {
   }
 }
 
-async function handleGoogleNativeCallback(code: string) {
+async function handleGoogleNativeCallback(code: string): Promise<void> {
   const pending = pendingGoogleAuth
   if (!pending) return
   pendingGoogleAuth = null
   Browser.close().catch(() => {})
 
   try {
-    const platform = Capacitor.getPlatform() as 'ios' | 'android'
+    const platform = getNativePlatform()
     const clientId = GOOGLE_NATIVE_CLIENT_ID[platform] || ''
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -193,7 +198,7 @@ async function handleGoogleNativeCallback(code: string) {
  *                    let the existing App.tsx effect (which parses
  *                    window.location.search) log the user in.
  */
-export function registerDeepLinkHandler() {
+export function registerDeepLinkHandler(): () => void {
   if (!isNative) return () => {}
 
   const listenerPromise = CapacitorApp.addListener('appUrlOpen', (event) => {
@@ -220,7 +225,7 @@ export function registerDeepLinkHandler() {
  * Opens a server-driven OAuth flow (LinkedIn) in the system browser, tagged
  * so the backend redirects back to the app's deep link instead of the website.
  */
-export async function openOAuthInSystemBrowser(authUrl: string) {
+export async function openOAuthInSystemBrowser(authUrl: string): Promise<void> {
   const url = new URL(authUrl)
   url.searchParams.set('platform', 'mobile')
   await Browser.open({ url: url.toString() })
@@ -231,7 +236,7 @@ export async function openOAuthInSystemBrowser(authUrl: string) {
  * native, a plain navigation on web. Shared so LoginPage/SignupPage/
  * ParticleProfile don't each repeat the isNative branch themselves.
  */
-export function startLinkedInAuth(linkedinUrl: string) {
+export function startLinkedInAuth(linkedinUrl: string): void {
   if (isNative) {
     openOAuthInSystemBrowser(linkedinUrl)
     return

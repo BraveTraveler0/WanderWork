@@ -4,7 +4,7 @@ import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../ap
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 import { isNewJob } from '../utils/jobUtils'
 import { isNative } from '../native'
-import { purchaseTokenPack } from '../native-iap'
+import { purchaseTokenPack, withNativePurchase } from '../native-iap'
 import { NativeTokenPackModal } from './PlansPage'
 import { Share } from '@capacitor/share'
 
@@ -823,15 +823,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
           onPurchase={async (productId, tokens) => {
             setNativeTokenPurchasing(productId)
             setNativeTokenError(null)
-            try {
+            await withNativePurchase(async () => {
               await purchaseTokenPack(productId)
               setCurrentTokens((t: number) => t + tokens)
               closeTokens()
-            } catch (err: any) {
-              if (!err?.userCancelled) setNativeTokenError(err?.message || 'Purchase failed. Please try again.')
-            } finally {
-              setNativeTokenPurchasing(null)
-            }
+            }, setNativeTokenError)
+            setNativeTokenPurchasing(null)
           }}
         />
       )}

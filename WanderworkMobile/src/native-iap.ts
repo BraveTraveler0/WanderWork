@@ -1,6 +1,5 @@
-import { Purchases, LOG_LEVEL } from '@revenuecat/purchases-capacitor'
-import { Capacitor } from '@capacitor/core'
-import { isNative } from './native'
+import { Purchases, LOG_LEVEL, type MakePurchaseResult, type CustomerInfo } from '@revenuecat/purchases-capacitor'
+import { getNativePlatform, isNative } from './native'
 
 // RevenueCat's dashboard maps these product IDs to the real App Store
 // Connect / Play Console products — see WanderworkMobile/README.md for the
@@ -26,9 +25,9 @@ const REVENUECAT_API_KEY = {
 let configured = false
 
 /** Call once at app startup (after the user's email is known, if logged in). */
-export async function configureIAP(appUserId?: string) {
+export async function configureIAP(appUserId?: string): Promise<void> {
   if (!isNative) return
-  const platform = Capacitor.getPlatform() as 'ios' | 'android'
+  const platform = getNativePlatform()
   const apiKey = REVENUECAT_API_KEY[platform]
   if (!apiKey) return // not configured yet — see README
 
@@ -43,17 +42,17 @@ export async function configureIAP(appUserId?: string) {
 
 export async function iapAvailable(): Promise<boolean> {
   if (!isNative) return false
-  const platform = Capacitor.getPlatform() as 'ios' | 'android'
+  const platform = getNativePlatform()
   return Boolean(REVENUECAT_API_KEY[platform])
 }
 
 /** Call on logout so the next login doesn't inherit the previous user's entitlements. */
-export async function resetIAPUser() {
+export async function resetIAPUser(): Promise<void> {
   if (!isNative || !configured) return
   await Purchases.logOut().catch(() => {})
 }
 
-async function purchaseProduct(productId: string) {
+async function purchaseProduct(productId: string): Promise<MakePurchaseResult> {
   const offerings = await Purchases.getOfferings()
   const pkg = Object.values(offerings.all)
     .flatMap((offering) => offering.availablePackages)
@@ -67,15 +66,35 @@ async function purchaseProduct(productId: string) {
 }
 
 /** Buys a subscription tier; resolves once the store purchase sheet completes. */
-export async function purchaseSubscription(plan: 'pro' | 'premium') {
+export async function purchaseSubscription(plan: 'pro' | 'premium'): Promise<MakePurchaseResult> {
   return purchaseProduct(SUBSCRIPTION_PRODUCTS[plan])
 }
 
 /** Buys a fixed token pack (consumable, non-renewing). */
-export async function purchaseTokenPack(productId: string) {
+export async function purchaseTokenPack(productId: string): Promise<MakePurchaseResult> {
   return purchaseProduct(productId)
 }
 
-export async function restorePurchases() {
+export async function restorePurchases(): Promise<{ customerInfo: CustomerInfo }> {
   return Purchases.restorePurchases()
+}
+
+/**
+ * Wraps a native purchase/restore call with the error handling every call
+ * site needs: swallow a user-initiated cancellation (RevenueCat sets
+ * `userCancelled` on that error, and it isn't a failure worth surfacing),
+ * otherwise report a message. Callers still own their own loading-state
+ * setters since those vary per call site (a plan key vs. a product id).
+ */
+export async function withNativePurchase<T>(
+  action: () => Promise<T>,
+  onError: (message: string) => void | Promise<void>,
+  fallbackMessage = 'Purchase failed. Please try again.'
+): Promise<T | undefined> {
+  try {
+    return await action()
+  } catch (err: any) {
+    if (!err?.userCancelled) await onError(err?.message || fallbackMessage)
+    return undefined
+  }
 }
