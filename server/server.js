@@ -68,6 +68,13 @@ const defaultAllowedOrigins = [
   'https://aoncreative.io',
   'https://www.aoncreative.io',
   'https://aoncreativev.onrender.com',
+  // Capacitor's native WebView origins — Android serves the app from
+  // https://localhost and iOS from capacitor://localhost, both with no
+  // port, so they don't match the /^https?:\/\/localhost:\d+$/ dev-server
+  // regex below. Without these, every API call from the native mobile
+  // app gets rejected by CORS.
+  'https://localhost',
+  'capacitor://localhost',
 ];
 const configuredAllowedOrigins = String(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '')
   .split(',')
