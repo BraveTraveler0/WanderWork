@@ -47,6 +47,23 @@ body {
   padding-right: var(--safe-area-right);
 }
 
+/* MessagesPage: fixed 300px list column beside a flex:1 viewer only works
+   at tablet width and up. Below 640px, show one column at a time (list or
+   the selected conversation), toggled by MessagesPage's mobileView state. */
+.mp-list-col {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 639px) {
+  .mp-list-col {
+    width: 100%;
+  }
+  .mp-hidden-mobile {
+    display: none;
+  }
+}
+
 @keyframes bounce {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.1); }

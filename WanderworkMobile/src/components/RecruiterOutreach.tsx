@@ -75,22 +75,24 @@ function RecruiterRow({ r, isSent, isSelected, isDisabled, onClick, fadingOut }:
         pointerEvents: fadingOut ? 'none' : undefined,
       }}
     >
-      <div className="flex items-center gap-4 px-5 py-4">
-        <div
-          className="w-5 h-5 rounded-[5px] border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200"
-          style={{
-            borderColor: isSelected ? '#306770' : '#DCDCDC',
-            background: isSelected ? '#306770' : 'white',
-          }}
-        >
-          {isSelected && <Check size={12} color="white" strokeWidth={3} />}
-        </div>
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={{ background: '#EEF6F7', color: '#306770' }}>
-          {initials(r.name)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-black leading-snug truncate">{r.name}</p>
-          <p className="text-[12px] truncate" style={{ color: '#787878' }}>{[r.jobTitle, r.company].filter(Boolean).join(' · ')}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-5 py-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div
+            className="w-5 h-5 rounded-[5px] border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200"
+            style={{
+              borderColor: isSelected ? '#306770' : '#DCDCDC',
+              background: isSelected ? '#306770' : 'white',
+            }}
+          >
+            {isSelected && <Check size={12} color="white" strokeWidth={3} />}
+          </div>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={{ background: '#EEF6F7', color: '#306770' }}>
+            {initials(r.name)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-semibold text-black leading-snug truncate">{r.name}</p>
+            <p className="text-[12px] truncate" style={{ color: '#787878' }}>{[r.jobTitle, r.company].filter(Boolean).join(' · ')}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text }}>
@@ -108,16 +110,18 @@ function SentRow({ r, sentAt }: { r: RecruiterRecord; sentAt: string }) {
       className="w-full text-left rounded-[14px] border"
       style={{ borderColor: '#E8F8F2', background: '#FAFAFA' }}
     >
-      <div className="flex items-center gap-4 px-5 py-3">
-        <div className="w-5 h-5 rounded-[5px] border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: '#C5EEE0', background: '#C5EEE0' }}>
-          <Check size={12} color="white" strokeWidth={3} />
-        </div>
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={{ background: '#F4F4F4', color: '#BBBBBB' }}>
-          {initials(r.name)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold leading-snug truncate" style={{ color: '#BBBBBB' }}>{r.name}</p>
-          <p className="text-[12px] truncate" style={{ color: '#CCCCCC' }}>{[r.jobTitle, r.company].filter(Boolean).join(' · ')}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-5 py-3">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-5 h-5 rounded-[5px] border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: '#C5EEE0', background: '#C5EEE0' }}>
+            <Check size={12} color="white" strokeWidth={3} />
+          </div>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={{ background: '#F4F4F4', color: '#BBBBBB' }}>
+            {initials(r.name)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-semibold leading-snug truncate" style={{ color: '#BBBBBB' }}>{r.name}</p>
+            <p className="text-[12px] truncate" style={{ color: '#CCCCCC' }}>{[r.jobTitle, r.company].filter(Boolean).join(' · ')}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: '#F0F0F0', color: '#CCCCCC' }}>

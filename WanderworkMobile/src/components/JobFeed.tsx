@@ -2211,9 +2211,9 @@ const JobCard = memo(({ id, title, company, location, description, skills, hasNe
       >
         <div className="flex flex-col gap-4 sm:gap-6">
           {/* Header */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <h3 className="text-[20px] sm:text-[24px] text-black line-clamp-2 min-w-0 break-words">{title}</h3>
-            <div className="flex items-center gap-3 flex-shrink-0 justify-end">
+            <div className="flex items-center gap-3 flex-shrink-0 sm:justify-end">
               {hasNewBadge && expiringDays == null && (
                 <div
                   className="px-4 py-1 rounded-[10px] text-[12px] text-white text-center"

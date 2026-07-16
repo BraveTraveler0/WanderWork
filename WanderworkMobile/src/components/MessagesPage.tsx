@@ -42,6 +42,7 @@ const MessagesPage = ({
 }) => {
   const [applications, setApplications] = useState<Application[]>([])
   const [selected, setSelected] = useState<Application | null>(null)
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
   const [tab, setTab] = useState<'coverLetter' | 'resume'>('coverLetter')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -99,7 +100,10 @@ const MessagesPage = ({
 
       <div style={{ display: 'flex', gap: 20, padding: inline ? '0 0 16px' : '0 32px 40px', ...contentHeight }}>
         {/* Left: application list */}
-        <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          className={`mp-list-col${mobileView === 'detail' ? ' mp-hidden-mobile' : ''}`}
+          style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
           {/* Search */}
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
@@ -139,7 +143,7 @@ const MessagesPage = ({
               return (
                 <button
                   key={app._id}
-                  onClick={() => { setSelected(app); setTab('coverLetter') }}
+                  onClick={() => { setSelected(app); setTab('coverLetter'); setMobileView('detail') }}
                   style={{
                     position: 'relative', textAlign: 'left', padding: '14px 16px', borderRadius: 12,
                     border: selected?._id === app._id ? '1.5px solid #63B08D' : '1.5px solid #E4E4E4',
@@ -174,7 +178,10 @@ const MessagesPage = ({
         </div>
 
         {/* Right: document viewer */}
-        <div style={{ flex: 1, background: '#fff', borderRadius: 18, border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
+        <div
+          className={mobileView === 'list' ? 'mp-hidden-mobile' : ''}
+          style={{ flex: 1, background: '#fff', borderRadius: 18, border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}
+        >
           {!selected ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 40px', textAlign: 'center' }}>
               <p style={{ color: '#306770', fontSize: 15, fontWeight: 700, margin: 0 }}>No documents here yet.</p>
@@ -184,6 +191,13 @@ const MessagesPage = ({
             <>
               {/* Doc header */}
               <div style={{ padding: '20px 28px 0', borderBottom: '1px solid #F0F0F0' }}>
+                <button
+                  onClick={() => setMobileView('list')}
+                  className="sm:hidden"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '6px 12px', borderRadius: 8, background: 'none', border: '1px solid #DCDCDC', cursor: 'pointer', color: '#306770', fontSize: 12, fontWeight: 600, fontFamily: 'Manrope' }}
+                >
+                  <ArrowLeft size={13} /> Back to list
+                </button>
                 <p style={{ fontWeight: 700, fontSize: 16, color: '#306770', margin: '0 0 2px' }}>{selected.jobTitle} at {selected.company}</p>
                 <p style={{ fontSize: 12, color: '#aaa', margin: '0 0 14px' }}>
                   {selected.preparedAt ? new Date(selected.preparedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}

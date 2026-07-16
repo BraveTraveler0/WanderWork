@@ -172,8 +172,8 @@ export default function CustomJobRequestModal({
           <div style={{ position: 'absolute', top: -28, right: -28, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
           <div style={{ position: 'absolute', bottom: -16, left: 32, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
 
-          <div className="flex items-start justify-between relative">
-            <div className="flex-1 pr-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 relative">
+            <div className="flex-1 sm:pr-3">
               <h2 style={{ fontFamily: 'Manrope', fontWeight: 800, fontSize: 20, color: '#fff', letterSpacing: '-0.3px', marginBottom: 8, lineHeight: 1.2 }}>
                 Customize your Resume + Cover Letter
               </h2>
