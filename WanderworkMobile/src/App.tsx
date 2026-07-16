@@ -1222,6 +1222,15 @@ function App() {
     }},
   ]
 
+  // Shown in the mobile "More" sheet instead of menuItems when the visitor
+  // isn't signed in — everything else in menuItems needs an account.
+  const guestMenuItems = [
+    { label: 'Sign In',        action: () => { setShowLogin(true); setShowMenu(false) } },
+    { label: 'Create Account', action: () => { setShowSignup(true); setShowMenu(false) } },
+    { label: 'Report a Bug',   action: () => { navigateTo('reportbug'); setShowMenu(false) } },
+    { label: 'Join Our Team!', action: () => { setCurrentPage('jointeam'); setShowMenu(false) } },
+  ]
+
   const MenuDropdown = () => (
     <div
       className="hidden lg:block absolute top-full right-0 mt-2 w-[210px] rounded-[14px] z-40 overflow-hidden"
@@ -1283,7 +1292,7 @@ function App() {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {menuItems.map((item, i) => (
+        {(_token ? menuItems : guestMenuItems).map((item, i) => (
           <button
             key={item.label}
             onClick={item.action}
@@ -1371,7 +1380,7 @@ function App() {
     return <>
       <SettingsPage onBack={() => setCurrentPage('dashboard')} currentPage={settingsTab} onPageChange={setSettingsTab} data={safeData} onCandidateUpdate={handleCandidateUpdate} onDeleteAccount={handleDeleteAccount} onSaved={refreshPairings} />
       <div className="lg:hidden h-20" />
-      {_token && <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      <BottomNav active="more" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
       {showMenu && <MobileMoreSheet />}
     </>
   }
@@ -1396,7 +1405,7 @@ function App() {
     return <>
       <PlansPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
       <div className="lg:hidden h-20" />
-      {_token && <BottomNav active={null} unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      <BottomNav active={null} unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
       {showMenu && <MobileMoreSheet />}
     </>
   }
@@ -1429,7 +1438,7 @@ function App() {
     return <>
       <ProfilePage candidate={profileCandidate} onBack={() => setCurrentPage('dashboard')} onCandidateUpdate={handleCandidateUpdate} onSaved={refreshPairings} />
       <div className="lg:hidden h-20" />
-      {_token && <BottomNav active="profile" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} />}
+      <BottomNav active="profile" unseenCount={unseenAppCount} onNavigate={handleBottomNavigate} onOpenRecruiters={() => setShowRecruiterNavModal(true)} onOpenMore={() => setShowMenu(true)} isGuest={!_token} onRequireAuth={() => setShowLogin(true)} />
       {showMenu && <MobileMoreSheet />}
     </>
   }
@@ -1734,17 +1743,17 @@ function App() {
             </div>
           </div>
         </footer>
-        {_token && <div className="lg:hidden h-20" />}
+        <div className="lg:hidden h-20" />
       </div>
-      {_token && (
-        <BottomNav
-          active={currentPage === 'messages' ? 'messages' : 'dashboard'}
-          unseenCount={unseenAppCount}
-          onNavigate={handleBottomNavigate}
-          onOpenRecruiters={() => setShowRecruiterNavModal(true)}
-          onOpenMore={() => setShowMenu(true)}
-        />
-      )}
+      <BottomNav
+        active={currentPage === 'messages' ? 'messages' : 'dashboard'}
+        unseenCount={unseenAppCount}
+        onNavigate={handleBottomNavigate}
+        onOpenRecruiters={() => setShowRecruiterNavModal(true)}
+        onOpenMore={() => setShowMenu(true)}
+        isGuest={!_token}
+        onRequireAuth={() => setShowLogin(true)}
+      />
       {showMenu && <MobileMoreSheet />}
     </div>
   )

@@ -9,6 +9,9 @@ interface BottomNavProps {
   onNavigate: (page: BottomNavPage) => void
   onOpenRecruiters: () => void
   onOpenMore: () => void
+  /** Not logged in: Messages/Profile/Recruiters prompt sign-in instead of navigating. */
+  isGuest?: boolean
+  onRequireAuth?: () => void
 }
 
 function NavButton({
@@ -47,7 +50,12 @@ function NavButton({
 /** Fixed bottom tab bar for the primary "main task" destinations — the
  * standard iOS/Android navigation pattern, shown only on phone-width
  * viewports (the desktop/tablet layout keeps the sidebar as primary nav). */
-export default function BottomNav({ active, unseenCount, onNavigate, onOpenRecruiters, onOpenMore }: BottomNavProps) {
+export default function BottomNav({ active, unseenCount, onNavigate, onOpenRecruiters, onOpenMore, isGuest, onRequireAuth }: BottomNavProps) {
+  const guarded = (action: () => void) => {
+    if (isGuest && onRequireAuth) return onRequireAuth()
+    action()
+  }
+
   return (
     <nav
       className="lg:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch safe-area-bottom safe-area-x"
@@ -59,9 +67,9 @@ export default function BottomNav({ active, unseenCount, onNavigate, onOpenRecru
       }}
     >
       <NavButton active={active === 'dashboard'} label="Jobs" onClick={() => onNavigate('dashboard')} icon={<Briefcase size={20} />} />
-      <NavButton active={false} label="Recruiters" onClick={onOpenRecruiters} icon={<Users size={20} />} />
-      <NavButton active={active === 'messages'} label="Messages" onClick={() => onNavigate('messages')} icon={<MessageCircle size={20} />} badge={unseenCount} />
-      <NavButton active={active === 'profile'} label="Profile" onClick={() => onNavigate('profile')} icon={<User size={20} />} />
+      <NavButton active={false} label="Recruiters" onClick={() => guarded(onOpenRecruiters)} icon={<Users size={20} />} />
+      <NavButton active={active === 'messages'} label="Messages" onClick={() => guarded(() => onNavigate('messages'))} icon={<MessageCircle size={20} />} badge={unseenCount} />
+      <NavButton active={active === 'profile'} label="Profile" onClick={() => guarded(() => onNavigate('profile'))} icon={<User size={20} />} />
       <NavButton active={active === 'more'} label="More" onClick={onOpenMore} icon={<Menu size={20} />} />
     </nav>
   )
