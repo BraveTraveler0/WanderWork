@@ -46,7 +46,7 @@ export default function JoinTeamPage({ onBack }: JoinTeamPageProps) {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)', fontFamily: 'Manrope, sans-serif' }}>
+    <div className="min-h-screen safe-area-top" style={{ background: 'linear-gradient(145.48deg, #F9FAFB 0%, #F0F2F5 100%)', fontFamily: 'Manrope, sans-serif' }}>
       <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-10">
 
         <button

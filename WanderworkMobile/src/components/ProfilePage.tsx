@@ -305,7 +305,7 @@ export default function ProfilePage({ candidate, onBack, onCandidateUpdate, onSa
     educations.length === 0
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
+    <div className="safe-area-top" style={{ minHeight: '100vh', background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
       <div style={{ maxWidth: 780, margin: '0 auto', padding: '0 20px 80px' }}>
 
         {/* Header nav */}

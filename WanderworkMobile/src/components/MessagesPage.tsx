@@ -84,7 +84,7 @@ const MessagesPage = ({
   const contentHeight = inline ? { flex: 1, minHeight: 0 } : { height: 'calc(100vh - 90px)' }
 
   return (
-    <div style={outerStyle}>
+    <div className={inline ? undefined : 'safe-area-top'} style={outerStyle}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: inline ? '16px 0 0' : '24px 32px 0', marginBottom: 16 }}>
         <button

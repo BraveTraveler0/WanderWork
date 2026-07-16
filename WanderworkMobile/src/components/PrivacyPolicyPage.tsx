@@ -29,7 +29,7 @@ const PrivacyPolicyPage = ({ onBack }: PrivacyPolicyPageProps) => {
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
       <div className="max-w-[860px] mx-auto p-4 sm:p-6">
-        <header className="sticky top-0 z-50 flex items-center gap-3 mb-8 py-4 -mt-4" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
+        <header className="sticky top-0 z-50 safe-area-top flex items-center gap-3 mb-8 py-4 -mt-4" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
           <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <ArrowLeft size={24} style={{ color: '#306770' }} />
           </button>

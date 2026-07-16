@@ -426,6 +426,7 @@ const PlansPage = ({
   return (
     <>
     <div
+      className="safe-area-top"
       style={{
         minHeight: '100vh',
         background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)',

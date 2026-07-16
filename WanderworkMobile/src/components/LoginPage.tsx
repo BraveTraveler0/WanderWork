@@ -89,7 +89,7 @@ export default function LoginPage({ onLogin, onForgotPassword, onBackToLanding, 
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
+    <div className="min-h-screen safe-area-top flex items-center justify-center p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
       <style>{`
         @keyframes bgBreathe {
           0%, 100% { filter: brightness(1); }

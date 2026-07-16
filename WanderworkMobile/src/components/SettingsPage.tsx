@@ -418,7 +418,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     <div className="min-h-screen" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
       <div className="max-w-[1460px] mx-auto p-4 sm:p-6">
         {/* Header */}
-        <header className="sticky top-0 z-50 flex items-center justify-between mb-6 sm:mb-8 py-4 -mt-4" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
+        <header className="sticky top-0 z-50 safe-area-top flex items-center justify-between mb-6 sm:mb-8 py-4 -mt-4" style={{ background: 'linear-gradient(145.48deg, #FFFFFF 1.38%, #F4F4F4 99.61%)' }}>
           <div className="flex items-center gap-3">
             <button
               onClick={onBack}

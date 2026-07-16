@@ -1464,7 +1464,7 @@ function App() {
       )}
 
       {/* Full-width sticky header */}
-      <div className="sticky top-0 z-50 w-full" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
+      <div className="sticky top-0 z-50 w-full safe-area-top" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
         <header className="max-w-[1460px] mx-auto px-4 sm:px-6 flex items-center justify-between py-4">
           <h1 className="font-bold text-[24px]" style={{ color: '#306770', fontFamily: 'Manrope', letterSpacing: '3.6px' }}>
             {logoText.length <= 6 ? logoText : 'WANDER'}
