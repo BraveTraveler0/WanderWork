@@ -6,11 +6,12 @@ import './index.css'
 import '@fontsource/manrope/400.css'
 import '@fontsource/manrope/700.css'
 import '@fontsource/manrope/800.css'
-import { initNativeApp, registerDeepLinkHandler } from './native'
+import { initNativeApp, registerDeepLinkHandler, interceptExternalLinks } from './native'
 
 inject()
 initNativeApp()
 registerDeepLinkHandler()
+interceptExternalLinks()
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

@@ -22,6 +22,43 @@ export async function initNativeApp() {
 }
 
 /**
+ * Capacitor's WebView does NOT automatically route target="_blank" links or
+ * window.open() to the system browser the way a real browser tab would —
+ * by default they silently no-op. This is a single, centralized fix instead
+ * of touching every apply-link/share-link/external-link call site in the
+ * app individually: intercept both mechanisms once and hand them to
+ * @capacitor/browser. Critically this covers job "Apply Now" links, which
+ * would otherwise be silently broken (the single most important user
+ * journey in the app) on native builds.
+ */
+export function interceptExternalLinks() {
+  if (!isNative) return () => {}
+
+  const originalOpen = window.open.bind(window)
+  window.open = ((url?: string | URL, target?: string, features?: string) => {
+    if (url) {
+      Browser.open({ url: url.toString() }).catch(() => {})
+      return null
+    }
+    return originalOpen(url, target, features)
+  }) as typeof window.open
+
+  const onClick = (e: MouseEvent) => {
+    const anchor = (e.target as HTMLElement)?.closest?.('a[target="_blank"]') as HTMLAnchorElement | null
+    if (anchor?.href) {
+      e.preventDefault()
+      Browser.open({ url: anchor.href }).catch(() => {})
+    }
+  }
+  document.addEventListener('click', onClick, true)
+
+  return () => {
+    document.removeEventListener('click', onClick, true)
+    window.open = originalOpen
+  }
+}
+
+/**
  * Wires the Android hardware/gesture back button to an app-supplied handler.
  * The handler owns the decision of what "back" means for the current screen
  * (close a modal, pop to dashboard, or exit the app) since there is no router.
