@@ -20,6 +20,7 @@ import LandingPage from './landing/LandingPage'
 import BottomNav, { type BottomNavPage } from './components/BottomNav'
 import { API_BASE_URL } from './api/config'
 import { registerBackHandler, exitApp } from './native'
+import { configureIAP, resetIAPUser } from './native-iap'
 import {
   getAllJobSeekerData,
   getJobs,
@@ -603,6 +604,13 @@ function App() {
     setShowWelcomeModal(localStorage.getItem(key) !== 'true')
   }, [_token, _user])
 
+  // RevenueCat's app_user_id is set to the account email so the backend
+  // webhook (keyed the same way Stripe checkout already is) can credit the
+  // right account for a native purchase.
+  useEffect(() => {
+    configureIAP(_user?.email || undefined)
+  }, [_user?.email])
+
 
   const dismissWelcomeModal = () => {
     if (_user) localStorage.setItem(getWelcomeStorageKey(_user), 'true')
@@ -673,6 +681,7 @@ function App() {
     setToken(null)
     setData(null)
     setProfileImage(null)
+    resetIAPUser()
   }
 
   const handleDeleteAccount = async () => {

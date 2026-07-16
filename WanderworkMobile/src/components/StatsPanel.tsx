@@ -4,6 +4,8 @@ import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../ap
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 import { isNewJob } from '../utils/jobUtils'
 import { isNative } from '../native'
+import { purchaseTokenPack } from '../native-iap'
+import { NativeTokenPackModal } from './PlansPage'
 import { Share } from '@capacitor/share'
 
 const INTERESTED_KEY = 'wanderworkInterestedJobs'
@@ -138,6 +140,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const [hasCompanyRecruiters, setHasCompanyRecruiters] = useState(false)
   const [showRecruiterModal, setShowRecruiterModal] = useState(false)
   const [showTokensModal, setShowTokensModal] = useState(false)
+  const [nativeTokenPurchasing, setNativeTokenPurchasing] = useState<string | null>(null)
+  const [nativeTokenError, setNativeTokenError] = useState<string | null>(null)
   const [tokenQty, setTokenQty] = useState(10)
   const [currentTokens, setCurrentTokens] = useState(tokensCount)
   const [displayTokens, setDisplayTokens] = useState(tokensCount)
@@ -811,7 +815,28 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         )
       })()}
 
-      {showTokensModal && (
+      {showTokensModal && isNative && (
+        <NativeTokenPackModal
+          onClose={closeTokens}
+          purchasing={nativeTokenPurchasing}
+          error={nativeTokenError}
+          onPurchase={async (productId, tokens) => {
+            setNativeTokenPurchasing(productId)
+            setNativeTokenError(null)
+            try {
+              await purchaseTokenPack(productId)
+              setCurrentTokens((t: number) => t + tokens)
+              closeTokens()
+            } catch (err: any) {
+              if (!err?.userCancelled) setNativeTokenError(err?.message || 'Purchase failed. Please try again.')
+            } finally {
+              setNativeTokenPurchasing(null)
+            }
+          }}
+        />
+      )}
+
+      {showTokensModal && !isNative && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4" onClick={closeTokens}>
           <div
             className="bg-white rounded-[20px] w-full max-w-[420px] shadow-[0_30px_90px_rgba(0,0,0,0.16)] p-8 relative"

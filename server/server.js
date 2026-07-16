@@ -406,6 +406,7 @@ const routes = {
   '/oauth': './routes/oauthRoutes',
   '/capitalwatch': './routes/capitalWatchRoutes',
   '/account-deletion': './routes/accountDeletionRoutes',
+  '/revenuecat': './routes/revenueCatWebhook',
 };
 
 // Register routes

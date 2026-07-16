@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
+import { isNative } from '../native'
+import { purchaseSubscription, purchaseTokenPack, TOKEN_PACK_PRODUCTS } from '../native-iap'
 
 const LS_URLS: Record<string, string> = {
   tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
@@ -92,6 +94,53 @@ function PaymentModal({ planKey, onClose, onStripe }: {
               <span style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
                 {opt.available ? opt.sub : 'Not configured yet'}
               </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Apple/Google IAP can't sell an arbitrary token quantity at a dynamic price
+// (only pre-registered fixed products), so native purchases pick from a
+// short fixed list instead of the web app's +/- quantity stepper.
+export function NativeTokenPackModal({ onClose, onPurchase, purchasing, error }: {
+  onClose: () => void
+  onPurchase: (productId: string, tokens: number) => void
+  purchasing: string | null
+  error: string | null
+}) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 24px 60px rgba(0,0,0,0.18)', position: 'relative' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: '#aaa' }}>
+          <X size={18} />
+        </button>
+        <h3 style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 18, color: '#306770', marginBottom: 6 }}>Buy Tokens</h3>
+        <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Pick a token pack.</p>
+        {error && <p style={{ fontSize: 12, color: '#c0392b', marginBottom: 12 }}>{error}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {TOKEN_PACK_PRODUCTS.map((pack) => (
+            <button
+              key={pack.id}
+              onClick={() => onPurchase(pack.id, pack.tokens)}
+              disabled={purchasing !== null}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 18px', borderRadius: 12, border: '1.5px solid #E4E4E4',
+                background: '#fff', cursor: purchasing ? 'not-allowed' : 'pointer', opacity: purchasing && purchasing !== pack.id ? 0.5 : 1,
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#306770' }}>{pack.label}</span>
+              <span style={{ fontSize: 12, color: '#888' }}>{purchasing === pack.id ? 'Purchasing…' : 'Buy'}</span>
             </button>
           ))}
         </div>
@@ -363,6 +412,10 @@ const PlansPage = ({
   const [checkoutLoading, setCheckoutLoading] = useState<StripePlan | 'tokens' | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [paymentModal, setPaymentModal] = useState<{ planKey: string; stripePlan?: StripePlan } | null>(null)
+  const [showNativeTokenModal, setShowNativeTokenModal] = useState(false)
+  const [nativePurchasing, setNativePurchasing] = useState<string | null>(null)
+  const [nativeError, setNativeError] = useState<string | null>(null)
+  const [nativeSuccess, setNativeSuccess] = useState<string | null>(null)
   const faqSection = useInView(0.1)
 
   useEffect(() => {
@@ -387,8 +440,45 @@ const PlansPage = ({
     }
   }
 
+  const handleNativeSubscription = async (plan: StripePlan) => {
+    setNativePurchasing(plan)
+    setNativeError(null)
+    try {
+      await purchaseSubscription(plan)
+      setNativeSuccess('Subscription active! It may take a moment to reflect in your account.')
+    } catch (err: any) {
+      if (err?.userCancelled) return
+      setNativeError(err?.message || 'Purchase failed. Please try again.')
+    } finally {
+      setNativePurchasing(null)
+    }
+  }
+
+  const handleNativeTokenPurchase = async (productId: string, tokens: number) => {
+    setNativePurchasing(productId)
+    setNativeError(null)
+    try {
+      await purchaseTokenPack(productId)
+      setShowNativeTokenModal(false)
+      setNativeSuccess(`${tokens} tokens purchased! They may take a moment to appear.`)
+    } catch (err: any) {
+      if (err?.userCancelled) return
+      setNativeError(err?.message || 'Purchase failed. Please try again.')
+    } finally {
+      setNativePurchasing(null)
+    }
+  }
+
   const openPaymentModal = (planKey: string, stripePlan?: StripePlan) => {
     if (!userEmail && onSignUp) { onSignUp(); return }
+    // App Store/Play Store require native in-app purchase for digital
+    // subscriptions and consumables bought inside the app — Stripe/Lemon
+    // Squeezy/Paddle can only be shown on the web build.
+    if (isNative) {
+      if (stripePlan) handleNativeSubscription(stripePlan)
+      else setShowNativeTokenModal(true)
+      return
+    }
     setPaymentModal({ planKey, stripePlan })
   }
 
@@ -613,6 +703,18 @@ const PlansPage = ({
           </div>
         )}
 
+        {nativeError && (
+          <div style={{ maxWidth: 480, margin: '0 auto 56px', padding: '14px 20px', borderRadius: 12, background: '#FFF0F0', border: '1px solid #F5C0C0', color: '#B91C1C', fontSize: 13, fontFamily: 'Manrope', textAlign: 'center' }}>
+            {nativeError}
+          </div>
+        )}
+
+        {nativeSuccess && (
+          <div style={{ maxWidth: 480, margin: '0 auto 56px', padding: '14px 20px', borderRadius: 12, background: '#F0FAF5', border: '1px solid #B8E8CE', color: '#1E7A4C', fontSize: 13, fontFamily: 'Manrope', textAlign: 'center' }}>
+            {nativeSuccess}
+          </div>
+        )}
+
         {/* Social proof strip */}
         <div
           ref={undefined}
@@ -663,6 +765,14 @@ const PlansPage = ({
         planKey={paymentModal.planKey}
         onClose={() => setPaymentModal(null)}
         onStripe={() => handleStripeCheckout(paymentModal!.stripePlan ?? 'tokens')}
+      />
+    )}
+    {showNativeTokenModal && (
+      <NativeTokenPackModal
+        onClose={() => setShowNativeTokenModal(false)}
+        onPurchase={handleNativeTokenPurchase}
+        purchasing={nativePurchasing}
+        error={nativeError}
       />
     )}
     </>
