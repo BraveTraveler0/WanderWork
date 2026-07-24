@@ -3,6 +3,7 @@
 const cron = require('node-cron')
 const sgMail = require('@sendgrid/mail')
 const mongoose = require('mongoose')
+const connectDB = require('../config/dbConn')
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate')
 const Job = require('../models/JobSeeker/jobSeeker.Job')
 const Application = require('../models/JobSeeker/jobSeeker.Application')
@@ -10,8 +11,29 @@ const RecruiterContact = require('../models/JobSeeker/jobSeeker.RecruiterContact
 const CandidateJobPairing = require('../models/JobSeeker/jobSeeker.CandidateJobPairing')
 const { adminDigestEmail } = require('../utils/adminDigestEmail')
 
-// Friday noon EST = Friday 17:00 UTC
-const SCHEDULE = '0 17 * * 5'
+const SCHEDULE = '0 12 * * 5'
+const SCHEDULE_TIMEZONE = 'America/New_York'
+
+async function ensureDatabaseConnection() {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await mongoose.connection.db.admin().ping()
+      return
+    } catch (err) {
+      console.warn(`[AdminDigest] MongoDB ping failed; reconnecting: ${err.message}`)
+    }
+  }
+
+  await mongoose.disconnect().catch(() => {})
+  await connectDB()
+}
+
+function digestWeekKey(now = new Date()) {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const day = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() - day + 1)
+  return date.toISOString().slice(0, 10)
+}
 
 async function gatherStats() {
   const now = new Date()
@@ -54,7 +76,12 @@ async function gatherStats() {
 
     // Jobs — raw collection to avoid strictQuery stripping non-schema fields
     jobCol.countDocuments({}),
-    jobCol.countDocuments({ datePosted: { $gte: weekAgo } }),
+    jobCol.countDocuments({
+      $or: [
+        { datePosted: { $gte: weekAgo } },
+        { date_posted: { $gte: weekAgo } },
+      ],
+    }),
     jobCol.countDocuments({ has_recruiter: true }),
     jobCol.countDocuments({ desc_cleaned: true }),
     jobCol.countDocuments({ desc_cleaned: { $ne: true }, description_short: { $exists: true, $ne: '' } }),
@@ -122,27 +149,49 @@ async function sendAdminWeeklyDigest() {
   sgMail.setApiKey(apiKey)
 
   console.log('[AdminDigest] Gathering weekly stats...')
-  const { weekStart, weekEnd, stats } = await gatherStats()
+  await ensureDatabaseConnection()
 
-  console.log('[AdminDigest] Stats gathered:', JSON.stringify(stats, null, 2))
-
-  const msg = adminDigestEmail({ weekStart, weekEnd, stats })
+  const weekKey = digestWeekKey()
+  const deliveries = mongoose.connection.db.collection('admin_digest_deliveries')
+  try {
+    await deliveries.insertOne({
+      _id: weekKey,
+      status: 'sending',
+      createdAt: new Date(),
+    })
+  } catch (err) {
+    if (err && err.code === 11000) {
+      console.log(`[AdminDigest] Digest already claimed for week ${weekKey}; skipping duplicate.`)
+      return
+    }
+    throw err
+  }
 
   try {
+    const { weekStart, weekEnd, stats } = await gatherStats()
+    console.log('[AdminDigest] Stats gathered:', JSON.stringify(stats, null, 2))
+
+    const msg = adminDigestEmail({ weekStart, weekEnd, stats })
     await sgMail.send(msg)
+    await deliveries.updateOne(
+      { _id: weekKey },
+      { $set: { status: 'sent', sentAt: new Date(), recipients: msg.to } }
+    )
     console.log('[AdminDigest] Digest sent to', msg.to.join(', '))
   } catch (err) {
+    await deliveries.deleteOne({ _id: weekKey }).catch(() => {})
     console.error('[AdminDigest] Send failed:', err.response?.body || err.message)
+    throw err
   }
 }
 
 function initAdminWeeklyDigest() {
-  console.log('[AdminDigest] Weekly admin digest scheduled: Fridays at 12PM EST')
+  console.log('[AdminDigest] Weekly admin digest scheduled: Fridays at 12 PM America/New_York')
   cron.schedule(SCHEDULE, () => {
     sendAdminWeeklyDigest().catch(err =>
       console.error('[AdminDigest] Unexpected error:', err.message)
     )
-  })
+  }, { timezone: SCHEDULE_TIMEZONE })
 }
 
-module.exports = { initAdminWeeklyDigest, sendAdminWeeklyDigest }
+module.exports = { initAdminWeeklyDigest, sendAdminWeeklyDigest, gatherStats, digestWeekKey }

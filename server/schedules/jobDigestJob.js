@@ -7,7 +7,7 @@ const Job = require('../models/JobSeeker/jobSeeker.Job');
 const CandidateJobPairing = require('../models/JobSeeker/jobSeeker.CandidateJobPairing');
 const { jobDigestEmail } = require('../utils/jobDigestEmail');
 
-const SCHEDULE = '0 12 * * 5';
+const SCHEDULE = '0 10 * * 2';
 const SCHEDULE_TIMEZONE = 'America/New_York';
 const JOBS_PER_EMAIL = 5;
 const MAX_JOB_AGE_DAYS = 60;
@@ -149,7 +149,7 @@ async function sendWeeklyJobDigest() {
 }
 
 function initJobDigestSchedule() {
-  console.log('[JobDigest] Weekly digest scheduled: Fridays at 12 PM America/New_York');
+  console.log('[JobDigest] Weekly digest scheduled: Tuesdays at 10 AM America/New_York');
   cron.schedule(SCHEDULE, () => {
     sendWeeklyJobDigest().catch(err =>
       console.error('[JobDigest] Unexpected error:', err.message)
