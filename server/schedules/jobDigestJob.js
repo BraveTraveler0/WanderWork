@@ -7,7 +7,7 @@ const Job = require('../models/JobSeeker/jobSeeker.Job');
 const CandidateJobPairing = require('../models/JobSeeker/jobSeeker.CandidateJobPairing');
 const { jobDigestEmail } = require('../utils/jobDigestEmail');
 
-const SCHEDULE = '0 10 * * 2';
+const SCHEDULE = '0 12 * * 5';
 const SCHEDULE_TIMEZONE = 'America/New_York';
 const JOBS_PER_EMAIL = 5;
 const MAX_JOB_AGE_DAYS = 60;
@@ -60,12 +60,15 @@ async function getMatchedJobsForCandidate(candidateId) {
 
   const eligiblePairings = pairings.filter(pairing => Number(pairing.score) >= MIN_MATCH_SCORE);
   const jobIds = eligiblePairings.map(pairing => pairing.jobId);
-  const jobs = await Job.find({ _id: { $in: jobIds } }).lean();
+  // Read the raw collection because imported jobs use both legacy camelCase and
+  // current snake_case fields; the legacy strict Mongoose schema drops fields
+  // such as date_posted and url_normalized during hydration.
+  const jobs = await Job.collection.find({ _id: { $in: jobIds } }).toArray();
 
   const jobMap = new Map(jobs.map(job => [job._id.toString(), job]));
   return eligiblePairings
     .map(pairing => jobMap.get(pairing.jobId.toString()))
-    .filter(isDigestEligibleJob)
+    .filter(job => isDigestEligibleJob(job))
     .slice(0, JOBS_PER_EMAIL);
 }
 
@@ -146,7 +149,7 @@ async function sendWeeklyJobDigest() {
 }
 
 function initJobDigestSchedule() {
-  console.log('[JobDigest] Weekly digest scheduled: Tuesdays at 10 AM America/New_York');
+  console.log('[JobDigest] Weekly digest scheduled: Fridays at 12 PM America/New_York');
   cron.schedule(SCHEDULE, () => {
     sendWeeklyJobDigest().catch(err =>
       console.error('[JobDigest] Unexpected error:', err.message)
