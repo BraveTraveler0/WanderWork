@@ -72,6 +72,9 @@ router.route('/custom-request')
 router.route('/featured-jobs')
     .get(jobSeekerController.getFeaturedJobs)
 
+router.route('/job-stats')
+    .get(jobSeekerController.getJobStats)
+
 router.route('/job')
     .get(jobSeekerController.getAllJobs)
 

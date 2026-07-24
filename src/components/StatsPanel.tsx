@@ -67,6 +67,7 @@ interface StatsPanelProps {
   onClose: () => void
   data?: any
   jobs?: any[]
+  newJobsCount?: number | null
   onNewJobsClick?: () => void
   onRecruiterContactsClick?: () => void
   isAuthenticated?: boolean
@@ -75,10 +76,10 @@ interface StatsPanelProps {
   onAutoOpenCoverLetterHandled?: () => void
 }
 
-const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, data, jobs = [], newJobsCount: liveNewJobsCount, onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
-  const newJobsCount = allJobs.filter(isNewJob).length
+  const newJobsCount = liveNewJobsCount ?? allJobs.filter(isNewJob).length
   const firstCandidate = Array.isArray(data?.Candidates) ? data!.Candidates[0] : undefined
   const tokensCount = (firstCandidate?.tokenBalance ?? firstCandidate?.tokens ?? 30)
   const recruiterContactsLeft: number = firstCandidate?.recruiterContactsLeft ?? 10

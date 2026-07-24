@@ -2762,6 +2762,24 @@ function isLikelyEnglish(text) {
 
 const FEATURED_JOBS_DEFAULT_LIMIT = 60;
 const FEATURED_JOBS_MAX_LIMIT = 200;
+const NEW_JOB_WINDOW_DAYS = 3;
+
+const getJobStats = asyncHandler(async (_req, res) => {
+    const all = await getAllJobsPure();
+    const now = Date.now();
+    const cutoff = now - NEW_JOB_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const newJobs = all.reduce((count, job) => {
+        const postedAt = parseJobDate(job);
+        return postedAt && postedAt >= cutoff && postedAt <= now ? count + 1 : count;
+    }, 0);
+
+    res.json({
+        totalJobs: all.length,
+        newJobs,
+        windowDays: NEW_JOB_WINDOW_DAYS,
+        generatedAt: new Date(now).toISOString(),
+    });
+});
 
 const getFeaturedJobs = asyncHandler(async (req, res) => {
     const requestedLimit = parseInt(req.query.limit, 10);
@@ -2823,6 +2841,7 @@ module.exports =
     getAllCandidates,
     getAllJobs,
     getFeaturedJobs,
+    getJobStats,
     _invalidateJobsCache,
     getAllApplications,
     getAllContacts,

@@ -466,6 +466,7 @@ function App() {
   const [transformedJobs, setTransformedJobs] = useState<any[]>([])
   const [publicJobs, setPublicJobs] = useState<any[]>([])
   const [publicJobsLoading, setPublicJobsLoading] = useState(true)
+  const [liveNewJobsCount, setLiveNewJobsCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [topVisibleJobId, setTopVisibleJobId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -757,6 +758,18 @@ function App() {
     }
     canonicalTag.href = `https://wanderwork.io${window.location.pathname === '/' ? '/' : window.location.pathname}`
   }, [currentPage, showLogin, showSignup, showLandingPage])
+
+  useEffect(() => {
+    fetch(`${API_BASE}/jobseeker/job-stats`)
+      .then((response) => {
+        if (!response.ok) throw new Error('job-stats not available')
+        return response.json()
+      })
+      .then((stats) => {
+        if (Number.isFinite(stats?.newJobs)) setLiveNewJobsCount(stats.newJobs)
+      })
+      .catch((statsError) => console.warn('Could not load live job count', statsError))
+  }, [])
 
   useEffect(() => {
     if (_token) return
@@ -1620,6 +1633,7 @@ function App() {
                       onClose={() => setSelectedJobId(null)}
                       data={safeData}
                       jobs={_token ? transformedJobs : publicJobs}
+                      newJobsCount={liveNewJobsCount}
                       onNewJobsClick={() => setShowNewOnly(true)}
                       onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                       isAuthenticated={!!_token}
@@ -1640,6 +1654,7 @@ function App() {
                   onClose={() => setSelectedJobId(null)}
                   data={safeData}
                   jobs={_token ? transformedJobs : publicJobs}
+                  newJobsCount={liveNewJobsCount}
                   onNewJobsClick={() => setShowNewOnly(true)}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                   isAuthenticated={!!_token}
