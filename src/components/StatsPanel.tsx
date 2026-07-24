@@ -1065,14 +1065,14 @@ const TokenCoinIcon = ({ onClick }: { onClick?: () => void }) => {
     oc.lineWidth = S * 0.20
     oc.lineCap = 'round'
     oc.beginPath()
-    oc.arc(cx, cy, S * 0.29, gapStart + gapSize, gapStart + Math.PI * 2)
+    oc.arc(cx, cy, S * 0.29, gapStart - gapStart, Math.PI * 2 + gapSize - gapSize)
     oc.stroke()
     // Subtle inner shadow for depth
     oc.strokeStyle = '#1e4e57'
     oc.lineWidth = S * 0.05
     oc.globalAlpha = 0.35
     oc.beginPath()
-    oc.arc(cx, cy, S * 0.22, gapStart + gapSize + 0.1, gapStart + Math.PI * 2 - 0.1)
+    oc.arc(cx, cy, S * 0.22, 0, Math.PI * 2)
     oc.stroke()
     oc.globalAlpha = 1
 
