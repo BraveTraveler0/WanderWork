@@ -98,7 +98,7 @@ ${'='.repeat(60)}`);
 let isRecruiterApifyRunning = false;
 
 /**
- * Weekly recruiter pull straight from the Apify actor task (replaces the n8n relay).
+ * Monthly recruiter pull straight from the Apify actor task (replaces the n8n relay).
  */
 async function runRecruiterApifySync() {
   if (isRecruiterApifyRunning) {
@@ -111,7 +111,7 @@ async function runRecruiterApifySync() {
 
   try {
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`📅 Weekly Recruiter Apify Sync - ${startTime.toISOString()}`);
+    console.log(`📅 Monthly Recruiter Apify Sync - ${startTime.toISOString()}`);
     console.log(`${'='.repeat(60)}`);
 
     const result = await runRecruiterApifyPipeline();
@@ -158,8 +158,8 @@ function initScheduledSync() {
     sendWeeklyTokenEmails().catch((e) => console.error('[WeeklyToken] Cron failed:', e.message));
   });
 
-  // Weekly recruiter pull from Apify — Monday 6:00 AM UTC.
-  const recruiterApifyTask = cron.schedule('0 6 * * 1', () => {
+  // Monthly recruiter pull from Apify — first day of the month at 6:00 AM UTC.
+  const recruiterApifyTask = cron.schedule('0 6 1 * *', () => {
     runRecruiterApifySync();
   });
 
