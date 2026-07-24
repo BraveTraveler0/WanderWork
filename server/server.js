@@ -13,14 +13,11 @@ const { initializeBots, shutdownBots } = require('./bot_accounts');
 // Import Airtable sync scheduler
 const { initScheduledSync } = require('./airtable-scheduler');
 const { scheduleRecruiterCompanyPairing } = require('./services/recruiterCompanyPairingService');
-const { purgeJunkJobs, backfillCandidateResumeFields } = require('./controllers/JobSeeker/jobSeekerController');
-const { purgeJobs } = require('./scripts/purgeJobs.cjs');
-const { pairAllCandidates } = require('./services/jobPairingService');
+const { backfillCandidateResumeFields } = require('./controllers/JobSeeker/jobSeekerController');
 const syncRoutes = require('./routes/sync');
 
-// Import schedules
-require("./schedules/postsJobs");
-require("./schedules/starsJobs");
+// Import schedules. Side-effect-only legacy schedules are loaded only by the
+// designated scheduler leader below.
 const { initJobDigestSchedule } = require('./schedules/jobDigestJob');
 const { initAdminWeeklyDigest } = require('./schedules/adminWeeklyDigest');
 const { initRemoteJobsImport } = require('./schedules/remoteJobsImport');
@@ -30,6 +27,7 @@ const { initCapitalWatchDeadlines } = require('./schedules/capitalWatchDeadlines
 const app = express();
 const PORT = process.env.PORT || 8000;
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+const runsScheduledJobs = process.env.RUN_SCHEDULED_JOBS !== 'false';
 
 app.set('trust proxy', 1);
 
@@ -414,14 +412,17 @@ Object.entries(routes).forEach(([path, route]) => {
   app.use(path, require(route));
 });
 
-// Initialize Airtable sync scheduler
-initScheduledSync();
-initJobDigestSchedule();
-initAdminWeeklyDigest();
-if (process.env.ENABLE_RECRUITER_COMPANY_PAIRING_SCHEDULE !== 'false') {
-  scheduleRecruiterCompanyPairing({
-    intervalMs: Number(process.env.RECRUITER_COMPANY_PAIR_INTERVAL_MS) || undefined,
-  });
+if (runsScheduledJobs) {
+  initScheduledSync();
+  initJobDigestSchedule();
+  initAdminWeeklyDigest();
+  if (process.env.ENABLE_RECRUITER_COMPANY_PAIRING_SCHEDULE !== 'false') {
+    scheduleRecruiterCompanyPairing({
+      intervalMs: Number(process.env.RECRUITER_COMPANY_PAIR_INTERVAL_MS) || undefined,
+    });
+  }
+} else {
+  console.log('[Scheduler] Disabled on this service; running in API-only mode.');
 }
 
 // Register Twitter and Image routes
@@ -451,13 +452,14 @@ process.on('SIGINT', gracefulShutdown);
 const startServer = async () => {
   try {
     await connectDB();
-    purgeJunkJobs(); // fire-and-forget: delete scraped search-result pages from the jobs collection
-    purgeJobs();    // fire-and-forget: remove stale/low-quality jobs on every deploy
-    pairAllCandidates().catch(e => console.warn('[Startup] pairAllCandidates failed:', e.message)); // re-score matches with latest algorithm
-    backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
-    initRemoteJobsImport(); // after DB connects so the startup import has an active connection
-    initCapitalWatchImport(); // weekly grant/funding-opportunity scrape
-    initCapitalWatchDeadlines(); // daily deadline check (2 weeks / 1 week / final days)
+    if (runsScheduledJobs) {
+      backfillCandidateResumeFields(); // fire-and-forget: extract work_experience/education from resume_text
+      // The startup import already purges and re-pairs; do not run duplicate
+      // full-collection passes immediately before it.
+      initRemoteJobsImport();
+      initCapitalWatchImport(); // weekly grant/funding-opportunity scrape
+      initCapitalWatchDeadlines(); // daily deadline check (2 weeks / 1 week / final days)
+    }
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

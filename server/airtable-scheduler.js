@@ -7,7 +7,6 @@ const cron = require('node-cron');
 const mongoose = require('mongoose');
 const connectDB = require('./config/dbConn');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
-const { pairAllCandidates } = require('./services/jobPairingService');
 const { syncRecruiters } = require('./services/recruiterSyncService');
 const { runRecruiterApifyPipeline } = require('./services/apifyRecruiterService');
 const { sendWeeklyTokenEmails } = require('./services/weeklyTokenService');
@@ -74,9 +73,6 @@ async function runSync() {
         `The following sync sections failed: ${failedSections.join(', ')}. Check Render logs for the upstream response.`
       );
     }
-    await dedupeJobs();
-    await purgeOldJobs(60);
-    await expireOldApplications(30);
     if (process.env.ENABLE_AIRTABLE_RECRUITER_SYNC === 'true') {
       await syncRecruiters().catch((e) => console.warn('[RecruiterSync] Failed (non-fatal):', e.message));
     } else {
@@ -89,10 +85,8 @@ async function runSync() {
     console.log(`\n✅ Sync completed in ${Math.round((new Date() - startTime) / 1000)}s`);
     console.log(`Next sync: ${new Date(Date.now() + 60 * 60 * 1000).toLocaleTimeString()}`);
 
-    // Re-pair all candidates with updated job data (fire-and-forget)
-    setImmediate(() => {
-      pairAllCandidates().catch((e) => console.warn('[AutoPair] Failed after sync:', e.message));
-    });
+    // Pairing and job cleanup run in the six-hour ATS import and daily
+    // maintenance jobs. Repeating full collection scans hourly was redundant.
   } catch (error) {
     lastSyncStatus = 'error';
     console.error(`❌ Sync failed: ${error.message}`);
