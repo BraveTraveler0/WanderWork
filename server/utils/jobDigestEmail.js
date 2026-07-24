@@ -3,15 +3,15 @@ const APP_URL = 'https://wanderwork.io'
 
 function jobDigestEmail({ firstName, jobs = [] }) {
   const name = firstName || null
-  const greeting = name ? `Hi ${name}, here are new remote roles for you.` : `Hey there, here are new remote roles for you.`
+  const greeting = name ? `Hi ${name}, here are your latest job matches.` : `Hey there, here are your latest job matches.`
   const subject = name
-    ? `${name}, ${jobs.length} New Remote Roles Are Waiting For You`
-    : `${jobs.length} New Remote Roles Are Waiting For You`
+    ? `${name}, ${jobs.length} New Job Matches Are Waiting For You`
+    : `${jobs.length} New Job Matches Are Waiting For You`
 
   const jobCards = jobs.map(job => {
     const location = Array.isArray(job.location)
-      ? job.location.map(l => typeof l === 'string' ? l : [l.city, l.state].filter(Boolean).join(', ')).filter(Boolean).join(' / ') || 'Remote'
-      : (job.location || 'Remote')
+      ? job.location.map(l => typeof l === 'string' ? l : [l.city, l.state, l.country].filter(Boolean).join(', ')).filter(Boolean).join(' / ') || 'Location not listed'
+      : (job.location || 'Location not listed')
 
     const posted = (job.datePosted || job.date_posted)
       ? new Date(job.datePosted || job.date_posted).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -56,7 +56,7 @@ function jobDigestEmail({ firstName, jobs = [] }) {
   <meta charset="utf-8">
   <meta name="x-apple-disable-message-reformatting">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>New Remote Roles For You</title>
+  <title>New Job Matches For You</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     html, body { margin:0 !important; padding:0 !important; height:100% !important; width:100% !important; }
@@ -74,7 +74,7 @@ function jobDigestEmail({ firstName, jobs = [] }) {
 <body style="background-color:#EEF4F5; margin:0; padding:0;">
 
   <div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; opacity:0;">
-    ${jobs.length} fresh remote roles matched to your profile this week.
+    ${jobs.length} current jobs matched to your profile this week.
   </div>
 
   <center role="article" aria-roledescription="email" lang="en">
