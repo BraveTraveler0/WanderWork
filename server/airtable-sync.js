@@ -1034,9 +1034,10 @@ async function sync(options = {}) {
     return results;
   } catch (error) {
     console.error('\n❌ Critical error:', error.message);
-  } finally {
-    await mongoose.connection.close();
   }
+  // Do not close the shared application connection. Standalone CLI callers
+  // terminate their own process; server callers must keep MongoDB available
+  // for API requests and scheduled email jobs.
 }
 
 // Parse command line arguments

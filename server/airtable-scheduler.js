@@ -4,15 +4,47 @@
  */
 
 const cron = require('node-cron');
+const mongoose = require('mongoose');
+const connectDB = require('./config/dbConn');
 const { sync, dedupeJobs, purgeOldJobs, expireOldApplications } = require('./airtable-sync');
 const { pairAllCandidates } = require('./services/jobPairingService');
 const { syncRecruiters } = require('./services/recruiterSyncService');
 const { runRecruiterApifyPipeline } = require('./services/apifyRecruiterService');
 const { sendWeeklyTokenEmails } = require('./services/weeklyTokenService');
+const { sendOperationalAlert } = require('./utils/operationalAlert');
 
 let isRunning = false;
 let lastSyncTime = null;
 let lastSyncStatus = null;
+
+async function checkMongoHealth() {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      console.warn(`[MongoHealth] Connection state ${mongoose.connection.readyState}; reconnecting...`);
+      await connectDB();
+      console.log('[MongoHealth] MongoDB connection restored.');
+      return;
+    }
+    await mongoose.connection.db.admin().ping();
+  } catch (error) {
+    console.error('[MongoHealth] Health check failed; attempting recovery:', error.message);
+    try {
+      await mongoose.disconnect().catch(() => {});
+      await connectDB();
+      await sendOperationalAlert(
+        'mongodb-recovered',
+        'MongoDB connection recovered automatically',
+        `The health check detected a connection failure and restored MongoDB.\n\nOriginal error: ${error.message}`
+      );
+    } catch (reconnectError) {
+      await sendOperationalAlert(
+        'mongodb-health',
+        'MongoDB connection failed',
+        `The automatic MongoDB health check could not recover.\n\n${reconnectError.stack || reconnectError.message}`
+      );
+    }
+  }
+}
 
 /**
  * Run the sync
@@ -32,6 +64,16 @@ async function runSync() {
     console.log(`${'='.repeat(60)}`);
 
     const results = await sync({ all: true });
+    const failedSections = Object.entries(results || {})
+      .filter(([key, value]) => key !== 'applicationLinks' && value === null)
+      .map(([key]) => key);
+    if (failedSections.length) {
+      await sendOperationalAlert(
+        'airtable-sync',
+        'Scheduled data sync partially failed',
+        `The following sync sections failed: ${failedSections.join(', ')}. Check Render logs for the upstream response.`
+      );
+    }
     await dedupeJobs();
     await purgeOldJobs(60);
     await expireOldApplications(30);
@@ -54,6 +96,11 @@ async function runSync() {
   } catch (error) {
     lastSyncStatus = 'error';
     console.error(`❌ Sync failed: ${error.message}`);
+    await sendOperationalAlert(
+      'scheduled-sync',
+      'Scheduled sync failed',
+      error.stack || error.message
+    );
   } finally {
     isRunning = false;
   }
@@ -150,6 +197,9 @@ function initScheduledSync() {
     runDailyDedup();
   });
 
+  // Keep the database connection healthy even when there is little web traffic.
+  const mongoHealthTask = cron.schedule('*/5 * * * *', checkMongoHealth);
+
   // Weekly free token emails — every Thursday, fires at 15:00 and 16:00 UTC
   // to cover both EST (UTC-5) and EDT (UTC-4). Only executes when Eastern time = 11 AM.
   cron.schedule('0 15,16 * * 4', () => {
@@ -165,7 +215,7 @@ function initScheduledSync() {
 
 console.log('✅ Scheduled sync initialized\n');
 
-  return { sync: task, dedup: dedupTask, recruiterApify: recruiterApifyTask };
+  return { sync: task, dedup: dedupTask, recruiterApify: recruiterApifyTask, mongoHealth: mongoHealthTask };
 }
 
 /**
@@ -195,4 +245,5 @@ module.exports = {
   runSync,
   runDailyDedup,
   runRecruiterApifySync,
+  checkMongoHealth,
 };

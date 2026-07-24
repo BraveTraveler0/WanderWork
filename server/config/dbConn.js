@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
+    if (mongoose.connection.readyState === 1) {
+        return mongoose.connection;
+    }
+
     try {
         // Set the mongoose buffering timeout before connecting
         mongoose.set('bufferTimeoutMS', 30000); // Increase from default 10000ms
@@ -47,7 +51,7 @@ const connectDB = async () => {
         return conn;
     } catch (err) {
         console.error('MongoDB connection error:', err);
-        process.exit(1);
+        throw err;
     }
 }
 
