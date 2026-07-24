@@ -159,6 +159,11 @@ async function runRecruiterApifySync() {
     console.log(`✅ Recruiter Apify sync completed in ${Math.round((new Date() - startTime) / 1000)}s`, result);
   } catch (error) {
     console.error(`❌ Recruiter Apify sync failed: ${error.message}`);
+    await sendOperationalAlert(
+      'recruiter-apify-sync',
+      'Monthly recruiter import failed',
+      error.stack || error.message
+    );
   } finally {
     isRecruiterApifyRunning = false;
   }
@@ -172,18 +177,13 @@ function isElevenAmEastern() {
 }
 
 /**
- * Initialize scheduled sync
- * Runs at the top of every hour (00 minutes)
+ * Initialize maintenance schedules. MongoDB and the direct job-source
+ * pipelines are authoritative, so the legacy full Airtable import is disabled.
  */
 function initScheduledSync() {
-  console.log('\n🕐 Initializing Airtable scheduled sync...');
-  console.log('   Schedule: Every hour (at :00)');
-  console.log('   Format: 0 * * * * (cron notation)');
-
-  // Run at minute 0 of every hour
-  const task = cron.schedule('0 * * * *', () => {
-    runSync();
-  });
+  console.log('\n🕐 Initializing maintenance schedules...');
+  console.log('   Legacy hourly Airtable import: disabled');
+  console.log('   Recruiter Apify import: monthly (first day at 06:00 UTC)');
 
 
   // Run daily dedup at 2:30 AM server time
@@ -207,9 +207,9 @@ function initScheduledSync() {
     runRecruiterApifySync();
   });
 
-console.log('✅ Scheduled sync initialized\n');
+console.log('✅ Maintenance schedules initialized\n');
 
-  return { sync: task, dedup: dedupTask, recruiterApify: recruiterApifyTask, mongoHealth: mongoHealthTask };
+  return { dedup: dedupTask, recruiterApify: recruiterApifyTask, mongoHealth: mongoHealthTask };
 }
 
 /**
@@ -220,7 +220,8 @@ function getSyncStatus() {
     isRunning,
     lastSyncTime,
     lastSyncStatus,
-    nextSync: new Date(Math.ceil(Date.now() / 3600000) * 3600000).toISOString(),
+    airtableScheduledSync: 'disabled',
+    recruiterApifySchedule: '0 6 1 * *',
   };
 }
 
