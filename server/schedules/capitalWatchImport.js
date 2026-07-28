@@ -7,6 +7,7 @@ const { topMatchesDigestEmail } = require('../utils/capitalWatchEmail')
 const { rankGrants } = require('../utils/capitalWatchScoring')
 const { getPublicAppUrl } = require('../utils/publicUrls')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
+const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
 
@@ -15,9 +16,28 @@ const SCHEDULE = '0 5 * * 3'
 
 let running = false
 
+function importWeekKey(now = new Date()) {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const day = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() - day + 1)
+  return date.toISOString().slice(0, 10)
+}
+
 async function runImport() {
   if (running) { console.log('[CapitalWatch] Already in progress, skipping.'); return }
   running = true
+  // Both production services run this cron. Claiming the week prevents a duplicate,
+  // real-money Apify/OpenAI run on the same source batch.
+  const weekKey = importWeekKey()
+  const claimed = await claimPeriod('capital_watch_import', weekKey).catch((err) => {
+    console.error('[CapitalWatch] Import claim check failed:', err.message)
+    return false
+  })
+  if (!claimed) {
+    console.log('[CapitalWatch] Import already claimed for this week by another instance, skipping.')
+    running = false
+    return
+  }
   try {
     const result = await runCapitalWatchPipeline()
 
@@ -37,6 +57,9 @@ async function runImport() {
     }
   } catch (err) {
     console.error('[CapitalWatch] Cycle error:', err.message)
+    // Let next week's run (or a manual retry) try again rather than permanently
+    // marking this week done on a failed attempt.
+    await releasePeriodClaim('capital_watch_import', weekKey).catch(() => {})
   } finally {
     running = false
   }

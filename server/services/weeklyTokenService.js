@@ -5,6 +5,7 @@ const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
 const Applications = require('../models/JobSeeker/jobSeeker.Application');
 const { weeklyTokenEmail } = require('../utils/mail.templates');
 const { getPublicAppUrl } = require('../utils/publicUrls');
+const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim');
 
 const APP_URL = getPublicAppUrl();
 const TOKEN_CAP = 30;
@@ -12,6 +13,13 @@ const LUCKY_CHANCE = 0.1;
 const LUCKY_AMOUNT = 3;
 const NORMAL_AMOUNT = 1;
 const EXPIRY_DAYS = 7;
+
+function weeklyTokenWeekKey(now = new Date()) {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  return date.toISOString().slice(0, 10);
+}
 
 async function sendWeeklyTokenEmails() {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -29,8 +37,21 @@ async function sendWeeklyTokenEmails() {
 
   let sent = 0;
   let errors = 0;
+  let skipped = 0;
+  const weekKey = weeklyTokenWeekKey();
 
   for (const candidate of eligible) {
+    if (!candidate.email) continue;
+
+    // Both production services run this scheduler. Claiming each candidate/week
+    // prevents duplicate emails (and a second instance overwriting the first
+    // instance's still-unclaimed grant token, which would break that link).
+    const claimed = await claimPeriod('weekly_token_email', `${weekKey}:${candidate._id}`);
+    if (!claimed) {
+      skipped++;
+      continue;
+    }
+
     try {
       const amount = Math.random() < LUCKY_CHANCE ? LUCKY_AMOUNT : NORMAL_AMOUNT;
       const token = crypto.randomBytes(32).toString('hex');
@@ -48,12 +69,13 @@ async function sendWeeklyTokenEmails() {
       console.log(`[WeeklyToken] Sent to ${candidate.email} (amount: ${amount})`);
     } catch (err) {
       errors++;
+      await releasePeriodClaim('weekly_token_email', `${weekKey}:${candidate._id}`);
       console.error(`[WeeklyToken] Failed for ${candidate.email}:`, err.message);
     }
   }
 
-  console.log(`[WeeklyToken] Done. Sent: ${sent}, Errors: ${errors}, Total eligible: ${eligible.length}`);
-  return { sent, errors, total: eligible.length };
+  console.log(`[WeeklyToken] Done. Sent: ${sent}, Errors: ${errors}, Skipped (already claimed): ${skipped}, Total eligible: ${eligible.length}`);
+  return { sent, errors, skipped, total: eligible.length };
 }
 
 async function claimWeeklyToken(email, token) {

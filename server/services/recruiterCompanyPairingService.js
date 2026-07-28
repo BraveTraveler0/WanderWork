@@ -1,8 +1,13 @@
 const Recruiter = require('../models/JobSeeker/jobSeeker.Recruiter')
 const Jobs = require('../models/JobSeeker/jobSeeker.Job')
 const RecruiterJobPairing = require('../models/JobSeeker/jobSeeker.RecruiterJobPairing')
+const { acquireLock } = require('../utils/schedulerClaim')
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000
+// Both production services run this interval. Without a cross-instance lock, one
+// instance's deleteMany can wipe out pairings the other just wrote (or is mid-write),
+// causing recruiter/job pairings to intermittently go empty or incomplete.
+const LOCK_TTL_MS = 20 * 60 * 1000
 let scheduledTimer = null
 let scheduleRunning = false
 
@@ -281,6 +286,11 @@ function scheduleRecruiterCompanyPairing(options = {}) {
     if (scheduleRunning) return
     scheduleRunning = true
     try {
+      const locked = await acquireLock('recruiter_company_pairing', LOCK_TTL_MS)
+      if (!locked) {
+        console.log('[RecruiterCompanyPairing] Another instance holds the lock, skipping this cycle.')
+        return
+      }
       const result = await pairRecruitersToCompanies(options)
       console.log('[RecruiterCompanyPairing]', result)
     } catch (error) {

@@ -5,6 +5,7 @@ const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { deadlineAlertEmail } = require('../utils/capitalWatchEmail')
 const { getPublicAppUrl } = require('../utils/publicUrls')
+const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
 
@@ -30,9 +31,27 @@ function daysUntil(dueDate) {
 
 let running = false
 
+function deadlineCheckDayKey(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    .toISOString()
+    .slice(0, 10)
+}
+
 async function checkDeadlines() {
   if (running) { console.log('[CapitalWatch] Deadline check already in progress, skipping.'); return }
   running = true
+  // Both production services run this cron. Claiming the day prevents both instances
+  // from independently deciding the same grant is due and double-emailing the team.
+  const dayKey = deadlineCheckDayKey()
+  const claimed = await claimPeriod('capital_watch_deadlines', dayKey).catch((err) => {
+    console.error('[CapitalWatch] Deadline claim check failed:', err.message)
+    return false
+  })
+  if (!claimed) {
+    console.log('[CapitalWatch] Deadline check already claimed for today by another instance, skipping.')
+    running = false
+    return
+  }
   try {
     const grants = await Grant.find({
       status: { $in: ['pending', 'approved'] },
@@ -73,6 +92,9 @@ async function checkDeadlines() {
     console.log(`[CapitalWatch] Deadline alert sent for ${totalDue} grant(s).`)
   } catch (err) {
     console.error('[CapitalWatch] Deadline check error:', err.message)
+    // Let tomorrow's run (or a manual retry) try again rather than permanently
+    // marking today done on a failed attempt.
+    await releasePeriodClaim('capital_watch_deadlines', dayKey).catch(() => {})
   } finally {
     running = false
   }

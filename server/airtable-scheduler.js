@@ -11,6 +11,7 @@ const { syncRecruiters } = require('./services/recruiterSyncService');
 const { runRecruiterApifyPipeline } = require('./services/apifyRecruiterService');
 const { sendWeeklyTokenEmails } = require('./services/weeklyTokenService');
 const { sendOperationalAlert } = require('./utils/operationalAlert');
+const { claimPeriod, releasePeriodClaim } = require('./utils/schedulerClaim');
 
 let isRunning = false;
 let lastSyncTime = null;
@@ -138,6 +139,10 @@ ${'='.repeat(60)}`);
 
 let isRecruiterApifyRunning = false;
 
+function recruiterApifyMonthKey(now = new Date()) {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 /**
  * Monthly recruiter pull straight from the Apify actor task (replaces the n8n relay).
  */
@@ -149,8 +154,17 @@ async function runRecruiterApifySync() {
 
   isRecruiterApifyRunning = true;
   const startTime = new Date();
+  // Both production services run this cron. Claiming the month prevents a duplicate,
+  // real-money Apify run against the same recruiter task.
+  const monthKey = recruiterApifyMonthKey();
 
   try {
+    const claimed = await claimPeriod('recruiter_apify_sync', monthKey);
+    if (!claimed) {
+      console.log('⏭️  Recruiter Apify sync already claimed for this month by another instance, skipping...');
+      return;
+    }
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`📅 Monthly Recruiter Apify Sync - ${startTime.toISOString()}`);
     console.log(`${'='.repeat(60)}`);
@@ -159,6 +173,9 @@ async function runRecruiterApifySync() {
     console.log(`✅ Recruiter Apify sync completed in ${Math.round((new Date() - startTime) / 1000)}s`, result);
   } catch (error) {
     console.error(`❌ Recruiter Apify sync failed: ${error.message}`);
+    // Let a manual retry (or next month) try again rather than permanently marking
+    // this month done on a failed attempt.
+    await releasePeriodClaim('recruiter_apify_sync', monthKey).catch(() => {});
     await sendOperationalAlert(
       'recruiter-apify-sync',
       'Monthly recruiter import failed',
