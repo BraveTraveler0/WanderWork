@@ -465,7 +465,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     const appUrl = safePublicUrl(process.env.APP_URL, 'https://wanderwork.io');
     const verificationLink = `${publicServerUrl}/auth/signup/verify?email=${encodeURIComponent(normalizedEmail)}&token=${verificationToken}`;
     const plainDisplayName = safeFirstName || normalizedEmail.split('@')[0] || 'there';
-    const displayName = escapeHtml(plainDisplayName);
+    const escapedDisplayName = escapeHtml(plainDisplayName);
     const emailMessage = {
       to: normalizedEmail,
       from: { name: 'Alice @ Wander/Work', email: process.env.EMAIL_FROM || 'support@wanderwork.io' },
@@ -483,7 +483,7 @@ const createNewUser = asyncHandler(async (req, res) => {
           <p style="margin:0;color:#FFFFFF;font-size:22px;font-weight:700;letter-spacing:4px">WANDER<span style="opacity:0.6">/</span>WORK</p>
         </td></tr>
         <tr><td style="padding:40px">
-          <p style="color:#1a1a1a;font-size:18px;font-weight:700;margin:0 0 12px">Hi ${displayName},</p>
+          <p style="color:#1a1a1a;font-size:18px;font-weight:700;margin:0 0 12px">Hi ${escapedDisplayName},</p>
           <h1 style="color:#111827;font-size:28px;line-height:1.25;font-weight:800;margin:0 0 16px">Verify your email to finish signup.</h1>
           <p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 28px">Confirm this email address so we can finish creating your Wander/Work account and start matching you with remote roles.</p>
           <div style="text-align:center;margin:0 0 28px">
