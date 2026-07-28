@@ -512,6 +512,9 @@ const createNewUser = asyncHandler(async (req, res) => {
     res.status(201).json({ user: { ...user._doc, password: undefined, token }, token, candidate });
 
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ message: 'Duplicate email' });
+    }
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
   }

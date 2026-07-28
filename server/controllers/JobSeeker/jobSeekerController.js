@@ -1215,27 +1215,27 @@ const getCandidateById = asyncHandler(async (req, res) => {
 const getJobById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) {
-        return res.statusCode(400).json({message: 'Job ID must be supplied'});
+        return res.status(400).json({message: 'Job ID must be supplied'});
     }
     try
     {
-        const results = Jobs.FindById(id);
-        if(!results?.length) {
-            return res.statusCode(400).json({message: 'No Job found.'});
+        const results = await Jobs.findById(id).lean().exec();
+        if(!results) {
+            return res.status(404).json({message: 'No Job found.'});
         }
         res.json(results);
     }
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occured when trying to collect Job ' + id});
+        res.status(500).json({message: 'An error occured when trying to collect Job ' + id});
     }
 });
 
 const getApplicationById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) {
-        return res.statusCode(400).json({message: 'Application ID must be supplied.'});
+        return res.status(400).json({message: 'Application ID must be supplied.'});
     }
     try
     {
@@ -1254,14 +1254,14 @@ const getApplicationById = asyncHandler(async (req, res) => {
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occured when trying to collect Application ' + id});
+        res.status(500).json({message: 'An error occured when trying to collect Application ' + id});
     }
 });
 
 const getCandidateJobPariringById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) {
-        return res.statusCode(400).json({message: 'A candidate+job pairing ID must be supplied.'});
+        return res.status(400).json({message: 'A candidate+job pairing ID must be supplied.'});
     }
     try
     {
@@ -1280,49 +1280,49 @@ const getCandidateJobPariringById = asyncHandler(async (req, res) => {
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occured when trying to collect Candidate+Job pairing ' + id});
+        res.status(500).json({message: 'An error occured when trying to collect Candidate+Job pairing ' + id});
     }
 });
 
 const getContactById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) {
-        return res.statusCode(400).json({message: 'A Contact ID must be supplied.'});
+        return res.status(400).json({message: 'A Contact ID must be supplied.'});
     }
     try
     {
         if (req.user?.email) return res.status(403).json({ message: 'Forbidden.' });
-        const results = Contacts.FindById(id);
-        if(!results?.length) {
-            return res.statusCode(400).json({message: 'No contact found.'});
+        const results = await Contacts.findById(id).lean().exec();
+        if(!results) {
+            return res.status(404).json({message: 'No contact found.'});
         }
         res.json(results)
     }
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occured when trying to collect Contact ' + id});
+        res.status(500).json({message: 'An error occured when trying to collect Contact ' + id});
     }
 });
 
 const getContactJobPairingById = asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id) {
-        return res.statusCode(400).json({message: 'A Contact+Job pairing ID must be supplied.'});
+        return res.status(400).json({message: 'A Contact+Job pairing ID must be supplied.'});
     }
     try
     {
         if (req.user?.email) return res.status(403).json({ message: 'Forbidden.' });
-        const results = ContactJobPairings.FindById(id);
-        if(!results?.length) {
-            return res.statusCode(400).json({message: 'No Contact+Job pairing found.'});
+        const results = await ContactJobPairings.findById(id).lean().exec();
+        if(!results) {
+            return res.status(404).json({message: 'No Contact+Job pairing found.'});
         }
         res.json(results);
     }
     catch(Error)
     {
         console.error(Error);
-        res.statusCode(500).json({message: 'An error occured when trying to collect Contact+Job Pairing ' + id});
+        res.status(500).json({message: 'An error occured when trying to collect Contact+Job Pairing ' + id});
     }
 });
 

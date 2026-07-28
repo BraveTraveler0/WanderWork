@@ -9,10 +9,13 @@ const {
     bulkUpdateQuantities,
     getMarketplaceInventory
 } = require('../controllers/inventoryController');
+const { requireAuth } = require('../middleware/requireAuth');
 
-// Routes
+// Marketplace browsing is intentionally public; everything else is account data.
 router.route('/marketplace')
     .get(getMarketplaceInventory);
+
+router.use(requireAuth);
 
 router.route('/:userId')
     .get(getUserInventory);

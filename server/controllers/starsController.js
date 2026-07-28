@@ -5,7 +5,7 @@ const getAllStars = asyncHandler(async (req, res) => {
     try {
         const users = await User.find();
 
-        if (!votes?.length) {
+        if (!users?.length) {
             return res.status(400).json({ message: 'No users found' });
         }
 
@@ -36,132 +36,148 @@ const getUserStars = asyncHandler(async (req, res) => {
     }
 });
 
+// These functions are called fire-and-forget (no await/catch) from postsController.js
+// on ordinary like/star/post/remix actions, so none of them may ever reject — an
+// uncaught rejection here crashes the whole process (Node's default unhandled-rejection
+// behavior is to exit), the same failure mode the achievements system hit.
+
 const updateUserStars = async (stars, userId) => {
-    const user = await User.findById(userId);
-    console.log("updateuserstars")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.stars) {
-        user.stars = stars;
-        console.log("update star stay the same")
-    } else {
-        user.stars += stars;
-        console.log("update star fire")
+        if (!user.stars) {
+            user.stars = stars;
+        } else {
+            user.stars += stars;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] updateUserStars failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 const reShareStarUpdate = async (userId) => {
-    const user = await User.findById(userId);
-    console.log("resharestarupdate")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.starsProgress.reShareCount) {
-        user.starsProgress.reShareCount = 1;
-    } else {
-        user.starsProgress.reShareCount += 1;
-    }
+        if (!user.starsProgress.reShareCount) {
+            user.starsProgress.reShareCount = 1;
+        } else {
+            user.starsProgress.reShareCount += 1;
+        }
 
-    if (user.starsProgress.reShareCount >= 5) {
-        user.starsProgress.reShareCount -= 5;
-        user.stars++;
-        console.log("reshare fire")
+        if (user.starsProgress.reShareCount >= 5) {
+            user.starsProgress.reShareCount -= 5;
+            user.stars++;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] reShareStarUpdate failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 const likeGiveStarUpdate = async (likes, userId) => {
-    const user = await User.findById(userId);
-    console.log("likegivestarupdate")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.starsProgress.likeGiveCount) {
-        user.starsProgress.likeGiveCount = likes;
-    } else {
-        user.starsProgress.likeGiveCount += likes;
-    }
+        if (!user.starsProgress.likeGiveCount) {
+            user.starsProgress.likeGiveCount = likes;
+        } else {
+            user.starsProgress.likeGiveCount += likes;
+        }
 
-    if (user.starsProgress.likeGiveCount >= 10) {
-        user.starsProgress.reShareCount -= 10;
-        user.stars++;
-        console.log("likegive fire")
+        if (user.starsProgress.likeGiveCount >= 10) {
+            user.starsProgress.likeGiveCount -= 10;
+            user.stars++;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] likeGiveStarUpdate failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 const likeReceiveStarUpdate = async (likes, userId) => {
-    const user = await User.findById(userId);
-    console.log("likereceivestarupdate")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.starsProgress.likeReceiveCount) {
-        user.starsProgress.likeReceiveCount = likes;
-    } else {
-        user.starsProgress.likeReceiveCount += likes;
-    }
+        if (!user.starsProgress.likeReceiveCount) {
+            user.starsProgress.likeReceiveCount = likes;
+        } else {
+            user.starsProgress.likeReceiveCount += likes;
+        }
 
-    if (user.starsProgress.likeReceiveCount >= 5) {
-        user.starsProgress.likeReceiveCount -= 5;
-        user.stars++;
-        console.log("likereceive fire")
+        if (user.starsProgress.likeReceiveCount >= 5) {
+            user.starsProgress.likeReceiveCount -= 5;
+            user.stars++;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] likeReceiveStarUpdate failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 const postStarUpdate = async (userId) => {
-    const user = await User.findById(userId);
-    console.log("poststarupdate")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.starsProgress.postCount) {
-        user.starsProgress.postCount = 1;
-    } else {
-        user.starsProgress.postCount += 1;
-    }
+        if (!user.starsProgress.postCount) {
+            user.starsProgress.postCount = 1;
+        } else {
+            user.starsProgress.postCount += 1;
+        }
 
-    if (user.starsProgress.postCount >= 3) {
-        user.starsProgress.postCount -= 3;
-        user.stars++;
-        console.log("post fire")
+        if (user.starsProgress.postCount >= 3) {
+            user.starsProgress.postCount -= 3;
+            user.stars++;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] postStarUpdate failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 const remixStarUpdate = async (userId) => {
-    const user = await User.findById(userId);
-    console.log("remixstarupdate")
+    try {
+        const user = await User.findById(userId);
 
-    if (!user) {
-        return;
-    }
+        if (!user) {
+            return;
+        }
 
-    if (!user.starsProgress.remixCount) {
-        user.starsProgress.remixCount = 1;
-    } else {
-        user.starsProgress.remixCount += 1;
-    }
+        if (!user.starsProgress.remixCount) {
+            user.starsProgress.remixCount = 1;
+        } else {
+            user.starsProgress.remixCount += 1;
+        }
 
-    if (user.starsProgress.remixCount >= 3) {
-        user.starsProgress.remixCount -= 3;
-        user.stars++;
-        console.log("remix fire")
+        if (user.starsProgress.remixCount >= 3) {
+            user.starsProgress.remixCount -= 3;
+            user.stars++;
+        }
+        await user.save();
+    } catch (error) {
+        console.error('[stars] remixStarUpdate failed (non-fatal):', error);
     }
-    await user.save();
 };
 
 module.exports = {

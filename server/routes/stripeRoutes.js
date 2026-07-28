@@ -270,11 +270,18 @@ router.post('/redeem-code', requireAuth, async (req, res) => {
       return res.status(409).json({ message: 'This code has already been redeemed on your account.' });
     }
 
+    // Atomic check-and-update: the usedPromoCodes filter guards against a concurrent
+    // duplicate request redeeming the same code twice (the earlier .includes() check
+    // above is only a fast-path, not the source of truth).
     const updated = await Candidate.findOneAndUpdate(
-      { _id: candidate._id },
+      { _id: candidate._id, usedPromoCodes: { $ne: normalizedCode } },
       { $inc: { tokenBalance: tokenQty }, $push: { usedPromoCodes: normalizedCode } },
       { new: true }
     );
+
+    if (!updated) {
+      return res.status(409).json({ message: 'This code has already been redeemed on your account.' });
+    }
 
     res.json({ tokenBalance: updated.tokenBalance, added: tokenQty });
   } catch (err) {

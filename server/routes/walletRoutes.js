@@ -1,6 +1,9 @@
 const express = require('express')
 const router = express.Router()
 const walletController = require('../controllers/walletController')
+const { requireAuth } = require('../middleware/requireAuth')
+
+router.use(requireAuth)
 
 router.route('/')
     .get(walletController.getAllWallet)

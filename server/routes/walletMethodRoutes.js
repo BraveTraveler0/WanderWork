@@ -1,6 +1,9 @@
 const express = require('express')
 const router = express.Router()
 const walletMethodControlor = require('../controllers/walletMethodController')
+const { requireAuth } = require('../middleware/requireAuth')
+
+router.use(requireAuth)
 
 router.route('/')
     .get(walletMethodControlor.getAllWalletMethod)

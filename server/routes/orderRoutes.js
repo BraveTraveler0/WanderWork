@@ -9,6 +9,9 @@ const {
     addOrderMessage,
     cancelOrder
 } = require('../controllers/orderController');
+const { requireAuth } = require('../middleware/requireAuth');
+
+router.use(requireAuth);
 
 // @route POST /orders
 // @desc Create new order

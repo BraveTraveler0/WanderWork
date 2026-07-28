@@ -473,14 +473,13 @@ const updateUserAchievementProgress = async (achievementId, userId, updateProgre
 
     // Prepare the update operation
     const updateOperation = async (session) => {
-      // Find the user and the achievement in a single query
-      const user = await User.findOne({ _id: userId, 'achievements.id': achievementId }).session(session);
+      const user = await User.findOne({ _id: userId }).session(session);
 
       if (!user) {
-        throw new Error('User or achievement not found');
+        throw new Error('User not found');
       }
 
-      const achievement = user.achievements.find((a) => a.id === achievementId);
+      let achievement = user.achievements.find((a) => a.id === achievementId);
 
       if (!achievement) {
         const fullAchievement = await Achievements.findById(achievementId).session(session);
@@ -534,7 +533,9 @@ const updateUserAchievementProgress = async (achievementId, userId, updateProgre
     if (res) {
       return res.status(500).json({ message: err.message });
     }
-    throw err;
+    // Achievement tracking is a best-effort side effect of the calling action
+    // (login, posting, liking, etc.) and must never fail or crash that action.
+    return null;
   }
 };
 

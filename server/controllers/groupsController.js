@@ -6,9 +6,11 @@ const Posts = require("../models/posts");
 const createNewGroup = asyncHandler(async (req, res) => {
   const { groupName, admins, groupBio, profimage, backimage, NSFW, tags, bgColor, title  } = req.body;
 
-  // Confirm data
-  if (!groupName || !admins || !groupBio, !profimage, !backimage, !NSFW, !tags, !bgColor, !title) {
-    return res.status(400).json({ message: 'All fields are required' });
+  // Confirm data (groupName is the only schema-required field; admins must be
+  // non-empty since a group needs at least one owner — everything else has a
+  // schema default and is legitimately optional)
+  if (!groupName || !admins?.length) {
+    return res.status(400).json({ message: 'groupName and admins are required' });
   }
 
   try {

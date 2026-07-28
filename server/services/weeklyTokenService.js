@@ -82,8 +82,15 @@ async function claimWeeklyToken(email, token) {
     return { success: false, error: 'Invalid claim link.' };
   }
 
-  const updated = await Candidates.findByIdAndUpdate(
-    candidate._id,
+  // Atomic claim: re-checking token/claimed state in the filter (not just in the
+  // earlier reads above) means a concurrent duplicate request — double-click, retry,
+  // or a replayed link — can't both pass and grant tokens twice.
+  const updated = await Candidates.findOneAndUpdate(
+    {
+      _id: candidate._id,
+      'weeklyTokenGrant.token': token,
+      'weeklyTokenGrant.claimed': false,
+    },
     {
       $inc: { tokenBalance: grant.amount },
       'weeklyTokenGrant.claimed': true,
@@ -91,6 +98,10 @@ async function claimWeeklyToken(email, token) {
     },
     { new: true }
   );
+
+  if (!updated) {
+    return { success: false, error: 'This token has already been claimed.' };
+  }
 
   const plural = grant.amount > 1;
   const surprise = plural ? ' Looks like you got lucky this week!' : '';
