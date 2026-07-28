@@ -7,9 +7,6 @@ const rateLimit = require("express-rate-limit");
 const mongoose = require('mongoose'); // Add this import
 const connectDB = require("./config/dbConn");
 const path = require('path');
-const imageRoutes = require("./routes/imagesRoutes");
-const twitterRoutes = require("./routes/twitterRoutes");
-const { initializeBots, shutdownBots } = require('./bot_accounts');
 // Import Airtable sync scheduler
 const { initScheduledSync } = require('./airtable-scheduler');
 const { scheduleRecruiterCompanyPairing } = require('./services/recruiterCompanyPairingService');
@@ -374,29 +371,9 @@ app.use(passport.session());
 
 // Route definitions
 const routes = {
-  '/tags': './routes/tagRoutes',
   '/users': './routes/userRoutes',
-  '/posts': './routes/postRoutes',
-  '/comment': './routes/commentRoutes',
-  '/crowns': './routes/achievementsRoutes',
-  '/notifications': './routes/notificationRoutes',
   '/auth': './routes/authenticationRoutes',
-  '/admin': './routes/adminSettingsRoutes',
-  '/voiting': './routes/voitingRouters',
-  '/votes': './routes/votesRouter',
-  '/wallet': './routes/walletRoutes',
-  '/walletmethod': './routes/walletMethodRoutes',
-  '/wallettransaction': './routes/walletTrasactionRoutes',
-  '/conversations': './routes/conversationRoutes',
-  '/messages': './routes/messageRoutes',
   '/stripe': './routes/stripeRoutes',
-  '/xp': './routes/xpRoutes',
-  '/codes': './routes/codeRedemptionRoutes',
-  '/groups': './routes/groupRoutes',
-  '/events': './routes/eventRoutes',
-  '/inventory': './routes/inventoryRoutes',
-  '/orders': './routes/orderRoutes',
-  '/shop-layout': './routes/shopLayoutRoutes',
   '/jobseeker': './routes/JobSeeker/jobSeekerRoute',
   '/recruiter': './routes/JobSeeker/recruiterRoute',
   '/sync': './routes/sync',
@@ -425,16 +402,10 @@ if (runsScheduledJobs) {
   console.log('[Scheduler] Disabled on this service; running in API-only mode.');
 }
 
-// Register Twitter and Image routes
-twitterRoutes(app);
-imageRoutes(app);
-//initializeBots();
-
 // Graceful shutdown handling
 const gracefulShutdown = async () => {
   console.log('Initiating graceful shutdown...');
-  await shutdownBots();
-  
+
   if (server) {
     server.close(() => {
       console.log('HTTP server closed');

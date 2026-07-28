@@ -80,7 +80,5 @@ router.route('/forgotPassword')
     .post(authenticationController.forgotPassword)
 router.route('/resetPassword')
     .post(authenticationController.resetPassword)
-router.route('/loginSocial')
-    .post(authenticationController.loginSocial)
 
 module.exports = router

@@ -5,11 +5,7 @@ const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
 const jwtUtils = require('../utils/jwtUtils')
 const { sendWelcomeEmail } = require('../utils/welcomeEmail')
 const bcrypt = require('bcrypt')
-const Achievements = require('../models/achievements')
-const { updateLightSeekerAchievement } = require('./achievementsController.js');
-const { getUserLevel } = require('./xpController.js');
 const sendEmail = require('../utils/mail.service')
-const passport = require('passport')
 const sgMail = require('@sendgrid/mail');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -168,17 +164,6 @@ async function resolveGoogleIdentity({ credential, accessToken }) {
     throw new Error('Google credential is required');
 }
 
-const _twKey = process.env.TWITTER_CONSUMER_KEY;
-const _twSecret = process.env.TWITTER_CONSUMER_SECRET;
-if (_twKey && _twKey !== 'dummy' && _twSecret && _twSecret !== 'dummy') {
-  const TwitterStrategy = require('passport-twitter').Strategy;
-  passport.use(new TwitterStrategy({
-    consumerKey: _twKey,
-    consumerSecret: _twSecret,
-    callbackURL: `${safePublicUrl(process.env.SERVER_URL, 'https://wanderwork-backend-server.onrender.com')}/api/auth/twitter/callback`,
-  }, (token, tokenSecret, profile, cb) => cb(null, profile)));
-}
-
 const login = asyncHandler(async (req, res) => {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || '');
@@ -236,7 +221,6 @@ const login = asyncHandler(async (req, res) => {
 
         // Respond with the user data (excluding the password) and the JWT
         res.json({ user: { ...user._doc, password: undefined }, token: jwtToken });
-        await updateLightSeekerAchievement(user._id);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
@@ -283,7 +267,6 @@ const googlelogin = asyncHandler(async (req, res) => {
 
         const jwtToken = jwtUtils.generateToken(user);
         res.json({ user: { ...user._doc, password: undefined }, token: jwtToken });
-        await updateLightSeekerAchievement(user._id);
     } catch (error) {
         console.error('Google login error:', error);
         res.status(500).json({ message: 'Server Error' });
@@ -352,44 +335,6 @@ const createNewUser = asyncHandler(async (req, res) => {
     // Hash password
     const hashedPwd = await bcrypt.hash(password, 15); // salt rounds
 
-    // Fetch all achievements from the database
-    const achievements = await Achievements.find().lean().exec();
-
-    // Create an array of achievements for the user
-    const userAchievements = achievements.map(({ _id, crown, goal }) => ({
-      id: _id,
-      crown,
-      goal,
-    }));
-
-    const tags = [
-        "Photography",
-        "Comics",
-        "Anime",
-        "AI Art",
-        "Film",
-        "Travel",
-        "NSFW",
-        "Painting",
-        "Video Games",
-        "Sci-Fi",
-        "Memes",
-        "Sports",
-        "History",
-        "Music",
-        "Cosplay",
-        "Concept Art",
-        "Fashion",
-        "Manga",
-        "Classical",
-        "Traditional Art",
-        "Digital Art (Non AI)",
-        "Abstract & Modeling",
-        "Cartoons",
-        "Design",
-        "Nature & Science"
-        ]
-
     const safeFirstName = cleanText(firstName || displayName || normalizedEmail.split('@')[0] || 'User');
     const safeLastName = cleanText(lastName || 'Candidate');
     const safeDisplayName = cleanText(displayName || `${safeFirstName} ${safeLastName}`) || `${safeFirstName} ${safeLastName}`.trim();
@@ -405,7 +350,7 @@ const createNewUser = asyncHandler(async (req, res) => {
       cleanText(calendlyUrl) ? { urlName: 'Calendly', urlAddress: cleanText(calendlyUrl) } : null,
     ].filter(Boolean);
 
-    const userObject = { email: normalizedEmail, password: hashedPwd, stars: 5, achievements: userAchievements, tags, displayName: safeDisplayName, profimage, backimage, ageVerified, event };
+    const userObject = { email: normalizedEmail, password: hashedPwd, displayName: safeDisplayName, profimage, backimage, ageVerified, event };
 
     // Create and store new user
     const user = await User.create(userObject);
@@ -518,15 +463,6 @@ const createNewUser = asyncHandler(async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
   }
-});
-
-const loginSocial = asyncHandler(async (req, res) => {
-    return res.status(410).json({ message: 'Legacy social login is disabled. Use Google or LinkedIn OAuth.' });
-});
-
-const twitterLogin = asyncHandler(async (req, res) => {
-      // Successful authentication, redirect home.
-      res.redirect('/');
 });
 
 const deleteUser = asyncHandler(async (req, res) => {
@@ -757,11 +693,7 @@ const startSession = asyncHandler(async (req, res) => {
 
     await user.save();
 
-    // console.log("GryphDebug: Fnished Saving User" + time.toString());
-
-    await updateLightSeekerAchievement(user._id);
-
-    return res.status(200).json({ message: 'Session Started', date: new Date(), updates: { levelUpdate: await getUserLevel(id), }, });
+    return res.status(200).json({ message: 'Session Started', date: new Date() });
 });
 
 const endSession = asyncHandler(async (req, res) => {
@@ -791,8 +723,6 @@ const endSession = asyncHandler(async (req, res) => {
 module.exports = {
     login,
     googlelogin,
-    loginSocial,
-    twitterLogin,
     createNewUser,
     deleteUser,
     forgotPassword,
