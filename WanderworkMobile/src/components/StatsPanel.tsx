@@ -693,7 +693,7 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
 
               {matchPercentage !== null && (
-                <p className="w-full text-right text-[16px] leading-6" style={{ color: '#787878' }}>
+                <p className="text-[16px] leading-6" style={{ color: '#787878' }}>
                   Match Percentage:{' '}
                   <span className="font-medium" style={{ color: '#306770' }}>{matchPercentage}%</span>
                 </p>
