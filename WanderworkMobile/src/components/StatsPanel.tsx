@@ -501,6 +501,8 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         })()
 
         const matchPercentage = (() => {
+          const CURVE_BONUS = 15
+          const MIN_DISPLAY_SCORE = 60
           const normalize = (value: unknown) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -517,9 +519,14 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             return idCandidates.has(entryId)
           })
 
+          const finalizeScore = (raw: number) => {
+            const curved = clamp(Math.round(raw) + CURVE_BONUS, 0, 100)
+            return curved >= MIN_DISPLAY_SCORE ? curved : null
+          }
+
           const rawScore = pairing?.score ?? (selectedJob as any).matchScore ?? (selectedJob as any).score
           const parsedScore = Number(rawScore)
-          if (Number.isFinite(parsedScore)) return clamp(Math.round(parsedScore), 0, 100)
+          if (Number.isFinite(parsedScore)) return finalizeScore(parsedScore)
 
           const candidateKeywords = Array.from(new Set([
             ...asStringList(firstCandidate?.skills),
@@ -534,13 +541,13 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
             asStringList((selectedJob as any).skills).join(' '),
           ].join(' '))
 
-          if (candidateKeywords.length === 0) return 70
+          if (candidateKeywords.length === 0) return finalizeScore(70)
 
           const matches = candidateKeywords.filter((kw) => kw && jobText.includes(kw)).length
           const coverage = matches / candidateKeywords.length
           const selectedSkillsCount = asStringList((selectedJob as any).skills).length
           const estimated = 45 + coverage * 45 + Math.min(5, selectedSkillsCount) * 2
-          return clamp(Math.round(estimated), 40, 95)
+          return finalizeScore(estimated)
         })()
         
         // Prefer apply_url (direct company listing) over url (aggregator page)
@@ -685,14 +692,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
               </div>
 
               {matchPercentage !== null && (
-                <div className="rounded-[12px] border border-[#DFF5EA] bg-[#F4FCF8] px-4 py-3">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: '#36BF8F' }}>
-                    Match Percentage
-                  </p>
-                  <p className="mt-1 text-[28px] font-bold leading-none" style={{ color: '#36BF8F' }}>
-                    {matchPercentage}%
-                  </p>
-                </div>
+                <p className="text-[22px] font-bold leading-none" style={{ color: '#36BF8F' }}>
+                  {matchPercentage}%
+                </p>
               )}
 
               {/* Match Reason */}
