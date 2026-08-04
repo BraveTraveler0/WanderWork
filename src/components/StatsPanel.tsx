@@ -496,7 +496,8 @@ const StatsPanel = ({ jobId, data, jobs = [], newJobsCount: liveNewJobsCount, on
         })()
 
         const matchPercentage = (() => {
-          const CURVE_BONUS = 15
+          const CURVE_BONUS = 25
+          const CURVE_MULTIPLIER = 1.1
           const MIN_DISPLAY_SCORE = 60
           const normalize = (value: unknown) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -515,7 +516,7 @@ const StatsPanel = ({ jobId, data, jobs = [], newJobsCount: liveNewJobsCount, on
           })
 
           const finalizeScore = (raw: number) => {
-            const curved = clamp(Math.round(raw) + CURVE_BONUS, 0, 100)
+            const curved = clamp(Math.round(raw * CURVE_MULTIPLIER + CURVE_BONUS), 0, 100)
             return curved >= MIN_DISPLAY_SCORE ? curved : null
           }
 
