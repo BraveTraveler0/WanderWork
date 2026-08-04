@@ -501,14 +501,46 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
         })()
 
         const matchPercentage = (() => {
-          const backendId = String((selectedJob as any).backendId || (selectedJob as any)._id || selectedJob.id || '')
-          const pairing = Array.isArray(data?.CandidateJobPairing)
-            ? data.CandidateJobPairing.find((entry: any) => String(entry?.jobId) === backendId)
-            : null
+          const normalize = (value: unknown) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+          const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+          const idCandidates = new Set([
+            String((selectedJob as any).backendId || ''),
+            String((selectedJob as any)._id || ''),
+            String((selectedJob as any).job_code || ''),
+            String((selectedJob as any).id || ''),
+          ].filter(Boolean))
+
+          const pairings = Array.isArray(data?.CandidateJobPairing) ? data.CandidateJobPairing : []
+          const pairing = pairings.find((entry: any) => {
+            const entryId = String(entry?.jobId?._id || entry?.jobId || '')
+            return idCandidates.has(entryId)
+          })
+
           const rawScore = pairing?.score ?? (selectedJob as any).matchScore ?? (selectedJob as any).score
           const parsedScore = Number(rawScore)
-          if (!Number.isFinite(parsedScore)) return null
-          return Math.max(0, Math.min(100, Math.round(parsedScore)))
+          if (Number.isFinite(parsedScore)) return clamp(Math.round(parsedScore), 0, 100)
+
+          const candidateKeywords = Array.from(new Set([
+            ...asStringList(firstCandidate?.skills),
+            ...asStringList(firstCandidate?.skills_2),
+            ...asStringList(firstCandidate?.targetRoles),
+          ].map(normalize).filter(Boolean))).slice(0, 12)
+
+          const jobText = normalize([
+            asText((selectedJob as any).title),
+            asText((selectedJob as any).company),
+            asText((selectedJob as any).description),
+            asStringList((selectedJob as any).skills).join(' '),
+          ].join(' '))
+
+          if (candidateKeywords.length === 0) return 70
+
+          const matches = candidateKeywords.filter((kw) => kw && jobText.includes(kw)).length
+          const coverage = matches / candidateKeywords.length
+          const selectedSkillsCount = asStringList((selectedJob as any).skills).length
+          const estimated = 45 + coverage * 45 + Math.min(5, selectedSkillsCount) * 2
+          return clamp(Math.round(estimated), 40, 95)
         })()
         
         // Prefer apply_url (direct company listing) over url (aggregator page)
