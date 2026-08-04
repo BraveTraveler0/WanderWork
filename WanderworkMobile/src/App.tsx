@@ -316,6 +316,35 @@ function normalizeJobUrl(url: string | undefined): string {
 }
 
 // Transform backend job data to component format
+const buildRemoteLocationPrefix = (rawLocation: unknown, normalizedLocation: string): string | null => {
+  const rawText = typeof rawLocation === 'string'
+    ? rawLocation
+    : Array.isArray(rawLocation)
+      ? rawLocation
+          .map((loc: any) => [loc?.city, loc?.state].filter(Boolean).join(', '))
+          .filter(Boolean)
+          .join(' / ')
+      : ''
+
+  const text = rawText.trim()
+  if (!text) return null
+
+  const isRemoteLike = /\b(remote|work from home|wfh|virtual|online)\b/i.test(text)
+  if (!isRemoteLike && !/^remote$/i.test(normalizedLocation)) return null
+
+  const cleanedText = text
+    .replace(/^(?:remote|work from home|wfh|virtual|online)\b[\s\-/,:]*/i, '')
+    .trim()
+
+  const onlyMatch = cleanedText.match(/([A-Za-z0-9][A-Za-z0-9 .,'-]+?)\s+only\b/i)
+  if (!onlyMatch) return null
+
+  const qualifier = onlyMatch[1].trim().replace(/^[\-/]\s*/, '').trim()
+  if (!qualifier || /^(remote|work from home|wfh|virtual|online)$/i.test(qualifier)) return null
+
+  return `Remote — ${qualifier}`
+}
+
 function transformJob(job: Job, index: number) {
   const locationString = (() => {
     const locVal: any = (job as any).location
@@ -441,15 +470,18 @@ function transformJob(job: Job, index: number) {
     return 'No description available'
   })()
 
+  const remoteLocationPrefix = buildRemoteLocationPrefix((job as any).location, locationString)
+  const descriptionWithRemoteNote = remoteLocationPrefix ? `${remoteLocationPrefix}\n\n${description}` : description
+
   const jobTitle = asText((job as any).title, 'Untitled')
-  const inferredCompany = inferCompanyName((job as any).company, description, asText((job as any).url), jobTitle)
+  const inferredCompany = inferCompanyName((job as any).company, descriptionWithRemoteNote, asText((job as any).url), jobTitle)
 
   return {
     id: index + 1,
     backendId: job._id,
     title: jobTitle,
     company: inferredCompany,
-    description,
+    description: descriptionWithRemoteNote,
     location: locationString,
     skills: (job as any).tags || (job as any).skills || [],
     hasNewBadge: isNewJob({ postedAt: dateStr }),
@@ -1875,7 +1907,7 @@ function WelcomeModal({ onClose }: { onClose: () => void }) {
           You're in. Let's get started.
         </h2>
         <p className="mt-3 text-base font-semibold leading-7 text-[#306770]">
-          Here is 100 tokens to get you started.
+          Here is 20 tokens to get you started.
         </p>
         <div className="mt-6 grid gap-3">
           {features.map((feature) => (

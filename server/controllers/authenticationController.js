@@ -377,7 +377,7 @@ const createNewUser = asyncHandler(async (req, res) => {
       resumeLink: '',
       status: 'active',
       paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      tokenBalance: 100,
+      tokenBalance: 20,
       tokensUsed: 0,
       creditsBalance: 30,
       creditsUsed: 0,

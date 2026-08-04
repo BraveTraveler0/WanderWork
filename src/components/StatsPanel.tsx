@@ -494,6 +494,17 @@ const StatsPanel = ({ jobId, data, jobs = [], newJobsCount: liveNewJobsCount, on
           }
           return fallbackMessage
         })()
+
+        const matchPercentage = (() => {
+          const backendId = String((selectedJob as any).backendId || (selectedJob as any)._id || selectedJob.id || '')
+          const pairing = Array.isArray(data?.CandidateJobPairing)
+            ? data.CandidateJobPairing.find((entry: any) => String(entry?.jobId) === backendId)
+            : null
+          const rawScore = pairing?.score ?? (selectedJob as any).matchScore ?? (selectedJob as any).score
+          const parsedScore = Number(rawScore)
+          if (!Number.isFinite(parsedScore)) return null
+          return Math.max(0, Math.min(100, Math.round(parsedScore)))
+        })()
         
         // Prefer apply_url (direct company listing) over url (aggregator page)
         const _rawApplyUrl: string = (selectedJob as any).apply_url || (selectedJob as any).applyUrl || (selectedJob as any).url || ''
@@ -628,6 +639,17 @@ const StatsPanel = ({ jobId, data, jobs = [], newJobsCount: liveNewJobsCount, on
                   <p>{asText(selectedJob.location, 'Remote')}</p>
                 </div>
               </div>
+
+              {matchPercentage !== null && (
+                <div className="rounded-[12px] border border-[#DFF5EA] bg-[#F4FCF8] px-4 py-3">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.14em]" style={{ color: '#36BF8F' }}>
+                    Match Percentage
+                  </p>
+                  <p className="mt-1 text-[28px] font-bold leading-none" style={{ color: '#36BF8F' }}>
+                    {matchPercentage}%
+                  </p>
+                </div>
+              )}
 
               {/* Match Reason */}
               {(() => {
