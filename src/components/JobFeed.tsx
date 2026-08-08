@@ -1054,7 +1054,7 @@ const isRealLocation = (loc: string): boolean => {
 
 // ---------------------------------------------------------------------------
 // Lightweight client-side cluster classifier — mirrors server roleOntology IDs
-// so affinity scores align with the matching algorithm's 20 clusters.
+// so affinity scores align with the matching algorithm.
 // Ordered most-specific first to avoid mis-classifications.
 // ---------------------------------------------------------------------------
 const CLUSTER_PATTERNS: Array<{ id: string; re: RegExp }> = [
@@ -1071,7 +1071,8 @@ const CLUSTER_PATTERNS: Array<{ id: string; re: RegExp }> = [
   { id: 'backend',         re: /\b(back[\s-]?end|backend|software[\s-]?engineer|software[\s-]?developer|api[\s-]?engineer|systems[\s-]?engineer|python[\s-]?developer|java[\s-]?developer|ruby[\s-]?developer|go[\s-]?developer|node[\s-]?developer)\b/i },
   { id: 'content_writing', re: /\b(content[\s-]?writ(?:er|ing)|copywriter|copywriting|technical[\s-]?writ(?:er|ing)|journalist|communications?[\s-]+(?:manager|director|specialist))\b/i },
   { id: 'marketing',       re: /\b(marketing[\s-]+(?:manager|director|specialist|analyst|strategist)|brand[\s-]?manager|growth[\s-]+(?:market|hacker)|demand[\s-]?gen|seo[\s-]?specialist|social[\s-]?media[\s-]+(?:manager|specialist)|product[\s-]?market(?:er|ing))\b/i },
-  { id: 'product_mgmt',    re: /\b(product[\s-]?manager|product[\s-]?management|program[\s-]?manager|product[\s-]?owner|product[\s-]?lead|head[\s-]?of[\s-]?product|vp[\s-]+(?:of[\s-]+)?product)\b/i },
+  { id: 'project_ops',     re: /\b(project[\s-]+(?:manager|coordinator|administrator|management)|program[\s-]+(?:manager|coordinator|administrator|management)|operations?[\s-]+(?:manager|coordinator|specialist|analyst|director|lead|management)|business[\s-]?operations|people[\s-]?operations|chief[\s-]?of[\s-]?staff|scrum[\s-]?master|pmo|operations)\b/i },
+  { id: 'product_mgmt',    re: /\b(product[\s-]?manager|product[\s-]?management|product[\s-]?owner|product[\s-]?lead|head[\s-]?of[\s-]?product|vp[\s-]+(?:of[\s-]+)?product)\b/i },
   { id: 'accounting',      re: /\b(accountant|bookkeeper|controller|auditor|accounts?[\s-]+(?:payable|receivable)|payroll[\s-]?specialist|tax[\s-]+(?:accountant|specialist|analyst))\b/i },
   { id: 'finance',         re: /\b(financial?[\s-]+(?:analyst|advisor|planner|director)|investment[\s-]+(?:analyst|banker)|portfolio[\s-]?manager|risk[\s-]?analyst|treasury|actuary|quant(?:itative)?[\s-]+analyst)\b/i },
   { id: 'technical_sales', re: /\b(solutions?[\s-]?engineer|sales[\s-]?engineer|customer[\s-]?success|account[\s-]?manager|client[\s-]?success|implementation[\s-]+(?:engineer|specialist)|technical[\s-]?account)\b/i },
@@ -1087,6 +1088,9 @@ function _detectCluster(title: string): string | null {
   }
   return null
 }
+
+const ENGINEERING_CLUSTERS = new Set(['frontend', 'fullstack', 'backend', 'platform', 'data_ml', 'mobile'])
+const ENGINEERING_SKILL_RE = /\b(javascript|typescript|python|java|golang|rust|ruby|php|swift|swiftui|kotlin|react|angular|vue|node(?:\.js)?|django|rails|spring|sql|postgres(?:ql)?|mysql|mongodb|aws|azure|gcp|docker|kubernetes|terraform|devops|git|rest api|graphql|machine learning|data engineering|software development|web development|react native|flutter)\b|c\+\+|c#/i
 
 const LOW_LEVEL_JOB_RE = /\b(junior|jr|entry level|intern|internship|apprentice|apprenticeship|trainee|new grad|new graduate|early career|campus|student|co op|fellowship)\b/
 
@@ -1313,6 +1317,38 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const candidate = data?.Candidates?.[0]
   const candidateId = candidate?._id
   const candidateLevel = useMemo(() => candidateSeniorityLevel(candidate), [candidate])
+  const candidateRoleCluster = useMemo(() => {
+    const roles = Array.isArray(candidate?.targetRoles)
+      ? candidate.targetRoles
+      : String(candidate?.targetRoles || '').split(',')
+    for (const role of roles) {
+      const cluster = _detectCluster(String(role))
+      if (cluster) return cluster
+    }
+    return null
+  }, [candidate?.targetRoles])
+  const candidateHasEngineeringSkills = useMemo(() => {
+    const skillFields = [
+      candidate?.skills,
+      candidate?.skills_2,
+      candidate?.inferredSkills,
+      candidate?.inferred_skills,
+      candidate?.extractedSkills,
+      candidate?.extracted_skills,
+    ]
+    const skillText = skillFields
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .filter(Boolean)
+      .join(' ')
+    return ENGINEERING_SKILL_RE.test(skillText)
+  }, [
+    candidate?.skills,
+    candidate?.skills_2,
+    candidate?.inferredSkills,
+    candidate?.inferred_skills,
+    candidate?.extractedSkills,
+    candidate?.extracted_skills,
+  ])
   const userCountry = useMemo(() => detectUserCountry(candidate?.location?.[0]), [candidate?.location?.[0]])
   const candidateKeywords = useMemo(() => {
     const values: string[] = []
@@ -1412,6 +1448,19 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     ])
   }, [data?.Applications, data?.CandidateJobPairing, candidateId])
 
+  const pairedJobIds = useMemo(() => {
+    const pairings = Array.isArray(data?.CandidateJobPairing) ? data!.CandidateJobPairing : []
+    return new Set(
+      pairings
+        .filter((pairing: any) =>
+          pairing?.jobId &&
+          Number(pairing?.score || 0) >= 10 &&
+          (!candidateId || String(pairing?.candidateId) === String(candidateId))
+        )
+        .map((pairing: any) => String(pairing.jobId))
+    )
+  }, [data?.CandidateJobPairing, candidateId])
+
   // Build search text for every job once — shared by matchedSet and keyword filter
   const jobSearchTexts = useMemo(() => {
     const map = new Map<number, { txt: string; tokens: Set<string> }>()
@@ -1428,7 +1477,18 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     const set = new Set<number>()
     for (const job of visibleJobsList) {
       if (candidateLevel >= 3 && isLowLevelJobForSeniorFilter(job)) continue
-      if (candidateKeywords.length > 0) {
+      const backendId = String(job.backendId)
+
+      if (candidateRoleCluster === 'project_ops') {
+        const jobCluster = _detectCluster(job.title)
+        if (jobCluster && ENGINEERING_CLUSTERS.has(jobCluster) && !candidateHasEngineeringSkills) continue
+      }
+
+      // Structured server pairings are authoritative. Resume keyword matching
+      // is only a fallback while a candidate has no generated pairings yet.
+      if (pairedJobIds.size > 0) {
+        if (matchedJobIds.has(backendId)) set.add(job.id)
+      } else if (candidateKeywords.length > 0) {
         const entry = jobSearchTexts.get(job.id)
         if (!entry) continue
         const { txt, tokens } = entry
@@ -1442,12 +1502,12 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
           return parts.length === 1 ? tokens.has(kw) : txt.includes(kw)
         })
         if (hit) set.add(job.id)
-      } else if (matchedJobIds.has(String(job.backendId))) {
+      } else if (matchedJobIds.has(backendId)) {
         set.add(job.id)
       }
     }
     return set
-  }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts, candidateLevel])
+  }, [visibleJobsList, candidateKeywords, matchedJobIds, pairedJobIds, jobSearchTexts, candidateLevel, candidateRoleCluster, candidateHasEngineeringSkills])
 
   const { visibleJobs, exactSearchCount } = useMemo(() => {
     const searchTerms = searchQuery.trim() ? _normSearch(searchQuery).split(' ').filter(Boolean) : []

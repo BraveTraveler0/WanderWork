@@ -265,7 +265,7 @@ function buildReasons(params) {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MIN_SCORE = 40
-const ALGORITHM_VERSION = 'structured-v3'
+const ALGORITHM_VERSION = 'structured-v4'
 
 // jobPrecomp = { text, tokens, titleNorm, skillsNorm, cluster }
 // expandedSkills = expandSkillsWithAliases(candSkills) — precomputed per candidate

@@ -292,10 +292,12 @@ export function getPairedRecruiters(
   candidateId: string,
   limit = 50,
   company?: string,
+  specialty?: string,
   init?: RequestInit & { signal?: AbortSignal }
 ): Promise<{ specialties: string[]; recruiters: RecruiterRecord[] }> {
   const params = new URLSearchParams({ candidateId, limit: String(limit) })
   if (company) params.set('company', company)
+  if (specialty) params.set('specialty', specialty)
   return fetchJson(`/recruiter/paired?${params}`, init);
 }
 

@@ -417,6 +417,11 @@ const SPECIALTY_RULES = [
   },
 ]
 
+const RECRUITER_SPECIALTIES = new Set([
+  ...SPECIALTY_RULES.map(({ specialty }) => specialty),
+  'general',
+])
+
 function inferSpecialties(candidate) {
   const text = [
     ...(candidate?.targetRoles || []),
@@ -449,15 +454,20 @@ function inferSpecialties(candidate) {
 // Returns recruiters matching the candidate's specialty that they haven't
 // been paired with before. Optional `company` param filters by recruiter company.
 const getPairedRecruiters = asyncHandler(async (req, res) => {
-  const { candidateId, limit = 50, company } = req.query
+  const { candidateId, limit = 50, company, specialty } = req.query
   if (!candidateId) return res.status(400).json({ message: 'candidateId required' })
+
+  const requestedSpecialty = String(specialty || '').trim().toLowerCase()
+  if (requestedSpecialty && !RECRUITER_SPECIALTIES.has(requestedSpecialty)) {
+    return res.status(400).json({ message: 'Invalid recruiter specialty' })
+  }
 
   const [candidate, contacted] = await Promise.all([
     requireCandidateOwner(req, candidateId),
     RecruiterContact.find({ candidateId }).select('recruiterId').lean(),
   ])
 
-  const specialties = inferSpecialties(candidate)
+  const specialties = requestedSpecialty ? [requestedSpecialty] : inferSpecialties(candidate)
   const contactedIds = contacted.map((c) => c.recruiterId)
 
   if (company) {
@@ -470,7 +480,7 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
 
   const isGeneral = specialties.length === 1 && specialties[0] === 'general'
   const lim = Number(limit)
-  const specialtySlots = isGeneral ? 0 : Math.round(lim * 0.7)
+  const specialtySlots = requestedSpecialty ? lim : (isGeneral ? 0 : Math.round(lim * 0.7))
   const generalSlots   = lim - specialtySlots
   const baseFilter = { email: { $nin: [null, ''] }, status: 'active' }
 
@@ -478,11 +488,14 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
     specialtySlots > 0
       ? Recruiter.find({ ...baseFilter, specialty: { $in: specialties } }).sort({ score: -1 }).limit(specialtySlots * 2).lean()
       : Promise.resolve([]),
-    Recruiter.find({ ...baseFilter, specialty: 'general' }).sort({ score: -1 }).limit(generalSlots * 2).lean(),
+    generalSlots > 0
+      ? Recruiter.find({ ...baseFilter, specialty: 'general' }).sort({ score: -1 }).limit(generalSlots * 2).lean()
+      : Promise.resolve([]),
   ])
 
   const seen = new Set()
   const pick = (pool, slots) => {
+    if (slots <= 0) return []
     const out = []
     for (const r of pool) {
       const key = r.email?.toLowerCase().trim()

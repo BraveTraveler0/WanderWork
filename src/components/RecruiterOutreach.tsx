@@ -23,15 +23,39 @@ const FADE_MS = 500
 const SPECIALTY_LABELS: Record<string, string> = {
   tech: 'Tech',
   creative: 'Creative & Design',
+  product: 'Product & Project',
+  data: 'Data & AI',
+  sales: 'Sales & Customer Success',
+  operations: 'Operations & HR',
+  finance: 'Finance & Accounting',
   business: 'Business',
   healthcare: 'Healthcare',
   legal: 'Legal',
   general: 'General',
 }
 
+const SPECIALTY_OPTIONS = [
+  'operations',
+  'tech',
+  'creative',
+  'product',
+  'data',
+  'sales',
+  'finance',
+  'business',
+  'healthcare',
+  'legal',
+  'general',
+]
+
 const SPECIALTY_COLORS: Record<string, { bg: string; text: string }> = {
   tech:       { bg: '#EEF4FF', text: '#3B6FD4' },
   creative:   { bg: '#FFF4EE', text: '#C45A1A' },
+  product:    { bg: '#F4F0FF', text: '#6546A8' },
+  data:       { bg: '#EAF8F8', text: '#237A7A' },
+  sales:      { bg: '#FFF7E6', text: '#9A6500' },
+  operations: { bg: '#EEF7F1', text: '#287044' },
+  finance:    { bg: '#F1F5F9', text: '#41556B' },
   business:   { bg: '#F0FAF4', text: '#2A7A50' },
   healthcare: { bg: '#FFF0F5', text: '#B0386A' },
   legal:      { bg: '#F5F0FF', text: '#6B3AB0' },
@@ -134,6 +158,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   const effectiveLimit = dailyLimit ?? DAILY_LIMIT
   const [loading, setLoading] = useState(true)
   const [specialties, setSpecialties] = useState<string[]>([])
+  const [selectedSpecialty, setSelectedSpecialty] = useState('')
   const [recruiters, setRecruiters] = useState<RecruiterRecord[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [fadingOutIds, setFadingOutIds] = useState<Set<string>>(new Set())
@@ -147,9 +172,11 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   // Load paired recruiters + contact history on mount
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
+    setRecruiters([])
 
     Promise.all([
-      getPairedRecruiters(candidateId, 50, company),
+      getPairedRecruiters(candidateId, 50, company, selectedSpecialty),
       getRecruiterContactHistory(candidateId).catch(() => []),
     ]).then(([{ specialties, recruiters }, contacts]) => {
       if (cancelled) return
@@ -175,10 +202,21 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
         .filter((e) => e.recruiter?._id)
       setSentList(past)
       setLoading(false)
-    }).catch(() => { if (!cancelled) setLoading(false) })
+    }).catch(() => {
+      if (cancelled) return
+      setErrorMsg('Unable to load recruiters right now. Please try again.')
+      setLoading(false)
+    })
 
     return () => { cancelled = true }
-  }, [candidateId, company])
+  }, [candidateId, company, selectedSpecialty])
+
+  const handleSpecialtyChange = (specialty: string) => {
+    setSelectedIds(new Set())
+    setErrorMsg('')
+    setLoading(true)
+    setSelectedSpecialty(specialty)
+  }
 
   // Clean up timers on unmount
   useEffect(() => () => { fadeTimers.current.forEach(clearTimeout) }, [])
@@ -291,12 +329,40 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
                 {SPECIALTY_LABELS[s] ?? s}
               </span>
             ))}
-            <span style={{ color: 'rgba(180,215,220,0.75)', fontSize: 11 }}>matched to your profile</span>
+            <span style={{ color: 'rgba(180,215,220,0.75)', fontSize: 11 }}>
+              {selectedSpecialty ? 'selected category' : 'matched to your profile'}
+            </span>
           </div>
         </div>
 
         {/* Intro */}
         <div className="px-7 pt-6 pb-4 flex-shrink-0">
+          {!company && (
+            <div className="mb-4">
+              <label htmlFor="recruiter-specialty" className="block text-[12px] font-semibold mb-1.5" style={{ color: '#333' }}>
+                Recruiter category
+              </label>
+              <div className="relative">
+                <select
+                  id="recruiter-specialty"
+                  value={selectedSpecialty}
+                  onChange={(e) => handleSpecialtyChange(e.target.value)}
+                  className="w-full h-11 appearance-none rounded-[8px] border border-[#D9E2E4] bg-white pl-3.5 pr-10 text-[13px] font-medium text-[#26383B] outline-none focus:border-[#306770]"
+                >
+                  <option value="">Best match for my profile</option>
+                  {SPECIALTY_OPTIONS.map((specialty) => (
+                    <option key={specialty} value={specialty}>{SPECIALTY_LABELS[specialty]}</option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: '#306770' }}
+                />
+              </div>
+            </div>
+          )}
           <p className="text-[13px] leading-[1.65]" style={{ color: '#555' }}>
             Select recruiters below and we will send personalized draft emails to your inbox. Nothing is sent to recruiters from WanderWork.
           </p>

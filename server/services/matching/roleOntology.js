@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Role Ontology
 // ---------------------------------------------------------------------------
-// Defines 20 role clusters, how to detect them from a job/candidate title,
+// Defines role clusters, how to detect them from a job/candidate title,
 // and graded distances between clusters (0 = same, 5 = hard block).
 //
 // Detection order matters — more-specific patterns come before catch-alls so
@@ -227,12 +227,40 @@ const CLUSTERS = [
   },
 
   // ── Product Management ───────────────────────────────────────────────────
+  // Project and operations management is distinct from product management.
+  // Keep this first so "program manager" is classified here.
+  {
+    id: 'project_ops',
+    label: 'Project / Program / Operations Management',
+    patterns: [
+      /\bproject\s+manager\b/i,
+      /\bproject\s+coordinator\b/i,
+      /\bproject\s+administrator\b/i,
+      /\bprogram\s+manager\b/i,
+      /\bprogram\s+coordinator\b/i,
+      /\bprogram\s+administrator\b/i,
+      /\boperations\s+manager\b/i,
+      /\boperations\s+coordinator\b/i,
+      /\boperations\s+specialist\b/i,
+      /\boperations\s+analyst\b/i,
+      /\boperations\s+director\b/i,
+      /\boperations\s+lead\b/i,
+      /\bbusiness\s+operations\b/i,
+      /\bpeople\s+operations\b/i,
+      /\bchief\s+of\s+staff\b/i,
+      /\bproject\s+management\b/i,
+      /\bprogram\s+management\b/i,
+      /\boperations\s+management\b/i,
+      /\bpmo\b/i,
+      /\bscrum\s+master\b/i,
+      /\boperations\b/i,
+    ],
+  },
   {
     id: 'product_mgmt',
     label: 'Product Management',
     patterns: [
       /\bproduct\s+manager\b/i,
-      /\bprogram\s+manager\b/i,
       /\bproduct\s+lead\b/i,
       /\bgroup\s+product\s+manager\b/i,
       /\bprincipal\s+product\s+manager\b/i,
@@ -623,6 +651,28 @@ const RAW_DISTANCES = {
     brand_creative: 4,
     legal: 5,
     admin: 5,
+  },
+  project_ops: {
+    admin: 1,
+    product_mgmt: 2,
+    technical_sales: 4,
+    accounting: 4,
+    finance: 4,
+    legal: 4,
+    sales: 4,
+    ux_design: 5,
+    ui_visual: 5,
+    design_systems: 5,
+    design_content: 5,
+    brand_creative: 5,
+    frontend: 3,
+    fullstack: 3,
+    backend: 3,
+    platform: 3,
+    data_ml: 3,
+    mobile: 3,
+    marketing: 5,
+    content_writing: 5,
   },
   accounting: {
     finance: 2,
