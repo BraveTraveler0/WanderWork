@@ -1,4 +1,10 @@
 {
+  "redirects": [
+    { "source": "/privacy.html", "destination": "/privacy", "permanent": true },
+    { "source": "/support.html", "destination": "/support", "permanent": true },
+    { "source": "/terms.html", "destination": "/terms", "permanent": true },
+    { "source": "/about.html", "destination": "/about", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/about", "destination": "https://wanderwork-backend-server.onrender.com/about" },
     { "source": "/privacy", "destination": "https://wanderwork-backend-server.onrender.com/privacy" },
@@ -10,10 +16,6 @@
     { "source": "/sitemaps/:path*", "destination": "https://wanderwork-backend-server.onrender.com/sitemaps/:path*" },
     { "source": "/feeds/:path*", "destination": "https://wanderwork-backend-server.onrender.com/feeds/:path*" },
     { "source": "/jobs/:path*", "destination": "https://wanderwork-backend-server.onrender.com/jobs/:path*" },
-    { "source": "/privacy.html", "destination": "/privacy", "permanent": true },
-    { "source": "/support.html", "destination": "/support", "permanent": true },
-    { "source": "/terms.html", "destination": "/terms", "permanent": true },
-    { "source": "/about.html", "destination": "/about", "permanent": true },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

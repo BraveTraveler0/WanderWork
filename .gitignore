@@ -39,3 +39,4 @@ server/development.env
 *.njsproj
 *.sln
 *.sw?
+.vercel
