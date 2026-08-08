@@ -4,6 +4,12 @@
 /terms https://wanderwork-backend-server.onrender.com/terms 200
 /support https://wanderwork-backend-server.onrender.com/support 200
 
+# Redirect .html variants to canonical paths
+/privacy.html /privacy 301
+/support.html /support 301
+/terms.html /terms 301
+/about.html /about 301
+
 # Dynamic SEO routes — sitemaps and feeds from Express
 /sitemap.xml https://wanderwork-backend-server.onrender.com/sitemap.xml 200
 /sitemaps/* https://wanderwork-backend-server.onrender.com/sitemaps/:splat 200

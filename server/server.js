@@ -402,6 +402,29 @@ if (runsScheduledJobs) {
   console.log('[Scheduler] Disabled on this service; running in API-only mode.');
 }
 
+app.use((req, res) => {
+  res.status(404).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Not Found | WanderWork</title>
+  <meta name="robots" content="noindex"/>
+  <style>body{font-family:system-ui,sans-serif;background:#f4f6f7;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+  .box{background:#fff;border-radius:20px;padding:48px;text-align:center;max-width:480px;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+  h1{color:#306770;font-size:22px;font-weight:800;margin-bottom:12px}p{color:#6b7280;font-size:14px;margin-bottom:24px}
+  a{display:inline-block;background:#306770;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px}</style>
+</head>
+<body>
+<div class="box">
+  <h1>WANDER/WORK</h1>
+  <p>The page you requested was not found. Browse our latest remote jobs below.</p>
+  <a href="${process.env.APP_URL || 'https://wanderwork.io'}">Browse Remote Jobs</a>
+</div>
+</body>
+</html>`);
+});
+
 // Graceful shutdown handling
 const gracefulShutdown = async () => {
   console.log('Initiating graceful shutdown...');

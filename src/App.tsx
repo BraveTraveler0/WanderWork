@@ -746,11 +746,20 @@ function App() {
   }, [showLogin, showSignup])
 
   // SEO: update document title and robots meta based on current page/auth state.
-  // Private pages (dashboard, settings, auth screens) get noindex so Google doesn't
-  // waste crawl budget on login walls or personal data views.
+  // Private pages (dashboard when authenticated, settings, auth screens) get noindex
+  // so Google doesn't waste crawl budget on login walls or personal data views.
   useEffect(() => {
+    const path = window.location.pathname
+    const isPublicJobPage = path === '/remote-jobs' || path === '/digital-nomad-jobs' || path === '/work-from-home-jobs' || path === '/ai-job-search' || path === '/resume-cover-letter-ai'
+    const publicTitle = (() => {
+      if (path === '/digital-nomad-jobs') return 'Digital Nomad Jobs — Remote Work & Travel-Friendly Roles | WanderWork'
+      if (path === '/work-from-home-jobs') return 'Work From Home Jobs — Remote Roles | WanderWork'
+      if (path === '/ai-job-search') return 'AI Job Search — Remote Job Matching | WanderWork'
+      if (path === '/resume-cover-letter-ai') return 'AI Resume Builder & Cover Letter Generator | WanderWork'
+      return 'Remote Jobs — Fresh Remote Job Listings | WanderWork'
+    })()
     const PAGE_META: Partial<Record<string, { title: string; noindex?: boolean }>> = {
-      dashboard:      { title: 'Dashboard | WanderWork', noindex: true },
+      dashboard:      { title: 'Dashboard | WanderWork', noindex: !!_token },
       settings:       { title: 'Settings | WanderWork', noindex: true },
       profile:        { title: 'My Profile | WanderWork', noindex: true },
       messages:       { title: 'Messages | WanderWork', noindex: true },
@@ -770,6 +779,8 @@ function App() {
       ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: false }
       : effectivePage === '__auth__'
       ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: true }
+      : isPublicJobPage
+      ? { title: publicTitle, noindex: false }
       : (PAGE_META[effectivePage] ?? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: false })
 
     document.title = meta.title
@@ -1435,7 +1446,13 @@ function App() {
       {/* Full-width sticky header */}
       <div className="sticky top-0 z-50 w-full" style={{ background: 'rgba(249,250,251,0.82)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)', borderBottom: '1px solid rgba(220,224,230,0.8)' }}>
         <header className="max-w-[1460px] mx-auto px-4 sm:px-6 flex items-center justify-between py-4">
-          <h1 className="font-bold text-[16px] sm:text-[24px] tracking-[1.6px] sm:tracking-[3.6px] shrink-0" style={{ color: '#306770', fontFamily: 'Manrope' }}>
+          <h1
+            onClick={() => navigateBack()}
+            className="font-bold text-[16px] sm:text-[24px] tracking-[1.6px] sm:tracking-[3.6px] shrink-0 cursor-pointer"
+            style={{ color: '#306770', fontFamily: 'Manrope', background: 'none', border: 'none', padding: 0 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
             {logoText.length <= 6 ? logoText : 'WANDER'}
             {logoText.length >= 7 && <span style={{ opacity: 0.45 }}>/</span>}
             {logoText.length > 7 ? logoText.slice(7) : ''}
