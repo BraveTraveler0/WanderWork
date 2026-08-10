@@ -12,6 +12,7 @@ const Applications = require('../../models/JobSeeker/jobSeeker.Application.js');
 const CandidateJobPairings = require('../../models/JobSeeker/jobSeeker.CandidateJobPairing.js');
 const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPairing.js');
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
+const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides');
 
 function textValue(value) {
     if (value == null) return '';
@@ -962,7 +963,7 @@ const PLAN_MAX_CONTACTS = { free: 10, upgraded: 20, premium: 30 }
 // to a single candidate, without touching the DB. Keeps reads (e.g. a logged-in
 // user's own dashboard) from showing a stale pre-refill count.
 function withEffectiveRecruiterContacts(c) {
-    const max = PLAN_MAX_CONTACTS[c.plan || 'free'] || 10
+    const max = getRecruiterContactsMaxOverride(c.email) ?? (PLAN_MAX_CONTACTS[c.plan || 'free'] || 10)
     const left = c.recruiterContactsLeft ?? max
     const updatedAt = c.recruiterContactsUpdatedAt ? new Date(c.recruiterContactsUpdatedAt).getTime() : 0
     const daysElapsed = Math.floor((Date.now() - updatedAt) / 86400000)

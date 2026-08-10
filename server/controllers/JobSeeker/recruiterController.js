@@ -9,13 +9,18 @@ const {
   getRecruitersForCompany,
   pairRecruitersToCompanies,
 } = require('../../services/recruiterCompanyPairingService')
+const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides')
 
 // ── Daily recruiter contact limits ───────────────────────────────────────────
 const PLAN_MAX = { free: 10, upgraded: 20, premium: 30 }
 
+function planMaxFor(candidate) {
+  return getRecruiterContactsMaxOverride(candidate.email) ?? (PLAN_MAX[candidate.plan || 'free'] || 10)
+}
+
 // Computes effective recruiterContactsLeft without touching the DB — use for reads.
 function computeRecruiterContacts(candidate) {
-  const max = PLAN_MAX[candidate.plan || 'free'] || 10
+  const max = planMaxFor(candidate)
   const left = candidate.recruiterContactsLeft ?? max
   const updatedAt = candidate.recruiterContactsUpdatedAt ?? new Date(0)
   const daysElapsed = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
@@ -26,7 +31,7 @@ function computeRecruiterContacts(candidate) {
 async function refillRecruiterContacts(candidateId) {
   const candidate = await CandidateModel.findById(candidateId).lean()
   if (!candidate) return null
-  const max = PLAN_MAX[candidate.plan || 'free'] || 10
+  const max = planMaxFor(candidate)
   const left = candidate.recruiterContactsLeft ?? max
   const updatedAt = candidate.recruiterContactsUpdatedAt ?? new Date(0)
   const daysElapsed = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
