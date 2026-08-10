@@ -897,7 +897,7 @@ const getEverything = asyncHandler(async (req, res) => {
 const getAllCandidates = asyncHandler(async (req, res) => {
     if (req.user?.email) {
         const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }).lean().exec();
-        return res.json(candidate ? [candidate] : []);
+        return res.json(candidate ? [withEffectiveRecruiterContacts(candidate)] : []);
     }
     const results = await getAllCandidatesPure();
     res.json(results);
@@ -958,17 +958,21 @@ const getAllContactJobPairings = asyncHandler(async (req, res) => {
 
 const PLAN_MAX_CONTACTS = { free: 10, upgraded: 20, premium: 30 }
 
+// Applies the same day-based recruiter-contact refill used by getAllCandidatesPure
+// to a single candidate, without touching the DB. Keeps reads (e.g. a logged-in
+// user's own dashboard) from showing a stale pre-refill count.
+function withEffectiveRecruiterContacts(c) {
+    const max = PLAN_MAX_CONTACTS[c.plan || 'free'] || 10
+    const left = c.recruiterContactsLeft ?? max
+    const updatedAt = c.recruiterContactsUpdatedAt ? new Date(c.recruiterContactsUpdatedAt).getTime() : 0
+    const daysElapsed = Math.floor((Date.now() - updatedAt) / 86400000)
+    const effectiveLeft = Math.min(left + daysElapsed, max)
+    return { ...c, recruiterContactsLeft: effectiveLeft, recruiterContactsMax: max }
+}
+
 async function getAllCandidatesPure() {
     const candidates = await Candidates.find().lean().exec()
-    const now = Date.now()
-    return candidates.map((c) => {
-        const max = PLAN_MAX_CONTACTS[c.plan || 'free'] || 10
-        const left = c.recruiterContactsLeft ?? max
-        const updatedAt = c.recruiterContactsUpdatedAt ? new Date(c.recruiterContactsUpdatedAt).getTime() : 0
-        const daysElapsed = Math.floor((now - updatedAt) / 86400000)
-        const effectiveLeft = Math.min(left + daysElapsed, max)
-        return { ...c, recruiterContactsLeft: effectiveLeft, recruiterContactsMax: max }
-    })
+    return candidates.map(withEffectiveRecruiterContacts)
 }
 
 // Fields the UI actually needs — excludes raw scraper blobs and vendor internals
