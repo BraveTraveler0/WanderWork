@@ -13,6 +13,7 @@ const CandidateJobPairings = require('../../models/JobSeeker/jobSeeker.Candidate
 const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPairing.js');
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
 const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides');
+const { easternDaysElapsed } = require('../../utils/easternDayReset');
 
 function textValue(value) {
     if (value == null) return '';
@@ -965,8 +966,8 @@ const PLAN_MAX_CONTACTS = { free: 10, upgraded: 20, premium: 30 }
 function withEffectiveRecruiterContacts(c) {
     const max = getRecruiterContactsMaxOverride(c.email) ?? (PLAN_MAX_CONTACTS[c.plan || 'free'] || 10)
     const left = c.recruiterContactsLeft ?? max
-    const updatedAt = c.recruiterContactsUpdatedAt ? new Date(c.recruiterContactsUpdatedAt).getTime() : 0
-    const daysElapsed = Math.floor((Date.now() - updatedAt) / 86400000)
+    const updatedAt = c.recruiterContactsUpdatedAt ? new Date(c.recruiterContactsUpdatedAt) : new Date(0)
+    const daysElapsed = easternDaysElapsed(updatedAt)
     const effectiveLeft = Math.min(left + daysElapsed, max)
     return { ...c, recruiterContactsLeft: effectiveLeft, recruiterContactsMax: max }
 }

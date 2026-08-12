@@ -10,8 +10,11 @@ const {
   pairRecruitersToCompanies,
 } = require('../../services/recruiterCompanyPairingService')
 const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides')
+const { easternDaysElapsed } = require('../../utils/easternDayReset')
 
 // ── Daily recruiter contact limits ───────────────────────────────────────────
+// Refills at midnight US Eastern (see utils/easternDayReset), not N*24h after the
+// candidate's last use — that rolling window meant "remaining today" quietly lied.
 const PLAN_MAX = { free: 10, upgraded: 20, premium: 30 }
 
 function planMaxFor(candidate) {
@@ -23,7 +26,7 @@ function computeRecruiterContacts(candidate) {
   const max = planMaxFor(candidate)
   const left = candidate.recruiterContactsLeft ?? max
   const updatedAt = candidate.recruiterContactsUpdatedAt ?? new Date(0)
-  const daysElapsed = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
+  const daysElapsed = easternDaysElapsed(new Date(updatedAt))
   return { left: Math.min(left + daysElapsed, max), max }
 }
 
@@ -34,13 +37,12 @@ async function refillRecruiterContacts(candidateId) {
   const max = planMaxFor(candidate)
   const left = candidate.recruiterContactsLeft ?? max
   const updatedAt = candidate.recruiterContactsUpdatedAt ?? new Date(0)
-  const daysElapsed = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
+  const daysElapsed = easternDaysElapsed(new Date(updatedAt))
   if (daysElapsed <= 0) return left
   const newLeft = Math.min(left + daysElapsed, max)
-  const newUpdatedAt = new Date(new Date(updatedAt).getTime() + daysElapsed * 86400000)
   await CandidateModel.updateOne(
     { _id: candidateId },
-    { $set: { recruiterContactsLeft: newLeft, recruiterContactsUpdatedAt: newUpdatedAt } }
+    { $set: { recruiterContactsLeft: newLeft, recruiterContactsUpdatedAt: new Date() } }
   )
   return newLeft
 }
