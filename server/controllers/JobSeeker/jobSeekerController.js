@@ -875,11 +875,10 @@ const getEverything = asyncHandler(async (req, res) => {
             }
 
             const candidate = match ? withEffectiveRecruiterContacts(match) : null
-            const [ApplicationsForCandidate, Jobs, CandidatePairings] = await Promise.all([
+            const [ApplicationsForCandidate, CandidatePairings] = await Promise.all([
                 candidate
                     ? Applications.find({ candidateId: candidate._id, status: { $ne: 'system' } }).lean().exec()
                     : Promise.resolve([]),
-                getDashboardJobsPure(100),
                 candidate
                     ? CandidateJobPairings.find(
                         { candidateId: candidate._id },
@@ -887,6 +886,15 @@ const getEverything = asyncHandler(async (req, res) => {
                     ).lean().exec()
                     : Promise.resolve([]),
             ])
+            const matchedJobIds = [
+                ...ApplicationsForCandidate
+                    .filter((application) => application.jobId && application.status !== 'not_interested')
+                    .map((application) => application.jobId),
+                ...CandidatePairings
+                    .filter((pairing) => pairing.jobId && Number(pairing.score || 0) >= 10)
+                    .map((pairing) => pairing.jobId),
+            ]
+            const Jobs = await getDashboardJobsPure(100, matchedJobIds)
 
             return res.json({
                 Applications: ApplicationsForCandidate,
@@ -1261,17 +1269,25 @@ async function getAllJobsPure(options = {}) {
 // Read a bounded set by indexed insertion order so page load does not transfer
 // thousands of job descriptions before anything can render. Full search remains
 // available through GET /jobseeker/job.
-async function getDashboardJobsPure(limit = 300) {
+async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
     const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 300, 1), 500)
     const JobDynamic = mongoose.models.JobDynamic ||
         mongoose.model('JobDynamic', new mongoose.Schema({}, { strict: false, collection: 'jobseeker.jobs' }))
-    const jobs = await JobDynamic.find({}, JOB_PROJECTION)
-        .sort({ _id: -1 })
-        .limit(safeLimit * 3)
-        .lean().exec()
+    const normalizedRequiredIds = [...new Set(requiredJobIds.map(String))]
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id))
+    const [recentJobs, requiredJobs] = await Promise.all([
+        JobDynamic.find({}, JOB_PROJECTION)
+            .sort({ _id: -1 })
+            .limit(safeLimit * 3)
+            .lean().exec(),
+        normalizedRequiredIds.length
+            ? JobDynamic.find({ _id: { $in: normalizedRequiredIds } }, JOB_PROJECTION).lean().exec()
+            : Promise.resolve([]),
+    ])
     const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000
 
-    return jobs
+    const recent = recentJobs
         .filter((job) => {
             if (isJunkJobRecord(job)) return false
             const jobUrl = String(job.url || job.apply_url || '')
@@ -1284,6 +1300,17 @@ async function getDashboardJobsPure(limit = 300) {
         })
         .sort((a, b) => (parseJobDate(b) || 0) - (parseJobDate(a) || 0))
         .slice(0, safeLimit)
+
+    // Pairings are authoritative even when the matched job is older than the
+    // bounded recent feed. Merge them back in so the Matched filter can always
+    // resolve every pairing returned alongside this response.
+    const seen = new Set()
+    return [...requiredJobs, ...recent].filter((job) => {
+        const id = String(job._id)
+        if (seen.has(id)) return false
+        seen.add(id)
+        return true
+    })
 }
 
 async function getAllApplicationsPure() {
