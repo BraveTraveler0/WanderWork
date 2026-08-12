@@ -47,8 +47,10 @@ async function refillRecruiterContacts(candidateId) {
   return newLeft
 }
 
-async function requireCandidateOwner(req, candidateId) {
-  const candidate = await CandidateModel.findById(candidateId).lean()
+async function requireCandidateOwner(req, candidateId, fields) {
+  let query = CandidateModel.findById(candidateId)
+  if (fields) query = query.select(fields)
+  const candidate = await query.lean()
   if (!candidate) {
     const error = new Error('Candidate not found')
     error.statusCode = 404
@@ -429,6 +431,21 @@ const RECRUITER_SPECIALTIES = new Set([
   'general',
 ])
 
+// Resume and cover-letter objects can be several megabytes. Recruiter matching
+// only needs these compact profile fields, so avoid transferring the full
+// candidate document on every modal load.
+const RECRUITER_MATCH_CANDIDATE_FIELDS = [
+  'email',
+  'targetRoles',
+  'skills',
+  'skills_2',
+  'inferredSkills',
+  'resume_text',
+  'work_experience',
+  'education',
+  'seniority',
+].join(' ')
+
 function inferSpecialties(candidate) {
   const text = [
     ...(candidate?.targetRoles || []),
@@ -470,7 +487,7 @@ const getPairedRecruiters = asyncHandler(async (req, res) => {
   }
 
   const [candidate, contacted] = await Promise.all([
-    requireCandidateOwner(req, candidateId),
+    requireCandidateOwner(req, candidateId, RECRUITER_MATCH_CANDIDATE_FIELDS),
     RecruiterContact.find({ candidateId }).select('recruiterId').lean(),
   ])
 
@@ -544,7 +561,7 @@ const getAllRecruiters = asyncHandler(async (req, res) => {
 const recordContact = asyncHandler(async (req, res) => {
   const { candidateId, recruiterId, status = 'paired', emailBody, tokensUsed = 0 } = req.body
   if (!candidateId || !recruiterId) return res.status(400).json({ message: 'candidateId and recruiterId required' })
-  await requireCandidateOwner(req, candidateId)
+  await requireCandidateOwner(req, candidateId, 'email')
 
   const recruiter = await Recruiter.findById(recruiterId).lean()
 
@@ -567,7 +584,7 @@ const recordContact = asyncHandler(async (req, res) => {
 const getContactHistory = asyncHandler(async (req, res) => {
   const { candidateId } = req.query
   if (!candidateId) return res.status(400).json({ message: 'candidateId required' })
-  await requireCandidateOwner(req, candidateId)
+  await requireCandidateOwner(req, candidateId, 'email')
 
   const contacts = await RecruiterContact.find({ candidateId })
     .populate({ path: 'recruiterId', model: 'JobSeeker.Recruiter' })
