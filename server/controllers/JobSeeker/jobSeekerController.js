@@ -819,8 +819,85 @@ async function backfillJobCompanies(jobs) {
     }
 }
 
+// Dashboard reads do not need embedded document payloads. Some legacy candidate
+// records contain large resume/cover-letter objects, which can push an otherwise
+// small authenticated page load past the frontend timeout.
+const CANDIDATE_DASHBOARD_FIELDS = [
+    'firstName', 'lastName', 'email', 'phone', 'location',
+    'targetRoles', 'seniority', 'skills', 'skills_2', 'urls',
+    'resumeLink', 'coverLetterLink', 'resume_hash',
+    'resume_updated_at', 'coverLetter_updated_at', 'work_experience',
+    'education', 'summary', 'inferredKeywords', 'status', 'paidUntil',
+    'graceDays', 'tokenBalance', 'tokensUsed', 'creditsBalance', 'creditsUsed',
+    'plan', 'recruiterContactsLeft', 'recruiterContactsUpdatedAt',
+].join(' ')
+
 const getEverything = asyncHandler(async (req, res) => {
     try {
+        if (req.user?.email) {
+            const userEmail = req.user.email.toLowerCase()
+            let match = await Candidates.findOne({ email: userEmail })
+                .select(CANDIDATE_DASHBOARD_FIELDS)
+                .lean()
+
+            // Auto-create a Candidate document if this authenticated user has none yet
+            if (!match) {
+                const displayName = req.user.displayName || req.user.email.split('@')[0]
+                const nameParts = String(displayName).trim().split(' ').filter(Boolean)
+                try {
+                    const created = await Candidates.findOneAndUpdate(
+                        { email: userEmail },
+                        {
+                            $setOnInsert: {
+                                email: userEmail,
+                                firstName: nameParts[0] || displayName,
+                                lastName: nameParts.slice(1).join(' ') || '',
+                                phone: '',
+                                location: [],
+                                targetRoles: [],
+                                seniority: [],
+                                skills: [],
+                                urls: [],
+                                resume: {},
+                                status: 'active',
+                                paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                                tokenBalance: 100,
+                                recruiterContactsLeft: 10,
+                                recruiterContactsUpdatedAt: new Date(),
+                            },
+                        },
+                        { upsert: true, new: true }
+                    )
+                    if (created) match = created.toObject ? created.toObject() : created
+                } catch (e) {
+                    console.warn('[getEverything] Auto-create candidate failed:', e.message)
+                }
+            }
+
+            const candidate = match ? withEffectiveRecruiterContacts(match) : null
+            const [ApplicationsForCandidate, Jobs, CandidatePairings] = await Promise.all([
+                candidate
+                    ? Applications.find({ candidateId: candidate._id, status: { $ne: 'system' } }).lean().exec()
+                    : Promise.resolve([]),
+                getDashboardJobsPure(100),
+                candidate
+                    ? CandidateJobPairings.find(
+                        { candidateId: candidate._id },
+                        { candidateId: 1, jobId: 1, score: 1, matchedSkills: 1, reason: 1, pairedAt: 1, source: 1, algorithmVersion: 1 }
+                    ).lean().exec()
+                    : Promise.resolve([]),
+            ])
+
+            return res.json({
+                Applications: ApplicationsForCandidate,
+                Candidates: candidate ? [candidate] : [],
+                Jobs,
+                Contacts: [],
+                CandidateJobPairing: CandidatePairings,
+                ContactJobPairing: [],
+            })
+        }
+
         let allCandidates = await getAllCandidatesPure()
 
         // When authenticated, return only the logged-in user's candidate
@@ -865,7 +942,7 @@ const getEverything = asyncHandler(async (req, res) => {
             allCandidates = match ? [match] : []
         }
 
-        const [Applications, Jobs, Contacts, CandidateJobPairing, ContactJobPairing] = await Promise.all([
+        const [allApplications, allJobs, allContacts, allCandidatePairings, allContactPairings] = await Promise.all([
             getAllApplicationsPure(),
             getAllJobsPure(),
             getAllContactsPure(),
@@ -876,19 +953,19 @@ const getEverything = asyncHandler(async (req, res) => {
             ? allCandidates.filter((c) => String(c.email || '').toLowerCase() === req.user.email.toLowerCase())
             : allCandidates;
         const candidateIds = new Set(visibleCandidates.map((c) => String(c._id)));
-        const filteredApplications = Applications.filter((a) =>
+        const filteredApplications = allApplications.filter((a) =>
             a.status !== 'system' && (req.user?.email ? candidateIds.has(String(a.candidateId)) : true)
         );
-        const filteredCandidatePairing = CandidateJobPairing.filter((p) =>
+        const filteredCandidatePairing = allCandidatePairings.filter((p) =>
             req.user?.email ? candidateIds.has(String(p.candidateId)) : true
         );
         res.json({
             Applications: filteredApplications,
             Candidates: visibleCandidates,
-            Jobs,
-            Contacts: req.user?.email ? [] : Contacts,
+            Jobs: allJobs,
+            Contacts: req.user?.email ? [] : allContacts,
             CandidateJobPairing: filteredCandidatePairing,
-            ContactJobPairing: req.user?.email ? [] : ContactJobPairing,
+            ContactJobPairing: req.user?.email ? [] : allContactPairings,
         });
     } catch (err) {
         console.error(err);
@@ -898,7 +975,9 @@ const getEverything = asyncHandler(async (req, res) => {
 
 const getAllCandidates = asyncHandler(async (req, res) => {
     if (req.user?.email) {
-        const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() }).lean().exec();
+        const candidate = await Candidates.findOne({ email: req.user.email.toLowerCase() })
+            .select(CANDIDATE_DASHBOARD_FIELDS)
+            .lean().exec();
         return res.json(candidate ? [withEffectiveRecruiterContacts(candidate)] : []);
     }
     const results = await getAllCandidatesPure();
@@ -1176,6 +1255,35 @@ async function getAllJobsPure(options = {}) {
     _jobsCache = filtered
     _jobsCacheAt = Date.now()
     return filtered;
+}
+
+// The dashboard needs a useful recent feed, not the entire jobs collection.
+// Read a bounded set by indexed insertion order so page load does not transfer
+// thousands of job descriptions before anything can render. Full search remains
+// available through GET /jobseeker/job.
+async function getDashboardJobsPure(limit = 300) {
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 300, 1), 500)
+    const JobDynamic = mongoose.models.JobDynamic ||
+        mongoose.model('JobDynamic', new mongoose.Schema({}, { strict: false, collection: 'jobseeker.jobs' }))
+    const jobs = await JobDynamic.find({}, JOB_PROJECTION)
+        .sort({ _id: -1 })
+        .limit(safeLimit * 3)
+        .lean().exec()
+    const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000
+
+    return jobs
+        .filter((job) => {
+            if (isJunkJobRecord(job)) return false
+            const jobUrl = String(job.url || job.apply_url || '')
+            if (/linkedin\.com/i.test(jobUrl)) return false
+            const title = String(job.title || job.job_title || job.name || '').trim()
+            const desc = String(job.description_short || job.description || '').trim()
+            if (!isLikelyEnglish(title) || !isLikelyEnglish(desc)) return false
+            const ts = parseJobDate(job)
+            return !ts || ts >= cutoff
+        })
+        .sort((a, b) => (parseJobDate(b) || 0) - (parseJobDate(a) || 0))
+        .slice(0, safeLimit)
 }
 
 async function getAllApplicationsPure() {
