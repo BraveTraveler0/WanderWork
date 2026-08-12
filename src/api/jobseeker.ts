@@ -305,7 +305,7 @@ export function sendRecruiterDraft(
   candidateId: string,
   recruiterId: string,
   init?: RequestInit & { signal?: AbortSignal }
-): Promise<{ contact: any; tokensRemaining: number; draftRecipientEmail?: string }> {
+): Promise<{ contact: any; tokensRemaining: number; contactsRemaining?: number; draftRecipientEmail?: string }> {
   return fetchJson('/recruiter/send-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

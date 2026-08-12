@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { X, Check, Zap, ChevronDown, Mail } from 'lucide-react'
+import { X, Check, Zap, ChevronDown, Mail, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { getPairedRecruiters, sendRecruiterDraft, getRecruiterContactHistory, RecruiterRecord } from '../api/jobseeker.ts'
 
 interface Props {
@@ -14,6 +14,11 @@ interface Props {
 interface SentEntry {
   recruiter: RecruiterRecord
   sentAt: string
+}
+
+interface SendNotice {
+  kind: 'success' | 'warning' | 'error'
+  message: string
 }
 
 const DAILY_LIMIT = 10
@@ -165,8 +170,11 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   const [sentList, setSentList] = useState<SentEntry[]>([])
   const [showSent, setShowSent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submittingCount, setSubmittingCount] = useState(0)
   const [tokens, setTokens] = useState(currentTokens)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [contactsLeft, setContactsLeft] = useState(effectiveLimit)
+  const [notice, setNotice] = useState<SendNotice | null>(null)
+  const submittingRef = useRef(false)
   const fadeTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   // Load paired recruiters + contact history on mount
@@ -204,7 +212,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
       setLoading(false)
     }).catch(() => {
       if (cancelled) return
-      setErrorMsg('Unable to load recruiters right now. Please try again.')
+      setNotice({ kind: 'error', message: 'Unable to load recruiters right now. Please try again.' })
       setLoading(false)
     })
 
@@ -213,7 +221,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
 
   const handleSpecialtyChange = (specialty: string) => {
     setSelectedIds(new Set())
-    setErrorMsg('')
+    setNotice(null)
     setLoading(true)
     setSelectedSpecialty(specialty)
   }
@@ -223,12 +231,12 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
 
   const sentIds = new Set(sentList.map((e) => e.recruiter._id))
   const visibleRecruiters = recruiters.filter((r) => !sentIds.has(r._id))
-  const remaining = effectiveLimit - selectedIds.size
+  const remaining = Math.max(contactsLeft - selectedIds.size, 0)
   const totalCost = selectedIds.size * TOKENS_PER_EMAIL
   const canAfford = tokens >= totalCost
 
   const toggleSelect = (id: string) => {
-    if (sentIds.has(id) || fadingOutIds.has(id)) return
+    if (submittingRef.current || sentIds.has(id) || fadingOutIds.has(id)) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) { next.delete(id) } else if (remaining > 0) { next.add(id) }
@@ -237,12 +245,15 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
   }
 
   const handleSubmit = async () => {
-    if (selectedIds.size === 0 || !canAfford || submitting) return
+    if (selectedIds.size === 0 || !canAfford || submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
-    setErrorMsg('')
+    setSubmittingCount(selectedIds.size)
+    setNotice(null)
 
     const ids = [...selectedIds]
     let lastBalance = tokens
+    let lastContactsLeft = contactsLeft
     const results = await Promise.allSettled(ids.map((id) => sendRecruiterDraft(candidateId, id)))
 
     const now = new Date().toISOString()
@@ -250,7 +261,11 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
         succeeded.push(ids[i])
-        lastBalance = (r as PromiseFulfilledResult<{ tokensRemaining: number }>).value.tokensRemaining
+        const value = (r as PromiseFulfilledResult<{ tokensRemaining: number; contactsRemaining?: number }>).value
+        lastBalance = Math.min(lastBalance, value.tokensRemaining)
+        if (typeof value.contactsRemaining === 'number') {
+          lastContactsLeft = Math.min(lastContactsLeft, value.contactsRemaining)
+        }
       }
     })
 
@@ -268,24 +283,30 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
         .filter(Boolean) as SentEntry[]
 
       setSentList((prev) => [...newEntries, ...prev])
+      setRecruiters((prev) => prev.filter((recruiter) => !succeeded.includes(recruiter._id)))
       setFadingOutIds(new Set())
-      setShowSent(true)
+      setShowSent(false)
     }, FADE_MS + 100)
 
     fadeTimers.current.set('submit', timer)
     setTokens(lastBalance)
+    setContactsLeft(lastContactsLeft)
     onTokensChanged(lastBalance)
+    submittingRef.current = false
     setSubmitting(false)
+    setSubmittingCount(0)
 
     if (succeeded.length > 0 && succeeded.length < ids.length) {
-      setErrorMsg(`${succeeded.length} of ${ids.length} drafts sent to your inbox. Some failed - try again.`)
+      setNotice({ kind: 'warning', message: `${succeeded.length} of ${ids.length} drafts were sent to your inbox. The sent recruiters were removed; try the remaining recruiter${ids.length - succeeded.length === 1 ? '' : 's'} again.` })
     } else if (succeeded.length === 0) {
-      setErrorMsg('Failed to send drafts to your inbox. Check your token balance and try again.')
+      setNotice({ kind: 'error', message: 'No drafts were sent. Check your token balance and try again.' })
+    } else {
+      setNotice({ kind: 'success', message: `${succeeded.length} draft${succeeded.length === 1 ? '' : 's'} sent to your inbox. The recruiter${succeeded.length === 1 ? ' has' : 's have'} been removed from this list.` })
     }
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4" onClick={() => { if (!submitting) onClose() }}>
       <div
         className="bg-white rounded-[20px] w-full max-w-[580px] shadow-[0_30px_90px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden"
         style={{ fontFamily: 'Manrope', maxHeight: '88vh' }}
@@ -312,8 +333,9 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
               </div>
               <button
                 aria-label="Close"
-                onClick={onClose}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
+                onClick={() => { if (!submitting) onClose() }}
+                disabled={submitting}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: submitting ? 'wait' : 'pointer', color: 'rgba(255,255,255,0.7)', flexShrink: 0, opacity: submitting ? 0.5 : 1 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
               >
@@ -347,6 +369,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
                   id="recruiter-specialty"
                   value={selectedSpecialty}
                   onChange={(e) => handleSpecialtyChange(e.target.value)}
+                  disabled={submitting}
                   className="w-full h-11 appearance-none rounded-[8px] border border-[#D9E2E4] bg-white pl-3.5 pr-10 text-[13px] font-medium text-[#26383B] outline-none focus:border-[#306770]"
                 >
                   <option value="">Best match for my profile</option>
@@ -428,11 +451,40 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
             </div>
           )}
 
-          {errorMsg && <p className="mt-4 text-center text-[12px]" style={{ color: '#C0392B' }}>{errorMsg}</p>}
         </div>
 
         {/* Footer */}
         <div className="px-7 py-5 border-t flex-shrink-0" style={{ borderColor: '#F0F0F0', background: 'white' }}>
+          {submitting && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-[10px] px-4 py-3 mb-3"
+              style={{ background: '#EEF6F7', color: '#255560' }}
+            >
+              <Loader2 size={18} className="animate-spin flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[13px] font-semibold">Preparing {submittingCount} draft{submittingCount === 1 ? '' : 's'} now...</p>
+                <p className="text-[11px] mt-0.5" style={{ color: '#52767C' }}>Keep this window open. We’ll confirm when everything reaches your inbox.</p>
+              </div>
+            </div>
+          )}
+          {!submitting && notice && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-2.5 rounded-[10px] px-4 py-3 mb-3"
+              style={{
+                background: notice.kind === 'success' ? '#EAF8F1' : notice.kind === 'warning' ? '#FFF7E6' : '#FFF0F0',
+                color: notice.kind === 'success' ? '#287044' : notice.kind === 'warning' ? '#8A5A00' : '#C0392B',
+              }}
+            >
+              {notice.kind === 'success'
+                ? <CheckCircle2 size={17} className="flex-shrink-0 mt-0.5" />
+                : <AlertCircle size={17} className="flex-shrink-0 mt-0.5" />}
+              <p className="text-[12px] font-medium leading-relaxed">{notice.message}</p>
+            </div>
+          )}
           {selectedIds.size > 0 && !canAfford && (
             <p className="text-center text-[12px] mb-3" style={{ color: '#C0392B' }}>
               Not enough tokens. You need {totalCost} but have {tokens}.
@@ -447,7 +499,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
             onMouseLeave={(e) => { if (selectedIds.size > 0 && canAfford && !submitting) e.currentTarget.style.background = '#306770' }}
           >
             {submitting
-              ? 'Sending drafts...'
+              ? `Preparing ${submittingCount} Draft${submittingCount === 1 ? '' : 's'}...`
               : selectedIds.size === 0
               ? 'Select recruiters for drafts'
               : `Send ${selectedIds.size} Draft${selectedIds.size !== 1 ? 's' : ''} to My Inbox - ${totalCost} tokens`}
