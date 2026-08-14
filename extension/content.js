@@ -2,42 +2,183 @@
 
 const API = 'https://wanderwork-backend-server.onrender.com';
 
-const FIELDS = [
-  { key: 'firstName', selectors: ['#first_name', '[name="firstName"]', '[name="first_name"]', '[autocomplete="given-name"]', '[placeholder*="First name" i]'] },
-  { key: 'lastName',  selectors: ['#last_name',  '[name="lastName"]',  '[name="last_name"]',  '[autocomplete="family-name"]', '[placeholder*="Last name" i]'] },
-  { key: 'fullName',  selectors: ['[name="name"]', '[name="full_name"]', '[autocomplete="name"]', '[placeholder*="Full name" i]'], getValue: (p) => `${p.firstName} ${p.lastName}`.trim() },
-  { key: 'email',     selectors: ['#email', '[name="email"]', '[type="email"]', '[autocomplete="email"]'] },
-  { key: 'phone',     selectors: ['#phone', '[name="phone"]', '[type="tel"]', '[autocomplete="tel"]', '[placeholder*="phone" i]'] },
-  { key: 'city',      selectors: ['#city', '[name="city"]', '[autocomplete="address-level2"]', '[placeholder*="city" i]', '[name*="location" i]', '[placeholder*="location" i]', '[id*="location" i]'] },
-  { key: 'state',     selectors: ['[name="state"]', '[autocomplete="address-level1"]', '[name*="state" i]'] },
-  { key: 'postalCode',selectors: ['[name="zip"]', '[name="postalCode"]', '[name="postal_code"]', '[autocomplete="postal-code"]', '[placeholder*="zip" i]'] },
-  { key: 'linkedin',  selectors: ['[name="urls[LinkedIn]"]', '[name="linkedin"]', '[placeholder*="linkedin" i]'] },
-  { key: 'portfolio', selectors: ['[name="urls[Website]"]', '[name="portfolio"]', '[name="website"]', '[placeholder*="portfolio" i]', '[placeholder*="website" i]'] },
-  { key: 'github',    selectors: ['[name="urls[Github]"]', '[name="github"]', '[placeholder*="github" i]'] },
+const FIELD_RULES = [
+  { key: 'firstName', labels: [/\bfirst\s*(?:legal\s*)?name\b/i, /\bgiven\s*name\b/i], selectors: ['#first_name', '[name="firstName"]', '[name="first_name"]', '[autocomplete="given-name"]'] },
+  { key: 'lastName', labels: [/\blast\s*(?:legal\s*)?name\b/i, /\bfamily\s*name\b/i, /\bsurname\b/i], selectors: ['#last_name', '[name="lastName"]', '[name="last_name"]', '[autocomplete="family-name"]'] },
+  { key: 'fullName', labels: [/\bfull\s*name\b/i, /\blegal\s*name\b/i, /\bname\s+as\s+it\s+appears/i], selectors: ['[name="full_name"]', '[autocomplete="name"]'], value: p => `${p.firstName || ''} ${p.lastName || ''}`.trim() },
+  { key: 'email', labels: [/\be-?mail(?:\s+address)?\b/i], selectors: ['#email', '[name="email"]', '[type="email"]', '[autocomplete="email"]'] },
+  { key: 'phoneCountryCode', labels: [/\bphone\s+country\s+code\b/i, /\bcountry\s+calling\s+code\b/i], value: p => String(p.phone || '').match(/^\+(\d{1,3})/)?.[1] || '' },
+  { key: 'phone', labels: [/\b(?:phone|mobile|telephone)(?:\s+number)?\b/i], exclude: [/country\s+code/i, /extension/i], selectors: ['#phone', '[name="phone"]', '[type="tel"]', '[autocomplete="tel"]'] },
+  { key: 'city', labels: [/\bcity\b/i, /\bmunicipality\b/i], selectors: ['#city', '[name="city"]', '[autocomplete="address-level2"]'] },
+  { key: 'state', labels: [/\bstate(?:\/province)?\b/i, /\bprovince\b/i, /\bregion\b/i], selectors: ['[name="state"]', '[autocomplete="address-level1"]'] },
+  { key: 'postalCode', labels: [/\b(?:zip|postal)\s*code\b/i], selectors: ['[name="zip"]', '[name="postalCode"]', '[name="postal_code"]', '[autocomplete="postal-code"]'] },
+  { key: 'location', labels: [/\bcurrent\s+location\b/i, /\bhome\s+location\b/i, /\blocation\s*\(.*city/i], exclude: [/preferred/i, /job/i] },
+  { key: 'linkedin', labels: [/linkedin/i], selectors: ['[name="urls[LinkedIn]"]', '[name*="linkedin" i]', '[placeholder*="linkedin" i]'] },
+  { key: 'github', labels: [/github/i], selectors: ['[name="urls[Github]"]', '[name*="github" i]', '[placeholder*="github" i]'] },
+  { key: 'portfolio', labels: [/portfolio/i, /recent\s+work/i, /work\s+samples?/i], exclude: [/password/i], selectors: ['[name="urls[Website]"]', '[name*="portfolio" i]', '[placeholder*="portfolio" i]'] },
+  { key: 'otherWebsite', labels: [/other\s+(?:website|url)/i, /personal\s+website/i, /additional\s+(?:website|url)/i], exclude: [/linkedin|github|portfolio/i] },
+  { key: 'school', labels: [/\b(?:university|college|school|institution)\b/i], exclude: [/high\s+school/i, /company/i] },
+  { key: 'major', labels: [/\bmajor\b/i, /field\s+of\s+study/i, /area\s+of\s+study/i, /concentration/i, /academic\s+discipline/i] },
+  { key: 'degree', labels: [/\bdegree(?:\s+type)?\b/i, /level\s+of\s+education/i], exclude: [/major/i] },
+  { key: 'currentCompany', labels: [/current\s+(?:company|employer)/i, /most\s+recent\s+employer/i] },
+  { key: 'currentTitle', labels: [/current\s+(?:job\s+)?title/i, /most\s+recent\s+(?:job\s+)?title/i] },
+  { key: 'whyCompany', labels: [/why\s+(?:do|would)\s+you\s+(?:want|like)/i, /why\s+(?:are\s+you\s+)?interested/i, /what\s+(?:interests|excites)\s+you/i, /why\s+(?:this|our)\s+(?:company|role|position|team)/i], value: (p, el) => fitLongAnswer(p.whyCompany || p.coverLetterBody, el) },
+  { key: 'coverLetter', labels: [/cover\s+letter/i, /letter\s+of\s+interest/i, /message\s+to\s+(?:the\s+)?hiring/i, /note\s+to\s+(?:the\s+)?hiring/i], exclude: [/upload|attach/i], value: (p, el) => fitLongAnswer(p.coverLetter || p.coverLetterBody, el) },
+  { key: 'summary', labels: [/professional\s+summary/i, /briefly\s+describe\s+yourself/i, /tell\s+us\s+about\s+yourself/i], value: (p, el) => fitLongAnswer(p.summary, el) },
 ];
 
-function fillField(el, value) {
-  if (!el || !value) return false;
-  const nativeSetter =
-    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-  if (nativeSetter) nativeSetter.call(el, value); else el.value = value;
-  el.dispatchEvent(new Event('input',  { bubbles: true }));
+function normalizeFieldText(value) {
+  return String(value || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function fieldDescriptor(el) {
+  const parts = [
+    el.getAttribute('aria-label'),
+    el.getAttribute('placeholder'),
+    el.getAttribute('name'),
+    el.id,
+    el.getAttribute('autocomplete'),
+  ];
+  if (el.labels) parts.push(...Array.from(el.labels).map(label => label.textContent));
+  const labelledBy = el.getAttribute('aria-labelledby');
+  if (labelledBy) {
+    parts.push(...labelledBy.split(/\s+/).map(id => document.getElementById(id)?.textContent));
+  }
+  let parent = el.parentElement;
+  for (let depth = 0; parent && depth < 4; depth++, parent = parent.parentElement) {
+    if (parent.matches('fieldset')) parts.push(parent.querySelector(':scope > legend')?.textContent);
+    const previous = parent.previousElementSibling;
+    if (previous?.matches?.('legend, h1, h2, h3, h4')) parts.push(previous.textContent);
+  }
+  return normalizeFieldText(parts.filter(Boolean).join(' | '));
+}
+
+function fitLongAnswer(value, el) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const limit = Number(el?.maxLength);
+  if (!Number.isFinite(limit) || limit <= 0 || text.length <= limit) return text;
+  const clipped = text.slice(0, limit + 1);
+  const boundary = clipped.lastIndexOf(' ');
+  return clipped.slice(0, boundary > limit * 0.7 ? boundary : limit).trim();
+}
+
+function isFillableControl(el) {
+  if (!el || el.disabled || el.readOnly) return false;
+  if (el instanceof HTMLInputElement && ['hidden', 'file', 'submit', 'button', 'reset', 'checkbox', 'radio'].includes(el.type)) return false;
+  const style = window.getComputedStyle(el);
+  return style.display !== 'none' && style.visibility !== 'hidden';
+}
+
+function dispatchFieldEvents(el) {
+  el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.dispatchEvent(new Event('blur', { bubbles: true }));
+}
+
+function setNativeValue(el, value) {
+  const prototypes = [window.HTMLInputElement, window.HTMLTextAreaElement, window.HTMLSelectElement];
+  const prototype = prototypes.find(type => type && el instanceof type)?.prototype;
+  const setter = prototype && Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+  if (setter) setter.call(el, value); else el.value = value;
+}
+
+function optionMatchScore(option, value) {
+  const target = normalizeFieldText(value).toLowerCase();
+  const label = normalizeFieldText(option?.textContent || option?.label || option?.value).toLowerCase();
+  if (!target || !label) return 0;
+  if (label === target) return 4;
+  if (label.startsWith(target) || target.startsWith(label)) return 3;
+  if (label.includes(target) || target.includes(label)) return 2;
+  const targetWords = target.split(' ').filter(word => word.length > 2);
+  return targetWords.length && targetWords.every(word => label.includes(word)) ? 1 : 0;
+}
+
+async function fillField(el, value) {
+  if (!isFillableControl(el) || value == null || String(value).trim() === '') return false;
+  const text = String(value).trim();
+
+  if (el instanceof HTMLSelectElement) {
+    const best = Array.from(el.options)
+      .map(option => ({ option, score: optionMatchScore(option, text) }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (!best?.score) return false;
+    setNativeValue(el, best.option.value);
+    dispatchFieldEvents(el);
+    return true;
+  }
+
+  if (el.isContentEditable) {
+    el.focus();
+    el.textContent = text;
+    dispatchFieldEvents(el);
+    return true;
+  }
+
+  el.focus();
+  setNativeValue(el, text);
+  el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+
+  if (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete')) {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const best = Array.from(document.querySelectorAll('[role="option"], [data-option-index], li'))
+      .filter(option => window.getComputedStyle(option).display !== 'none')
+      .map(option => ({ option, score: optionMatchScore(option, text) }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (best?.score >= 2) best.option.click();
+  }
+
+  dispatchFieldEvents(el);
   return true;
 }
 
-function autofill(profile) {
+async function autofill(profile) {
   let filled = 0;
-  for (const field of FIELDS) {
-    const value = field.getValue ? field.getValue(profile) : profile[field.key];
-    if (!value) continue;
-    for (const sel of field.selectors) {
-      const el = document.querySelector(sel);
-      if (el && fillField(el, value)) { filled++; break; }
+  const claimed = new Set();
+  const controls = Array.from(document.querySelectorAll('input, textarea, select, [contenteditable="true"]')).filter(isFillableControl);
+  const descriptors = new Map(controls.map(el => [el, fieldDescriptor(el)]));
+
+  for (const rule of FIELD_RULES) {
+    const valueFor = el => rule.value ? rule.value(profile, el) : profile[rule.key];
+    let candidates = controls.filter(el => {
+      if (claimed.has(el)) return false;
+      const descriptor = descriptors.get(el) || '';
+      if (!rule.labels.some(pattern => pattern.test(descriptor))) return false;
+      return !(rule.exclude || []).some(pattern => pattern.test(descriptor));
+    });
+
+    if (!candidates.length && rule.selectors) {
+      candidates = rule.selectors.flatMap(selector => Array.from(document.querySelectorAll(selector)))
+        .filter(el => !claimed.has(el) && isFillableControl(el));
+    }
+
+    for (const el of candidates) {
+      const value = valueFor(el);
+      if (await fillField(el, value)) {
+        claimed.add(el);
+        filled++;
+      }
     }
   }
   return filled;
+}
+
+async function fetchAutofillProfile(baseProfile, jobInfo) {
+  const extensionKey = await new Promise(resolve => chrome.storage.local.get(['extensionKey'], data => resolve(data.extensionKey)));
+  if (!extensionKey) return baseProfile;
+  const params = new URLSearchParams({
+    key: extensionKey,
+    company: jobInfo.company || '',
+    jobTitle: jobInfo.title || '',
+    jobUrl: jobInfo.url || '',
+  });
+  try {
+    const response = await fetch(`${API}/extension/profile?${params}`);
+    if (!response.ok) return baseProfile;
+    return { ...baseProfile, ...(await response.json()) };
+  } catch (_) {
+    return baseProfile;
+  }
 }
 
 // ── Widget ────────────────────────────────────────────────────────────────────
@@ -123,7 +264,8 @@ function getCompanyFromUrl(urlValue) {
 function getJobInfo() {
   const url = location.href;
   const structuredJob = getStructuredJobPosting();
-  const title = String(structuredJob?.title || document.title || '')
+  const pageHeading = document.querySelector('h1, [data-qa="job-title"], [class*="job-title" i], [class*="jobTitle"]')?.textContent || '';
+  const title = String(structuredJob?.title || pageHeading || document.title || '')
     .replace(/\s*(?:-|\u2013|\u2014|\|)\s*(Greenhouse|Lever|Ashby|Workday|SmartRecruiters|Workable|Jobvite).*$/i, '')
     .replace(/\s*(?:-|\u2013|\u2014|\|)\s*Jobs?\s*$/i, '')
     .trim();
@@ -208,13 +350,17 @@ function injectWidget(profile) {
   });
   autofillBtn.addEventListener('mouseenter', () => { autofillBtn.style.background = '#255860'; autofillBtn.style.transform = 'scale(1.03)'; });
   autofillBtn.addEventListener('mouseleave', () => { autofillBtn.style.background = '#306770'; autofillBtn.style.transform = 'scale(1)'; });
-  autofillBtn.addEventListener('click', () => {
-    const count = autofill(profile);
+  autofillBtn.addEventListener('click', async () => {
+    autofillBtn.disabled = true;
+    autofillBtn.textContent = 'Filling application...';
+    const currentProfile = await fetchAutofillProfile(profile, { title: jobTitle, company, url: jobUrl });
+    const count = await autofill(currentProfile);
     autofillBtn.innerHTML = count > 0 ? `✓ Filled ${count} fields` : '⚠ No fields found';
     autofillBtn.style.background = count > 0 ? '#27ae60' : '#c0392b';
     setTimeout(() => {
       autofillBtn.innerHTML = '⚡ Wander/Work Autofill';
       autofillBtn.style.background = '#306770';
+      autofillBtn.disabled = false;
     }, 2500);
   });
 
