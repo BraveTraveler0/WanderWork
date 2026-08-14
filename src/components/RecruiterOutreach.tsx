@@ -258,6 +258,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
 
     const now = new Date().toISOString()
     const succeeded: string[] = []
+    const failureMessages: string[] = []
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
         succeeded.push(ids[i])
@@ -266,6 +267,9 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
         if (typeof value.contactsRemaining === 'number') {
           lastContactsLeft = Math.min(lastContactsLeft, value.contactsRemaining)
         }
+      } else {
+        const message = r.reason instanceof Error ? r.reason.message : String(r.reason || '')
+        if (message) failureMessages.push(message)
       }
     })
 
@@ -299,7 +303,7 @@ export default function RecruiterOutreach({ candidateId, currentTokens, dailyLim
     if (succeeded.length > 0 && succeeded.length < ids.length) {
       setNotice({ kind: 'warning', message: `${succeeded.length} of ${ids.length} drafts were sent to your inbox. The sent recruiters were removed; try the remaining recruiter${ids.length - succeeded.length === 1 ? '' : 's'} again.` })
     } else if (succeeded.length === 0) {
-      setNotice({ kind: 'error', message: 'No drafts were sent. Check your token balance and try again.' })
+      setNotice({ kind: 'error', message: failureMessages[0] || 'No drafts were sent. Please try again.' })
     } else {
       setNotice({ kind: 'success', message: `${succeeded.length} draft${succeeded.length === 1 ? '' : 's'} sent to your inbox. The recruiter${succeeded.length === 1 ? ' has' : 's have'} been removed from this list.` })
     }
