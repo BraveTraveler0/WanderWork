@@ -2302,9 +2302,9 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     const candidateGitHub = prevCandidate.urls?.find((u) => u.urlName === 'GitHub')?.urlAddress || ''
     const contactBlock = [
         candidateName,
-        candidateLocation,
         candidateContactEmail,
         candidatePhone,
+        candidateLocation,
         candidatePortfolio,
         candidateGitHub,
     ].filter(Boolean).join('\n')
