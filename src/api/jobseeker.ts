@@ -110,6 +110,9 @@ export interface JobSeekerData {
 const BASE_URL = API_BASE_URL;
 
 const TIMEOUT_MS = 10000;
+const RECRUITER_DRAFT_TIMEOUT_MS = 60000;
+
+type FetchJsonInit = RequestInit & { signal?: AbortSignal; timeoutMs?: number };
 
 function getAuthHeader(): Record<string, string> {
   try {
@@ -120,20 +123,24 @@ function getAuthHeader(): Record<string, string> {
   }
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
+async function fetchJson<T>(path: string, init?: FetchJsonInit): Promise<T> {
+  const { timeoutMs = TIMEOUT_MS, ...requestInit } = init || {};
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${BASE_URL}${path}`, {
-      ...init,
-      signal: init?.signal ?? controller.signal,
+      ...requestInit,
+      signal: requestInit.signal ?? controller.signal,
       headers: {
         Accept: 'application/json',
         ...getAuthHeader(),
-        ...(init?.headers || {}),
+        ...(requestInit.headers || {}),
       },
     });
-    if (!res.ok) throw new Error(`Request failed ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      throw new Error(errorBody?.message || `Request failed ${res.status} ${res.statusText}`);
+    }
     return res.json();
   } finally {
     clearTimeout(timeout);
@@ -311,6 +318,7 @@ export function sendRecruiterDraft(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ candidateId, recruiterId }),
+    timeoutMs: RECRUITER_DRAFT_TIMEOUT_MS,
     ...init,
   });
 }

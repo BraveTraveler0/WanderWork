@@ -621,6 +621,27 @@ const sendEmail = asyncHandler(async (req, res) => {
   if (!recruiterEmail) {
     return res.status(400).json({ message: 'Recruiter email unavailable. No draft was sent and no tokens were charged.' })
   }
+
+  // A completed contact is final for this candidate/recruiter pair. Treat a
+  // retry as success so a client timeout cannot charge or deliver the draft a
+  // second time.
+  const existingContact = await RecruiterContact.findOne({
+    candidateId,
+    recruiterId,
+    status: 'draft_sent',
+  }).lean()
+  if (existingContact) {
+    const currentCandidate = await CandidateModel.findById(candidateId).lean()
+    const currentContacts = currentCandidate ? computeRecruiterContacts(currentCandidate) : { left: 0 }
+    return res.json({
+      contact: existingContact,
+      tokensRemaining: currentCandidate?.tokenBalance ?? 0,
+      contactsRemaining: currentContacts.left,
+      draftRecipientEmail: candidateEmail,
+      alreadySent: true,
+    })
+  }
+
   const draftMailer = getDraftMailer()
   if (!draftMailer) {
     console.error('[RecruiterEmail] Draft delivery unavailable: WanderWork SendGrid sender is not configured')
