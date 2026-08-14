@@ -30,6 +30,10 @@ function sanitizeResumeHeader(text, options = {}) {
   if (!text) return text
   const location = cleanValue(options.location)
   const email = cleanValue(options.email)
+  const phone = cleanValue(options.phone)
+  const contactLines = Array.isArray(options.contactLines)
+    ? options.contactLines.map(cleanValue).filter(Boolean)
+    : []
   const isSectionHeader = typeof options.isSectionHeader === 'function'
     ? options.isSectionHeader
     : () => false
@@ -40,18 +44,45 @@ function sanitizeResumeHeader(text, options = {}) {
     : null
   let inHeader = true
 
-  return String(text).split('\n').map((line) => {
+  const lines = String(text).split('\n')
+  const firstSectionIndex = lines.findIndex((line) => isSectionHeader(line.trim()))
+  if (contactLines.length && firstSectionIndex >= 0) {
+    return [...contactLines, '', ...lines.slice(firstSectionIndex)].join('\n')
+  }
+
+  return lines.map((line) => {
     const trimmed = line.trim()
     if (inHeader && isSectionHeader(trimmed)) inHeader = false
     if (!inHeader) return line
     if (repeatedLocation?.test(line)) return location
-    if (email && emailTest.test(line)) return line.replace(emailReplace, email)
-    return line
+    let sanitized = email && emailTest.test(line) ? line.replace(emailReplace, email) : line
+    if (phone) sanitized = replacePhoneNumbers(sanitized, phone)
+    return sanitized
   }).join('\n')
+}
+
+function replacePhoneNumbers(text, phone) {
+  const replacement = cleanValue(phone)
+  if (!text || !replacement) return text
+  return String(text).replace(/(?<!\w)\+?\d(?:[ \t().-]*\d){9,14}(?!\w)/g, (match) => {
+    return match.replace(/\D/g, '').length >= 10 ? replacement : match
+  })
+}
+
+function sanitizeDocumentContact(text, options = {}) {
+  if (!text) return text
+  const email = cleanValue(options.email)
+  const phone = cleanValue(options.phone)
+  let sanitized = String(text)
+  if (email) {
+    sanitized = sanitized.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, email)
+  }
+  return replacePhoneNumbers(sanitized, phone)
 }
 
 module.exports = {
   collapseRepeatedLocation,
   formatCandidateLocation,
+  sanitizeDocumentContact,
   sanitizeResumeHeader,
 }

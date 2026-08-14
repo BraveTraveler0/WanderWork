@@ -14,7 +14,7 @@ const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPa
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
 const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides');
 const { easternDaysElapsed } = require('../../utils/easternDayReset');
-const { formatCandidateLocation, sanitizeResumeHeader } = require('../../utils/resumeContact');
+const { formatCandidateLocation, sanitizeDocumentContact, sanitizeResumeHeader } = require('../../utils/resumeContact');
 
 function textValue(value) {
     if (value == null) return '';
@@ -2501,10 +2501,22 @@ Tailor every bullet point to match the target job description — highlight spec
         {
             location: candidateLocation,
             email: candidateContactEmail,
+            phone: candidatePhone,
+            contactLines: [
+                candidateName,
+                candidateContactEmail,
+                candidatePhone,
+                candidateLocation,
+                candidatePortfolio,
+                candidateGitHub,
+            ],
             isSectionHeader: isResumeSectionHeader,
         }
     ))
-    const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
+    const coverLetterContent = sanitizeDocumentContact(
+        stripLinkedInContact(fillPlaceholders(coverLetterRaw)),
+        { email: candidateContactEmail, phone: candidatePhone }
+    )
         ?.split('\n').filter(line => !/^---+$/.test(line.trim())).join('\n')
 
     const failedDocuments = [
