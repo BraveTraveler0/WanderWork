@@ -98,6 +98,11 @@ function getJobTime(job: any): number {
   return getJobDate(job)?.getTime() ?? 0
 }
 
+function getJobDiscardKey(job: any): string {
+  const stableId = job?.backendId || job?._id || job?.job_code || job?.url
+  return stableId ? `job:${String(stableId)}` : `ui:${String(job?.id ?? '')}`
+}
+
 const _normSearch = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 // ---------------------------------------------------------------------------
@@ -1133,13 +1138,19 @@ function isLowLevelJobForSeniorFilter(job: any): boolean {
 const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loading, isAuthenticated = true, onSignIn, onSignUp, onTopJobChange, onRecruiterContactsClick, onBuyCredits, onSearchJobs }: JobFeedProps) => {
   const [visibleCount, setVisibleCount] = useState(BATCH)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const [discardedJobs, setDiscardedJobs] = useState<Set<number>>(() => {
+  const [discardedJobs, setDiscardedJobs] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('wanderworkDiscardedJobs')
     if (!saved) return new Set()
     try {
       const parsed = JSON.parse(saved)
       if (Array.isArray(parsed)) {
-        return new Set(parsed.filter((id) => Number.isFinite(id)))
+        return new Set(parsed.flatMap((id) => {
+          if (typeof id === 'number' && Number.isFinite(id)) return [`legacy:${id}`]
+          if (typeof id === 'string' && id.trim()) {
+            return [/^\d+$/.test(id) ? `legacy:${id}` : id]
+          }
+          return []
+        }))
       }
       return new Set()
     } catch {
@@ -1276,17 +1287,64 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     return additions.length ? [...additions, ...visibleJobsListBase] : visibleJobsListBase
   }, [visibleJobsListBase, serverSearchJobs, searchQuery])
 
+  // Migrate the previous numeric card IDs to stable backend IDs. Numeric IDs
+  // are reassigned when jobs are refreshed, which allowed discarded jobs to
+  // return (and could hide a different job that inherited the old number).
+  useEffect(() => {
+    setDiscardedJobs((previous) => {
+      const next = new Set(previous)
+      let changed = false
+      for (const key of previous) {
+        if (!key.startsWith('legacy:')) continue
+        const legacyId = Number(key.slice('legacy:'.length))
+        const job = visibleJobsList.find((item: any) => item.id === legacyId)
+        if (!job) continue
+        next.delete(key)
+        next.add(getJobDiscardKey(job))
+        changed = true
+      }
+      if (!changed) return previous
+      localStorage.setItem('wanderworkDiscardedJobs', JSON.stringify([...next]))
+      return next
+    })
+  }, [visibleJobsList])
+
+  // Server-side dismissals are authoritative across refreshes, devices, and
+  // changes to the order of the feed.
+  useEffect(() => {
+    const applications = Array.isArray(data?.Applications) ? data.Applications : []
+    const candidateId = data?.Candidates?.[0]?._id
+    const serverKeys = applications
+      .filter((application: any) =>
+        application?.jobId &&
+        application?.status === 'dismissed' &&
+        (!candidateId || String(application?.candidateId) === String(candidateId))
+      )
+      .map((application: any) => `job:${String(application.jobId)}`)
+    if (!serverKeys.length) return
+
+    setDiscardedJobs((previous) => {
+      const next = new Set(previous)
+      serverKeys.forEach((key: string) => next.add(key))
+      if (next.size === previous.size) return previous
+      localStorage.setItem('wanderworkDiscardedJobs', JSON.stringify([...next]))
+      return next
+    })
+  }, [data?.Applications, data?.Candidates?.[0]?._id])
+
   const handleDiscardJob = (jobId: number) => {
+    const discardedJob = visibleJobs.find((job: any) => job.id === jobId)
+    if (!discardedJob) return
+
     const shouldAdvanceSelection = selectedJobId === jobId
     const nextJobId = shouldAdvanceSelection
-      ? visibleJobs.find((job: any) => job.id !== jobId && !discardedJobs.has(job.id))?.id ?? null
+      ? visibleJobs.find((job: any) => job.id !== jobId && !discardedJobs.has(getJobDiscardKey(job)))?.id ?? null
       : null
-    const discardedJob = visibleJobs.find((j: any) => j.id === jobId)
-    if (discardedJob) _nudgeAffinity(discardedJob.title, -1)
+    _nudgeAffinity(discardedJob.title, -1)
     setFadingJobId(jobId)
     setTimeout(() => {
       setDiscardedJobs(prev => {
-        const next = new Set([...prev, jobId])
+        const next = new Set([...prev, getJobDiscardKey(discardedJob)])
         localStorage.setItem('wanderworkDiscardedJobs', JSON.stringify([...next]))
         return next
       })
@@ -1295,6 +1353,13 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
         onSelectJob(nextJobId)
       }
     }, 300)
+
+    const candidateId = data?.Candidates?.[0]?._id
+    if (candidateId && discardedJob?.backendId) {
+      void updateJobSeeker({
+        Applications: [{ jobId: discardedJob.backendId, candidateId, status: 'dismissed' }]
+      }).catch((error) => console.warn('Failed to persist discarded job', error))
+    }
   }
 
   const handleRestoreJob = (jobId: number) => {
@@ -1302,10 +1367,17 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     if (restoredJob) _nudgeAffinity(restoredJob.title, 1)
     setDiscardedJobs(prev => {
       const newSet = new Set(prev)
-      newSet.delete(jobId)
+      newSet.delete(getJobDiscardKey(restoredJob))
       localStorage.setItem('wanderworkDiscardedJobs', JSON.stringify([...newSet]))
       return newSet
     })
+
+    const candidateId = data?.Candidates?.[0]?._id
+    if (candidateId && restoredJob?.backendId) {
+      void updateJobSeeker({
+        Applications: [{ jobId: restoredJob.backendId, candidateId, status: 'not_interested' }]
+      }).catch((error) => console.warn('Failed to persist restored job', error))
+    }
   }
 
   const isJobInterested = (job: any) => {
@@ -1440,7 +1512,9 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
     return new Set([
       ...appMatches
-        .filter((app: any) => app?.jobId && app?.status !== 'not_interested')
+        .filter((app: any) =>
+          app?.jobId && app?.status !== 'not_interested' && app?.status !== 'dismissed'
+        )
         .map((app: any) => String(app.jobId)),
       ...pairingMatches
         .filter((pairing: any) => pairing?.jobId && Number(pairing?.score || 0) >= 10)
@@ -1530,7 +1604,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     // Single combined filter pass \u2014 replaces 7 chained .filter() calls
     const jobs = visibleJobsList.filter((job: any) => {
       if (!jobHasUsableUrl(job)) return false
-      if (discardedJobs.has(job.id)) return false
+      if (discardedJobs.has(getJobDiscardKey(job))) return false
       if (showMatchedOnly && searchTerms.length === 0 && !matchedSet.has(job.id)) return false
       if (showInterestedOnly && !isJobInterested(job)) return false
       if (showNewOnly && !isNewJob(job)) return false
@@ -1639,7 +1713,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
 
     return { visibleJobs: jobs, exactSearchCount: searchTerms.length > 0 ? exactIds.size : jobs.length }
   }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, sortMode, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
-  const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
+  const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(getJobDiscardKey(job)))
 
   // Report the top visible job to the parent whenever the list changes
   useEffect(() => {

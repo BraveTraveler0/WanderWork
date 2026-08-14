@@ -824,7 +824,7 @@ async function backfillJobCompanies(jobs) {
 // records contain large resume/cover-letter objects, which can push an otherwise
 // small authenticated page load past the frontend timeout.
 const CANDIDATE_DASHBOARD_FIELDS = [
-    'firstName', 'lastName', 'email', 'phone', 'location',
+    'firstName', 'lastName', 'email', 'contactEmail', 'phone', 'location',
     'targetRoles', 'seniority', 'skills', 'skills_2', 'urls',
     'resumeLink', 'coverLetterLink', 'resume_hash',
     'resume_updated_at', 'coverLetter_updated_at', 'work_experience',
@@ -889,7 +889,11 @@ const getEverything = asyncHandler(async (req, res) => {
             ])
             const matchedJobIds = [
                 ...ApplicationsForCandidate
-                    .filter((application) => application.jobId && application.status !== 'not_interested')
+                    .filter((application) =>
+                        application.jobId &&
+                        application.status !== 'not_interested' &&
+                        application.status !== 'dismissed'
+                    )
                     .map((application) => application.jobId),
                 ...CandidatePairings
                     .filter((pairing) => pairing.jobId && Number(pairing.score || 0) >= 10)
