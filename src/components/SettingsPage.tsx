@@ -112,6 +112,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       coverLetter: null,
     })
   })
+  const accountEmail = candidate?.email || profile.email
 
   const [userId] = useState(() => localStorage.getItem('wanderworkUserId') || '')
   const [paymentProvider, setPaymentProvider] = useState<'stripe' | 'paypal'>(() => {
@@ -154,7 +155,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
   const handleUpgrade = async (plan: StripePlan) => {
     setUpgradeLoading(plan)
     try {
-      const url = await createCheckoutSession(plan, profile.email)
+      const url = await createCheckoutSession(plan, accountEmail)
       window.location.href = url
     } catch (err: any) {
       await showAlert('Checkout Failed', err?.message || 'Could not start checkout. Please try again.')
@@ -227,7 +228,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     if (!candidate) return
     const nextProfile = {
       fullName: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || profile.fullName,
-      email: candidate.email || profile.email,
+      email: candidate.contactEmail || candidate.email || profile.email,
       phone: candidate.phone || profile.phone,
       location: candidate.location?.[0]?.locationName || candidate.location?.[0]?.city || profile.location,
       resume: candidate.resume || candidate.resumeLink || profile.resume,
@@ -252,8 +253,11 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       const state = parts[1] || ''
       return { location: [{ locationName: value, city, state }] }
     }
-    if (field === 'email' || field === 'phone') {
-      return { [field]: value }
+    if (field === 'email') {
+      return { contactEmail: value }
+    }
+    if (field === 'phone') {
+      return { phone: value }
     }
     return null
   }
@@ -270,7 +274,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       }
       saveDebounceRef.current = window.setTimeout(async () => {
         try {
-          if (userId) {
+          if (userId && field !== 'email') {
             await updateUser(userId, { [field]: value })
           }
           if (candidate?._id && candidatePatch) {
@@ -303,7 +307,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
       }
 
       try {
-        const result = await uploadCandidateResume(profile.email, file)
+        const result = await uploadCandidateResume(accountEmail, file)
         const nextResume = result?.candidate?.resume || result?.candidate?.resumeLink || file.name
         const updated = { ...profile, resume: nextResume }
         setProfile(updated)
@@ -321,7 +325,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
 
     if (type === 'coverLetter') {
       try {
-        const result = await uploadCandidateCoverLetter(profile.email, file)
+        const result = await uploadCandidateCoverLetter(accountEmail, file)
         const nextCoverLetter = result?.candidate?.coverLetter || result?.candidate?.coverLetterLink || file.name
         const updated = { ...profile, coverLetter: nextCoverLetter }
         setProfile(updated)
@@ -364,7 +368,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
   }
 
   const handleResetPasswordLink = () => {
-    setPasswordStatus({ type: 'success', message: `Password reset link sent to ${profile.email}.` })
+    setPasswordStatus({ type: 'success', message: `Password reset link sent to ${accountEmail}.` })
   }
 
   const handlePaymentProviderChange = async (provider: 'stripe' | 'paypal') => {
@@ -514,7 +518,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   </div>
 
                   <div>
-                    <label className="block text-[12px] mb-2" style={{ color: '#787878' }}>Email</label>
+                    <label className="block text-[12px] mb-2" style={{ color: '#787878' }}>Resume Email</label>
                     <input
                       type="email"
                       value={profile.email}
@@ -859,7 +863,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                           {paymentProvider === 'stripe' ? 'Visa •••• 4451' : 'PayPal'}
                         </p>
                         <p className="text-[12px]" style={{ color: '#787878' }}>
-                          {paymentProvider === 'stripe' ? 'Expires 12/26' : profile.email}
+                          {paymentProvider === 'stripe' ? 'Expires 12/26' : accountEmail}
                         </p>
                       </div>
                       <button
@@ -876,7 +880,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
                     onClick={() => {
                       if (paymentProvider === 'stripe') {
-                        openCustomerPortal(profile.email).catch(() =>
+                        openCustomerPortal(accountEmail).catch(() =>
                           window.open('https://billing.stripe.com/p/login/7sY28s8860Dgg4ufHo3Ru00', '_blank', 'noopener,noreferrer')
                         )
                       } else {

@@ -14,6 +14,10 @@ const jobSeekerCandidateSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    contactEmail: {
+        type: String,
+        required: false
+    },
     profileImage: {
         type: String,
         required: false

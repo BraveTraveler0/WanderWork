@@ -79,6 +79,10 @@ const JOB_BOARD_COMPANIES = new Set([
   'greenhouse',
   'lever',
   'workday',
+  'ashby',
+  'smartrecruiters',
+  'workable',
+  'jobvite',
   'ziprecruiter',
 ])
 

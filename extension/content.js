@@ -40,34 +40,108 @@ function autofill(profile) {
   return filled;
 }
 
-function getJobInfo() {
-  const url = location.href;
-  const title = document.title
-    .replace(/\s*[-–|]\s*(Greenhouse|Lever|Ashby|Workday|SmartRecruiters|Workable|Jobvite).*$/i, '')
-    .replace(/\s*[-–|]\s*Jobs?\s*$/i, '')
-    .trim();
-
-  let company = '';
-  const ghMatch  = url.match(/boards\.greenhouse\.io\/([^/]+)/i) || url.match(/\.greenhouse\.io\/jobs\//i);
-  const levMatch = url.match(/jobs\.lever\.co\/([^/]+)/i);
-  const ashMatch = url.match(/jobs\.ashbyhq\.com\/([^/]+)/i);
-  const srMatch  = url.match(/jobs\.smartrecruiters\.com\/([^/]+)/i);
-  if (ghMatch?.[1])  company = ghMatch[1].replace(/-/g, ' ');
-  else if (levMatch?.[1]) company = levMatch[1].replace(/-/g, ' ');
-  else if (ashMatch?.[1]) company = ashMatch[1].replace(/-/g, ' ');
-  else if (srMatch?.[1])  company = srMatch[1].replace(/-/g, ' ');
-
-  if (!company) {
-    company = document.querySelector('meta[property="og:site_name"]')?.content || '';
-  }
-
-  return { title, company: company.replace(/\b\w/g, c => c.toUpperCase()), url };
-}
-
 // ── Widget ────────────────────────────────────────────────────────────────────
 
+const GENERIC_ATS_NAMES = new Set([
+  'ashby', 'greenhouse', 'jobvite', 'lever', 'smartrecruiters', 'workable', 'workday',
+  'careers', 'job board', 'jobs',
+]);
+const COMPANY_SUFFIXES = new Set([
+  'co', 'company', 'corp', 'corporation', 'global', 'group', 'holdings', 'inc',
+  'incorporated', 'international', 'limited', 'llc', 'ltd', 'plc', 'services',
+  'solutions', 'systems', 'technologies', 'technology',
+]);
+
+function cleanCompanyLabel(value) {
+  let decoded = String(value || '');
+  try { decoded = decodeURIComponent(decoded); } catch (_) { /* keep the original value */ }
+  return decoded
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_+]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isGenericAtsName(value) {
+  return GENERIC_ATS_NAMES.has(cleanCompanyLabel(value).toLowerCase());
+}
+
+function normalizeCompanyForMatch(value) {
+  return cleanCompanyLabel(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .filter(word => !['the', 'a', 'an'].includes(word) && !COMPANY_SUFFIXES.has(word))
+    .join(' ');
+}
+
+function getStructuredJobPosting() {
+  for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      const stack = [JSON.parse(script.textContent || '{}')];
+      while (stack.length) {
+        const item = stack.pop();
+        if (Array.isArray(item)) {
+          stack.push(...item);
+          continue;
+        }
+        if (!item || typeof item !== 'object') continue;
+        const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+        if (types.some(type => String(type).toLowerCase() === 'jobposting')) return item;
+        stack.push(...Object.values(item).filter(value => value && typeof value === 'object'));
+      }
+    } catch (_) { /* malformed third-party metadata */ }
+  }
+  return null;
+}
+
+function getCompanyFromUrl(urlValue) {
+  try {
+    const parsed = new URL(urlValue);
+    const host = parsed.hostname.toLowerCase();
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+    let slug = '';
+
+    if (host === 'boards.greenhouse.io' || host === 'job-boards.greenhouse.io') slug = pathParts[0] || '';
+    else if (host.endsWith('.greenhouse.io')) slug = host.slice(0, -'.greenhouse.io'.length).split('.').pop() || '';
+    else if (host === 'jobs.lever.co') slug = pathParts[0] || '';
+    else if (host === 'jobs.ashbyhq.com') slug = pathParts[0] || '';
+    else if (host === 'jobs.smartrecruiters.com' || host === 'careers.smartrecruiters.com') slug = pathParts[0] || '';
+    else if (host === 'apply.workable.com') slug = pathParts[0] || '';
+    else if (host === 'jobs.jobvite.com') slug = pathParts[0] || '';
+    else if (host.endsWith('.myworkdayjobs.com')) slug = host.split('.')[0] || '';
+
+    const company = cleanCompanyLabel(slug);
+    return isGenericAtsName(company) ? '' : company;
+  } catch (_) {
+    return '';
+  }
+}
+
+function getJobInfo() {
+  const url = location.href;
+  const structuredJob = getStructuredJobPosting();
+  const title = String(structuredJob?.title || document.title || '')
+    .replace(/\s*(?:-|\u2013|\u2014|\|)\s*(Greenhouse|Lever|Ashby|Workday|SmartRecruiters|Workable|Jobvite).*$/i, '')
+    .replace(/\s*(?:-|\u2013|\u2014|\|)\s*Jobs?\s*$/i, '')
+    .trim();
+
+  let company = cleanCompanyLabel(structuredJob?.hiringOrganization?.name) || getCompanyFromUrl(url);
+  if (!company) {
+    const metadataCompany = document.querySelector('meta[property="og:site_name"]')?.content
+      || document.querySelector('meta[name="application-name"]')?.content
+      || '';
+    if (!isGenericAtsName(metadataCompany)) company = cleanCompanyLabel(metadataCompany);
+  }
+
+  return { title, company, url };
+}
+
 function injectWidget(profile) {
-  if (document.getElementById('ww-widget')) return;
+  const existingWidget = document.getElementById('ww-widget');
+  if (existingWidget) existingWidget.remove();
 
   const { title: jobTitle, company, url: jobUrl } = getJobInfo();
   const LOGO_URL = chrome.runtime.getURL('logo.svg');
@@ -76,6 +150,7 @@ function injectWidget(profile) {
   // ── Root container ───────────────────────────────────────────────────────
   const widget = document.createElement('div');
   widget.id = 'ww-widget';
+  widget.dataset.jobUrl = jobUrl;
   Object.assign(widget.style, {
     position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px',
@@ -440,7 +515,9 @@ function injectWidget(profile) {
       try {
         const res = await fetch(`${API}/extension/recruiters?key=${encodeURIComponent(extensionKey)}&company=${encodeURIComponent(company)}`);
         const data = await res.json().catch(() => ({ recruiters: [] }));
-        const recruiters = data.recruiters || [];
+        const targetCompany = normalizeCompanyForMatch(company);
+        const recruiters = (data.recruiters || [])
+          .filter(recruiter => normalizeCompanyForMatch(recruiter.company) === targetCompany);
         if (!recruiters.length) return;
 
         hasRecruiters = true;
@@ -522,5 +599,20 @@ function injectWidget(profile) {
 // Inject whenever the user is connected, regardless of form presence
 chrome.storage.local.get(['profile'], ({ profile }) => {
   if (!profile) return;
-  injectWidget(profile);
+  let activeJobUrl = '';
+  let refreshTimer = null;
+
+  const refreshForActiveJob = () => {
+    const currentUrl = location.href;
+    const currentWidget = document.getElementById('ww-widget');
+    if (currentUrl === activeJobUrl && currentWidget?.dataset.jobUrl === currentUrl) return;
+
+    activeJobUrl = currentUrl;
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => injectWidget(profile), 500);
+  };
+
+  refreshForActiveJob();
+  window.addEventListener('popstate', refreshForActiveJob);
+  setInterval(refreshForActiveJob, 1500);
 });

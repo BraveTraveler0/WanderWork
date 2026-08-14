@@ -2,10 +2,13 @@ const express = require('express');
 const router = express.Router();
 const cors = require('cors');
 const crypto = require('crypto');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 const { requireAuth } = require('../middleware/requireAuth');
+const {
+  getRecruitersForCompany,
+  normalizeCompany,
+} = require('../services/recruiterCompanyPairingService');
 
 // This router is mounted BEFORE global CORS in server.js so content scripts
 // calling from ATS origins (greenhouse.io, lever.co, etc.) aren't rejected.
@@ -20,12 +23,6 @@ router.options('*', extensionCors);
 
 // Body parser — must be local because this router runs before global express.json()
 router.use(express.json({ limit: '1mb' }));
-
-function normalizeCompany(s) {
-  return String(s || '').toLowerCase()
-    .replace(/\b(inc|llc|ltd|corp|co|company|technologies|solutions|group|holdings)\b\.?/gi, '')
-    .replace(/[^a-z0-9]/g, '');
-}
 
 // GET /extension/key — returns (or generates) the extension key for the authenticated premium user
 router.get('/key', requireAuth, async (req, res) => {
@@ -76,7 +73,7 @@ router.get('/profile', async (req, res) => {
   res.json({
     firstName: candidate.firstName || '',
     lastName: candidate.lastName || '',
-    email: candidate.email || '',
+    email: candidate.contactEmail || candidate.email || '',
     phone: candidate.phone || '',
     city: loc.city || '',
     state: loc.state || '',
@@ -144,19 +141,23 @@ router.get('/recruiters', async (req, res) => {
     const company = String(req.query.company || '').trim();
     if (!company) return res.json({ recruiters: [] });
 
-    const normTarget = normalizeCompany(company);
-    if (normTarget.length < 3) return res.json({ recruiters: [] });
+    const normalizedCompany = normalizeCompany(company);
+    if (normalizedCompany.length < 3) return res.json({ recruiters: [] });
 
-    const recruiterCol = mongoose.connection.collection('jobseeker.recruiters');
-    const all = await recruiterCol.find(
-      { company: { $exists: true, $ne: '' } },
-      { projection: { name: 1, firstName: 1, lastName: 1, company: 1, jobTitle: 1, specialty: 1, email: 1 } }
-    ).toArray();
-
-    const matched = all.filter(r => {
-      const norm = normalizeCompany(r.company);
-      return norm === normTarget || norm.includes(normTarget) || normTarget.includes(norm);
-    }).slice(0, 5);
+    // Use the same vetted recruiter/job pairings as the main app. The exact
+    // normalized-company check is a final guard against close-name matches.
+    const matched = (await getRecruitersForCompany(company, { limit: 15 }))
+      .filter((recruiter) => normalizeCompany(recruiter.company) === normalizedCompany)
+      .slice(0, 5)
+      .map((recruiter) => ({
+        _id: recruiter._id,
+        name: recruiter.name,
+        firstName: recruiter.firstName,
+        lastName: recruiter.lastName,
+        company: recruiter.company,
+        jobTitle: recruiter.jobTitle,
+        specialty: recruiter.specialty,
+      }));
 
     res.json({ recruiters: matched });
   } catch (err) {

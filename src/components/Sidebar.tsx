@@ -73,7 +73,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
       title: firstTargetRole(rawCandidate),
       location: candidateLocation(rawCandidate),
-      email: rawCandidate.email || 'email@example.com',
+      email: rawCandidate.contactEmail || rawCandidate.email || 'email@example.com',
       phone: rawCandidate.phone || '+1-000-000-0000',
       skills: stringList(rawCandidate.skills).join(', ') || 'Skills',
       linkedin: candidateUrl(rawCandidate, 'LinkedIn', 'LinkedinURL.com'),
@@ -114,7 +114,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
         name: `${rawCandidate.firstName || ''} ${rawCandidate.lastName || ''}`.trim() || 'User',
         title: firstTargetRole(rawCandidate),
         location: candidateLocation(rawCandidate),
-        email: rawCandidate.email || 'email@example.com',
+        email: rawCandidate.contactEmail || rawCandidate.email || 'email@example.com',
         phone: rawCandidate.phone || '+1-000-000-0000',
         skills: stringList(rawCandidate.skills).join(', ') || 'Skills',
         linkedin: candidateUrl(rawCandidate, 'LinkedIn', 'LinkedinURL.com'),
@@ -165,7 +165,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
       case 'location':
         return { location: [{ locationName: trimmed, city: trimmed }] }
       case 'email':
-        return { email: trimmed }
+        return { contactEmail: trimmed }
       case 'phone':
         return { phone: trimmed }
       case 'skills': {
@@ -422,7 +422,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
             onCancel={() => handleCancel('location')}
           />
           <FieldRow
-            label="Email"
+            label="Resume Email"
             value={profile.email}
             editValue={editForm.email}
             editing={editingField === 'email'}

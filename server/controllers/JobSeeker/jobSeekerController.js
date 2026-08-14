@@ -14,6 +14,7 @@ const ContactJobPairings = require('../../models/JobSeeker/jobSeekerContactJobPa
 const { pairCandidateJobs, pairAllCandidates } = require('../../services/jobPairingService.js');
 const { getRecruiterContactsMaxOverride } = require('../../config/recruiterContactsOverrides');
 const { easternDaysElapsed } = require('../../utils/easternDayReset');
+const { formatCandidateLocation, sanitizeResumeHeader } = require('../../utils/resumeContact');
 
 function textValue(value) {
     if (value == null) return '';
@@ -2295,17 +2296,14 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
 
     // Collect real contact details so the AI never needs to use placeholders
     const candidatePhone = prevCandidate.phone || ''
-    const candidateLocation = [
-        prevCandidate.location?.[0]?.city,
-        prevCandidate.location?.[0]?.state,
-        prevCandidate.location?.[0]?.locationName,
-    ].filter(Boolean).join(', ')
+    const candidateLocation = formatCandidateLocation(prevCandidate.location?.[0])
+    const candidateContactEmail = cleanTextValue(prevCandidate.contactEmail || prevCandidate.email || email)
     const candidatePortfolio = prevCandidate.urls?.find((u) => u.urlName === 'Portfolio')?.urlAddress || ''
     const candidateGitHub = prevCandidate.urls?.find((u) => u.urlName === 'GitHub')?.urlAddress || ''
     const contactBlock = [
         candidateName,
         candidateLocation,
-        email,
+        candidateContactEmail,
         candidatePhone,
         candidatePortfolio,
         candidateGitHub,
@@ -2339,7 +2337,7 @@ const submitCustomRequest = asyncHandler(async (req, res) => {
     const fillPlaceholders = (text) => {
         if (!text) return text
         return text
-            .replace(/\[Your (E-?mail)\]/gi, email || '')
+            .replace(/\[Your (E-?mail)\]/gi, candidateContactEmail || '')
             .replace(/\[Your Phone( Number)?\]/gi, candidatePhone || '')
             .replace(/\[City,?\s*State,?\s*(Zip)?\]/gi, candidateLocation || '')
             .replace(/\[Your Address\]/gi, candidateLocation || '')
@@ -2494,7 +2492,14 @@ Tailor every bullet point to match the target job description — highlight spec
         })() : Promise.resolve(null),
     ])
 
-    const resumeContent = ensureSectionSpacing(stripLinkedInContact(fillPlaceholders(resumeRaw)))
+    const resumeContent = ensureSectionSpacing(sanitizeResumeHeader(
+        stripLinkedInContact(fillPlaceholders(resumeRaw)),
+        {
+            location: candidateLocation,
+            email: candidateContactEmail,
+            isSectionHeader: isResumeSectionHeader,
+        }
+    ))
     const coverLetterContent = stripLinkedInContact(fillPlaceholders(coverLetterRaw))
         ?.split('\n').filter(line => !/^---+$/.test(line.trim())).join('\n')
 
@@ -2696,6 +2701,7 @@ const UpdateAllData = asyncHandler(async (req, res) => {
     const editableCandidateFields = new Set([
         'firstName',
         'lastName',
+        'contactEmail',
         'phone',
         'location',
         'targetRoles',
@@ -2724,6 +2730,12 @@ const UpdateAllData = asyncHandler(async (req, res) => {
         const setFields = {};
         for (const [key, value] of Object.entries(patch || {})) {
             if (editableCandidateFields.has(key)) setFields[key] = value;
+        }
+        if (Object.prototype.hasOwnProperty.call(setFields, 'contactEmail')) {
+            setFields.contactEmail = cleanTextValue(setFields.contactEmail).toLowerCase();
+            if (setFields.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setFields.contactEmail)) {
+                return res.status(400).json({ message: 'Enter a valid contact email address.' });
+            }
         }
 
         if (Object.keys(setFields).length) {
