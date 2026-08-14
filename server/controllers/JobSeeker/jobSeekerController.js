@@ -2510,7 +2510,10 @@ Tailor every bullet point to match the target job description — highlight spec
                 candidatePortfolio,
                 candidateGitHub,
             ],
-            isSectionHeader: isResumeSectionHeader,
+            // Only stop at canonical resume sections. A generated all-caps name
+            // (for example, "DARRIEN CARTER") is part of the duplicate contact
+            // block and must be removed along with the rest of that block.
+            isSectionHeader: isKnownResumeSectionHeader,
         }
     ))
     const coverLetterContent = sanitizeDocumentContact(
