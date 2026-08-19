@@ -1241,7 +1241,23 @@ function App() {
 
     fetchData()
 
-    return () => controller.abort()
+    // A tab left open across a backend update (e.g. the nightly job-matching
+    // run) never refetches on its own, so the dashboard can sit stuck on an
+    // empty/stale match list indefinitely. Refresh when the user comes back
+    // to the tab, throttled so quick tab-switching doesn't spam the API.
+    let lastFetchAt = Date.now()
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastFetchAt < 2 * 60 * 1000) return
+      lastFetchAt = Date.now()
+      fetchData()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      controller.abort()
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [_user])
 
   const displayedJobId = selectedJobId ?? topVisibleJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
