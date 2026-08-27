@@ -75,7 +75,7 @@ function processJobDescription(d: unknown): string {
 }
 
 interface JobFeedProps {
-  onSelectJob: (id: number | null) => void
+  onSelectJob: (id: number | null, job?: any) => void
   selectedJobId: number | null
   data?: any
   onSignUp?: () => void
@@ -85,7 +85,7 @@ interface JobFeedProps {
   loading?: boolean
   isAuthenticated?: boolean
   onSignIn?: () => void
-  onTopJobChange?: (id: number | null) => void
+  onTopJobChange?: (id: number | null, job?: any) => void
   onRecruiterContactsClick?: () => void
   onBuyCredits?: () => void
   onSearchJobs?: (query: string) => Promise<any[]>
@@ -1288,7 +1288,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
       })
       setFadingJobId(null)
       if (shouldAdvanceSelection) {
-        onSelectJob(nextJobId)
+        onSelectJob(nextJobId, visibleJobs.find((job: any) => job.id === nextJobId))
       }
     }, 300)
   }
@@ -1395,7 +1395,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
   const matchedJobIds = useMemo(() => {
     const apps = Array.isArray(data?.Applications) ? data!.Applications : []
     const appMatches = candidateId
-      ? apps.filter((app: any) => app?.candidateId === candidateId)
+      ? apps.filter((app: any) => String(app?.candidateId) === String(candidateId))
       : apps
     const pairings = Array.isArray(data?.CandidateJobPairing) ? data!.CandidateJobPairing : []
     const pairingMatches = candidateId
@@ -1449,6 +1449,11 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     return set
   }, [visibleJobsList, candidateKeywords, matchedJobIds, jobSearchTexts, candidateLevel])
 
+  // Matching is generated asynchronously for new or recently updated profiles.
+  // Until at least one match exists, keep the main feed available instead of
+  // presenting a false "no jobs" state with the Matched toggle enabled.
+  const hasMatchedJobs = matchedSet.size > 0
+
   const { visibleJobs, exactSearchCount } = useMemo(() => {
     const searchTerms = searchQuery.trim() ? _normSearch(searchQuery).split(' ').filter(Boolean) : []
     const exactIds = new Set<number>()
@@ -1471,7 +1476,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     const jobs = visibleJobsList.filter((job: any) => {
       if (!jobHasUsableUrl(job)) return false
       if (discardedJobs.has(job.id)) return false
-      if (showMatchedOnly && searchTerms.length === 0 && !matchedSet.has(job.id)) return false
+      if (showMatchedOnly && hasMatchedJobs && searchTerms.length === 0 && !matchedSet.has(job.id)) return false
       if (showInterestedOnly && !isJobInterested(job)) return false
       if (showNewOnly && !isNewJob(job)) return false
 
@@ -1578,12 +1583,12 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
     })
 
     return { visibleJobs: jobs, exactSearchCount: searchTerms.length > 0 ? exactIds.size : jobs.length }
-  }, [visibleJobsList, discardedJobs, showMatchedOnly, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, sortMode, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
+  }, [visibleJobsList, discardedJobs, showMatchedOnly, hasMatchedJobs, matchedSet, showInterestedOnly, showNewOnly, locationQuery, dateRange, sortMode, keywords, interestedOverrides, jobSearchTexts, searchQuery, userCountry, clusterAffinity])
   const discardedJobsList = visibleJobsList.filter((job: any) => discardedJobs.has(job.id))
 
   // Report the top visible job to the parent whenever the list changes
   useEffect(() => {
-    onTopJobChange?.(visibleJobs[0]?.id ?? null)
+    onTopJobChange?.(visibleJobs[0]?.id ?? null, visibleJobs[0])
   }, [visibleJobs[0]?.id])
 
   // Process descriptions only for the jobs currently rendered — not the full list
@@ -2000,7 +2005,7 @@ const JobFeed = ({ onSelectJob, selectedJobId, data, jobs = [], showNewOnly, loa
               interested={isInterested}
               hasNewBadge={isNew}
               expiringDays={expiringDays}
-              onClick={() => onSelectJob(job.id)}
+              onClick={() => onSelectJob(job.id, job)}
               isSelected={selectedJobId === job.id}
               onDiscard={handleDiscardJob}
               onToggleInterested={() => toggleInterested(job)}

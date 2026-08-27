@@ -68,6 +68,7 @@ const asStringList = (value: unknown): string[] => {
 
 interface StatsPanelProps {
   jobId: number | null
+  selectedJob?: any
   onClose: () => void
   data?: any
   jobs?: any[]
@@ -79,7 +80,7 @@ interface StatsPanelProps {
   onAutoOpenCoverLetterHandled?: () => void
 }
 
-const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, selectedJob, data, jobs = [], onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
   const newJobsCount = allJobs.filter(isNewJob).length
@@ -92,7 +93,9 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
   const canOrder = hasUploadedResume && hasBasicProfile
   const [showCustomRequestModal, setShowCustomRequestModal] = useState<{ jobId: string | number; jobTitle: string; company: string; job?: any } | null>(null)
   const [initialCustomRequest, setInitialCustomRequest] = useState<{ resume?: boolean; coverLetter?: boolean } | null>(null)
-  const selectedJobForCompany = jobs?.find((job: any) => job.id === jobId) ?? data?.Jobs?.find((job: any) => job.id === jobId)
+  const selectedJobForCompany = selectedJob
+    ?? jobs?.find((job: any) => String(job.id) === String(jobId))
+    ?? data?.Jobs?.find((job: any) => [job.id, job._id, job.job_code].some((id) => String(id) === String(jobId)))
   const selectedCompany = asText(selectedJobForCompany?.company).trim() || undefined
 
   const [interestedOverrides, setInterestedOverrides] = useState<Record<number, boolean>>(loadInterestedOverrides)
@@ -383,14 +386,12 @@ const StatsPanel = ({ jobId, data, jobs = [], onNewJobsClick, onRecruiterContact
       {/* Job Detail Card */}
       {(() => {
         // First try to find in jobs array, then in data
-        const selectedJob = jobs?.find((job: any) => job.id === jobId) || 
-                           data?.Jobs?.find((job: any) => job.id === jobId) || 
-                           {
+        const selectedJob = selectedJobForCompany || {
           id: jobId,
-          title: 'Job Title',
-          company: 'Coca - Cola',
-          location: 'New York, NY, USA',
-          skills: ['UX', 'Design', 'Marketing'],
+          title: 'Job details unavailable',
+          company: 'Please return to the job feed and try again.',
+          location: '',
+          skills: [],
           description: 'We couldn\'t load this job\'s full description yet. You can still review your match, confirm the requirements, and apply directly on the employer\'s site.'
         }
 
