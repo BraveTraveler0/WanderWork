@@ -500,12 +500,14 @@ function transformJob(job: Job, index: number) {
 
 function App() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [selectedJobRecord, setSelectedJobRecord] = useState<any | null>(null)
   const [data, setData] = useState<JobSeekerData | null>(null)
   const [transformedJobs, setTransformedJobs] = useState<any[]>([])
   const [publicJobs, setPublicJobs] = useState<any[]>([])
   const [publicJobsLoading, setPublicJobsLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [topVisibleJobId, setTopVisibleJobId] = useState<number | null>(null)
+  const [topVisibleJobRecord, setTopVisibleJobRecord] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>(() => {
@@ -1278,6 +1280,14 @@ function App() {
   }, [_user])
 
   const displayedJobId = selectedJobId ?? topVisibleJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
+  const handleSelectJob = useCallback((id: number | null, job?: any) => {
+    setSelectedJobId(id)
+    setSelectedJobRecord(id === null ? null : (job ?? null))
+  }, [])
+  const handleTopJobChange = useCallback((id: number | null, job?: any) => {
+    setTopVisibleJobId(id)
+    setTopVisibleJobRecord(id === null ? null : (job ?? null))
+  }, [])
 
   const handleBottomNavigate = (page: BottomNavPage) => {
     if (page === 'messages') setUnseenAppCount(0)
@@ -1774,7 +1784,7 @@ function App() {
             <div className="flex-1 md:flex-[1.65] xl:flex-[1.8] min-h-[60vh] md:min-h-0 md:overflow-hidden">
               <div className={selectedJobId !== null ? 'hidden md:block h-full' : 'block h-full'}>
                 <JobFeed
-                  onSelectJob={setSelectedJobId}
+                  onSelectJob={handleSelectJob}
                   selectedJobId={selectedJobId}
                   data={safeData}
                   jobs={_token ? transformedJobs : publicJobs}
@@ -1785,7 +1795,7 @@ function App() {
                   onSearchJobs={searchJobsFromDatabase}
                   onSignIn={() => setShowLogin(true)}
                   onSignUp={() => setShowSignup(true)}
-                  onTopJobChange={setTopVisibleJobId}
+                  onTopJobChange={handleTopJobChange}
                   onRecruiterContactsClick={() => setShowRecruiterNavModal(true)}
                   onBuyCredits={() => setCurrentPage('plans')}
                 />
@@ -1805,6 +1815,7 @@ function App() {
                   <div className="p-4 pb-24">
                     <StatsPanel
                       jobId={selectedJobId}
+                      selectedJob={selectedJobRecord}
                       onClose={() => setSelectedJobId(null)}
                       data={safeData}
                       jobs={_token ? transformedJobs : publicJobs}
@@ -1825,6 +1836,7 @@ function App() {
               {displayedJobId !== null && (
                 <StatsPanel
                   jobId={displayedJobId}
+                  selectedJob={selectedJobId !== null ? selectedJobRecord : topVisibleJobRecord}
                   onClose={() => setSelectedJobId(null)}
                   data={safeData}
                   jobs={_token ? transformedJobs : publicJobs}
