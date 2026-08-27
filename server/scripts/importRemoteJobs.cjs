@@ -259,6 +259,70 @@ async function fetchWorkingNomads(category = null) {
   });
 }
 
+// We Work Remotely — public per-category RSS, no auth and no login wall (job
+// pages are public; "Apply" click-throughs go to the employer's own site, same
+// tier as Remotive/TheMuse below). Titles arrive as "Company: Job Title" with
+// no separate company field, hence the split on the first ": ".
+function extractRssTag(block, tag) {
+  const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
+  return m ? m[1].trim() : ''
+}
+function decodeRssEntities(str) {
+  return String(str)
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+}
+
+// Verified live 2026-08: only these category slugs resolve with real content —
+// a few plausible-looking ones (remote-copywriting-jobs, remote-data-jobs,
+// remote-hr-jobs) redirect elsewhere or no longer exist. Pure-programming
+// categories are skipped on purpose: that pool is huge but almost entirely
+// senior/staff roles already well covered by the ATS company boards above, so
+// pulling it in would mostly add senior noise instead of helping the
+// intern/entry-level gap this source exists to fill.
+const WWR_CATEGORIES = [
+  { slug: 'remote-customer-support-jobs', tag: 'Customer Support' },
+  { slug: 'remote-sales-and-marketing-jobs', tag: 'Sales & Marketing' },
+  { slug: 'remote-design-jobs', tag: 'Design' },
+  { slug: 'remote-devops-sysadmin-jobs', tag: 'DevOps & Sysadmin' },
+  { slug: 'remote-management-and-finance-jobs', tag: 'Management & Finance' },
+  { slug: 'remote-product-jobs', tag: 'Product' },
+  { slug: 'all-other-remote-jobs', tag: 'Other' },
+]
+
+async function fetchWeWorkRemotely({ slug, tag }) {
+  const res = await get(`https://weworkremotely.com/categories/${slug}.rss`)
+  const blocks = [...String(res.data).matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1])
+  return blocks.flatMap(block => {
+    const rawTitle = decodeRssEntities(extractRssTag(block, 'title'))
+    const sep = rawTitle.indexOf(': ')
+    if (sep === -1) return []
+    const company = rawTitle.slice(0, sep).trim()
+    const title = rawTitle.slice(sep + 2).trim()
+    const url = extractRssTag(block, 'link') || extractRssTag(block, 'guid')
+    const desc = truncateDesc(extractRssTag(block, 'description'))
+    if (!title || !company || !url || !desc || detectLang(desc) !== 'en') return []
+    const region = decodeRssEntities(extractRssTag(block, 'region'))
+    const pubDate = extractRssTag(block, 'pubDate')
+    return [{
+      title: stripEmoji(title),
+      company: stripEmoji(company),
+      url,
+      apply_url: null,
+      company_url: null,
+      salary: 'Not Listed',
+      location: normalizeLocation(region),
+      job_type: extractRssTag(block, 'type') === 'Contract' ? 'Contract' : 'Full-time',
+      date_posted: pubDate ? new Date(pubDate) : new Date(),
+      description_short: desc,
+      lang: 'en',
+      source: 'WeWorkRemotely',
+      ats_direct: false,
+      tags: [tag],
+    }]
+  })
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 // Each entry is { name, fetch }. Jobicy and RemoteOK were removed — both route
@@ -281,11 +345,19 @@ const SOURCES = [
   { name: 'TheMuse (Data/AI)', fetch: () => fetchTheMuse({ category: 'Data and Analytics' }) },
   { name: 'TheMuse (Design/UX)', fetch: () => fetchTheMuse({ category: 'Design and UX' }) },
   { name: 'TheMuse (Operations)', fetch: () => fetchTheMuse({ category: 'Business Operations' }) },
-  { name: 'TheMuse (Internships)', fetch: () => fetchTheMuse({ level: 'Internship' }) },
+  // Remote internships are a thin slice even before filtering (~2% of The
+  // Muse's own Internship-level postings are remote-eligible), so this one
+  // gets paged much deeper than the category fetches above to actually surface
+  // that thin slice instead of mostly missing it within the default 3 pages.
+  { name: 'TheMuse (Internships)', fetch: () => fetchTheMuse({ level: 'Internship' }, 10) },
   // "Education"/"Healthcare" were tried and dropped — verified live (300+ job
   // sample each) that both categories on The Muse are ~0% remote-eligible;
   // online tutoring and telehealth roles are sourced via ATS company seeds
   // in importAtsJobs.cjs instead (Preply, Cambly, Lyra Health, BetterHelp...).
+
+  // We Work Remotely — see WWR_CATEGORIES comment above for source rationale
+  // and why pure-programming categories are deliberately excluded.
+  ...WWR_CATEGORIES.map(c => ({ name: `WeWorkRemotely (${c.tag})`, fetch: () => fetchWeWorkRemotely(c) })),
 ];
 
 async function importRemoteJobs() {
