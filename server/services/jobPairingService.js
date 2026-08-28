@@ -242,7 +242,13 @@ function buildReasons(params) {
   if (roleDistance === 0) reasons.push(`Direct ${jobClusterId?.replace(/_/g, ' ')} role match`)
   else if (roleDistance === 1) reasons.push(`Strong adjacent role (${jobClusterId?.replace(/_/g, ' ')})`)
   else if (roleDistance === 2) reasons.push(`Bridge match: ${candClusterId?.replace(/_/g, ' ')} → ${jobClusterId?.replace(/_/g, ' ')}`)
-  else if (roleDistance === 3) reasons.push(`Stretch match: ${candClusterId?.replace(/_/g, ' ')} → ${jobClusterId?.replace(/_/g, ' ')}`)
+  else if (roleDistance === 3) {
+    // Reachable either as a real cross-cluster stretch (both known) or as the
+    // fallback for an unclassified candidate/job title (one or both null).
+    reasons.push(candClusterId && jobClusterId
+      ? `Stretch match: ${candClusterId.replace(/_/g, ' ')} → ${jobClusterId.replace(/_/g, ' ')}`
+      : 'Possible match based on skills')
+  }
 
   if (bridgeEval?.evidenceSkills?.length) {
     reasons.push(`Bridge skills: ${bridgeEval.evidenceSkills.slice(0, 4).join(', ')}`)
@@ -273,11 +279,16 @@ function scoreJob(candidate, job, jobPrecomp, candSkills, expandedSkills, candRo
   const { text, tokens, titleNorm, cluster: jobClusterObj } = jobPrecomp
   const jobClusterId = jobClusterObj?.id ?? null
 
-  // Role distance
+  // Role distance. Both sides must resolve to a known cluster for the
+  // adjacency table to mean anything — getDistance() falls back to 3
+  // ("moderate caution, don't hard block") when either side is unclassified.
+  const knownClusters = Boolean(candCluster?.id) && Boolean(jobClusterId)
   const distance = getDistance(candCluster?.id ?? null, jobClusterId)
 
-  // Hard block at distance 5 (unrelated families)
-  if (distance >= 5) {
+  // Hard block at distance 5 (unrelated families) — only meaningful between
+  // two known clusters; an unclassified candidate/job title falls back to
+  // distance 3 above and should never hit this.
+  if (knownClusters && distance >= 5) {
     return {
       score: 0,
       excluded: true,
@@ -290,15 +301,19 @@ function scoreJob(candidate, job, jobPrecomp, candSkills, expandedSkills, candRo
     return { score: 0, excluded: true, excludeReason: 'Entry-level job excluded for senior candidate' }
   }
 
-  // Bridge evidence (only meaningful when distance >= 2)
+  // Bridge evidence (only meaningful when both clusters are known and distance >= 2).
+  // When a candidate's target role doesn't match any known cluster (e.g. "CEO/Director",
+  // "automotive dealership"), there's no "from" cluster to bridge from — gating on bridge
+  // evidence in that case would exclude every job regardless of skill fit, which is the
+  // opposite of the "don't hard block" fallback getDistance() already chose.
   let bridgeEvidenceResult = null
-  if (distance >= 2 && candCluster?.id && jobClusterId) {
+  if (knownClusters && distance >= 2) {
     bridgeEvidenceResult = getBridgeEvidence(candSkills, candCluster.id, jobClusterId)
   }
   const bridgeEval = evaluateBridge(bridgeEvidenceResult, distance)
 
-  // At distance 2+, require bridge evidence to show the job
-  if (distance >= 2 && !bridgeEval.show) {
+  // At distance 2+ between two known clusters, require bridge evidence to show the job
+  if (knownClusters && distance >= 2 && !bridgeEval.show) {
     return {
       score: 0,
       excluded: true,
