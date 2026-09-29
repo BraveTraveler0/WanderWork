@@ -114,6 +114,10 @@ const RECRUITER_DRAFT_TIMEOUT_MS = 60000;
 
 type FetchJsonInit = RequestInit & { signal?: AbortSignal; timeoutMs?: number };
 
+export function isUnauthorizedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 401;
+}
+
 function getAuthHeader(): Record<string, string> {
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('wanderworkToken') : null
@@ -139,7 +143,9 @@ async function fetchJson<T>(path: string, init?: FetchJsonInit): Promise<T> {
     });
     if (!res.ok) {
       const errorBody = await res.json().catch(() => null);
-      throw new Error(errorBody?.message || `Request failed ${res.status} ${res.statusText}`);
+      const error = new Error(errorBody?.message || `Request failed ${res.status} ${res.statusText}`) as Error & { status: number };
+      error.status = res.status;
+      throw error;
     }
     return res.json();
   } finally {

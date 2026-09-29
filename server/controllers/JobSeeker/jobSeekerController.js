@@ -2959,7 +2959,10 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         ? Math.min(requestedLimit, FEATURED_JOBS_MAX_LIMIT)
         : FEATURED_JOBS_DEFAULT_LIMIT;
 
-    const all = await getAllJobsPure();
+    // The public feed only needs a bounded recent candidate set. Reusing the
+    // unbounded getAllJobsPure() path makes a cold page load scan and hydrate
+    // the entire jobs collection before returning the first card.
+    const all = await getDashboardJobsPure(FEATURED_JOBS_MAX_LIMIT);
     const now = Date.now();
 
     const scored = [];
