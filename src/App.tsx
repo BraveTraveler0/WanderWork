@@ -30,6 +30,7 @@ import {
   getContacts,
   getCandidateJobPairings,
   getContactJobPairings,
+  isUnauthorizedError,
   type Candidate,
   type Job,
   type JobSeekerData,
@@ -709,6 +710,10 @@ function App() {
     setUser(null)
     setToken(null)
     setData(null)
+    setSelectedJobId(null)
+    setSelectedJobRecord(null)
+    setTopVisibleJobId(null)
+    setTopVisibleJobRecord(null)
     setProfileImage(null)
   }
 
@@ -805,7 +810,14 @@ function App() {
   }, [currentPage, showLogin, showSignup, showLandingPage])
 
   useEffect(() => {
-    fetch(`${API_BASE}/jobseeker/job-stats`)
+    // Job cards are the primary content. On a cold backend, job-stats can take
+    // much longer than the curated feed, so do not make both database-heavy
+    // requests compete during first paint.
+    const primaryFeedLoading = _token ? loading : publicJobsLoading
+    if (primaryFeedLoading) return
+
+    const controller = new AbortController()
+    fetch(`${API_BASE}/jobseeker/job-stats`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error('job-stats not available')
         return response.json()
@@ -813,8 +825,12 @@ function App() {
       .then((stats) => {
         if (Number.isFinite(stats?.newJobs)) setLiveNewJobsCount(stats.newJobs)
       })
-      .catch((statsError) => console.warn('Could not load live job count', statsError))
-  }, [])
+      .catch((statsError) => {
+        if (statsError?.name !== 'AbortError') console.warn('Could not load live job count', statsError)
+      })
+
+    return () => controller.abort()
+  }, [_token, loading, publicJobsLoading])
 
   useEffect(() => {
     if (_token) return
@@ -1084,6 +1100,16 @@ function App() {
   ]
 
   useEffect(() => {
+    // Public visitors use the curated public feed below. Do not call private
+    // dashboard endpoints without a session token (it only creates 401s and
+    // can leave the UI on placeholder data).
+    if (!_token) {
+      setLoading(false)
+      setData(null)
+      setTransformedJobs([])
+      return
+    }
+
     const controller = new AbortController()
 
     const useJobs = (payload: {
@@ -1155,8 +1181,10 @@ function App() {
           return
         } catch (aggregateErr) {
           if (controller.signal.aborted) return
-          // 401 = token expired or account deleted — clear auth and show landing
-          if (String(aggregateErr).includes('401')) {
+          // 401 = token expired or account deleted — clear auth and show the
+          // public job feed. fetchJson preserves the status separately from
+          // the server's human-readable message.
+          if (isUnauthorizedError(aggregateErr)) {
             clearLocalAuth()
             setLoading(false)
             return
@@ -1209,6 +1237,11 @@ function App() {
           return
         } catch (endpointErr) {
           if (controller.signal.aborted) return
+          if (isUnauthorizedError(endpointErr)) {
+            clearLocalAuth()
+            setLoading(false)
+            return
+          }
           console.warn('Endpoint fetch failed, using seeds:', endpointErr)
         }
 
@@ -1260,7 +1293,7 @@ function App() {
       controller.abort()
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [_user])
+  }, [_token, _user])
 
   const displayedJobId = selectedJobId ?? topVisibleJobId ?? (_token ? (transformedJobs[0]?.id ?? null) : (publicJobs[0]?.id ?? null))
   const handleSelectJob = useCallback((id: number | null, job?: any) => {
