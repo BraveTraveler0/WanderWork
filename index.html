@@ -26,9 +26,6 @@
       fbq('init', '1068032962814492');
       fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=1068032962814492&ev=PageView&noscript=1"
-    /></noscript>
     <!-- End Meta Pixel Code -->
     <title>WanderWork — Remote Jobs, AI Resume Builder & Digital Nomad Jobs</title>
     <meta name="description" content="Find remote jobs, work-from-home jobs, and digital nomad-friendly jobs. AI tools to tailor your resume, generate cover letters, and find recruiter contacts — all in one place." />
@@ -84,6 +81,10 @@
     </script>
   </head>
   <body>
+    <!-- Meta Pixel noscript fallback (must live in body; img is invalid in head noscript) -->
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1068032962814492&ev=PageView&noscript=1"
+    /></noscript>
     <div id="root">
       <div id="initial-loader" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(145.48deg,#F9FAFB 0%,#F0F2F5 100%)">
         <div style="width:48px;height:48px;border-radius:50%;border:4px solid #C8DDE0;border-top-color:#1e5560;animation:ww-spin 0.75s linear infinite"></div>
