@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { API_BASE_URL } from '../api/config'
+import { trackSignupCompleted } from '../utils/signupTracking'
 
 const BASE_URL = API_BASE_URL
 
@@ -34,6 +35,8 @@ function GoogleLoginButton({ onLogin, onError }: { onLogin: (user: any, token: s
           throw new Error(j.message || 'Google login failed')
         }
         const data = await res.json()
+        // First-time Google users get an account created here, so count them as sign-ups.
+        if (data?.isNewUser) trackSignupCompleted('google')
         localStorage.setItem('wanderworkToken', data.token)
         localStorage.setItem('wanderworkUser', JSON.stringify(data.user))
         onLogin(data.user, data.token)
