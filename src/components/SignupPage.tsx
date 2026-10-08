@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { parseSignupResume, uploadCandidateResume } from '../api/jobseeker'
 import { API_BASE_URL } from '../api/config'
 import TermsOfServicePage from './TermsOfServicePage'
+import { trackSignupCompleted, trackSignupStarted } from '../utils/signupTracking'
 
 interface SignupPageProps {
   onSignup: (user: any, token: string) => void
@@ -56,6 +57,7 @@ function GoogleSignupButton({
         })
         const data = await response.json()
         if (!response.ok) throw new Error(data?.message || 'Google sign-up failed')
+        if (data?.isNewUser) trackSignupCompleted('google')
 
         localStorage.setItem('wanderworkToken', data.token)
         localStorage.setItem('wanderworkUser', JSON.stringify(data.user))
@@ -77,6 +79,7 @@ function GoogleSignupButton({
           onRequireTerms()
           return
         }
+        trackSignupStarted('google')
         googleSignup()
       }}
       disabled={googleLoading}
@@ -411,6 +414,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     }
     setLoading(true)
     setError(null)
+    trackSignupStarted('email')
     try {
       const response = await fetch(`${BASE_URL}/auth/signup`, {
         method: 'POST',
@@ -423,6 +427,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data?.message || 'Could not create your account.')
+      trackSignupCompleted('email')
 
       const token = data.token || data.user?.token
       localStorage.setItem('wanderworkToken', token)

@@ -6,6 +6,10 @@ import './index.css'
 import '@fontsource/manrope/400.css'
 import '@fontsource/manrope/700.css'
 import '@fontsource/manrope/800.css'
+import { captureFirstTouch } from './utils/signupTracking'
+
+// Remember where this visitor first came from, for sign-up attribution.
+captureFirstTouch()
 
 inject()
 
