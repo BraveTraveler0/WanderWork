@@ -267,6 +267,7 @@ router.post('/google', async (req, res) => {
     if (!googleEmail) return res.status(400).json({ message: 'Could not verify Google identity' });
 
     let user = await User.findOne({ email: googleEmail });
+    const isNewUser = !user;
     if (!user) {
       const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
       user = await User.create({
@@ -318,7 +319,7 @@ router.post('/google', async (req, res) => {
     }
 
     const token = jwtUtils.generateToken(user);
-    res.json({ user: { ...user._doc, password: undefined }, token });
+    res.json({ user: { ...user._doc, password: undefined }, token, isNewUser });
   } catch (err) {
     console.error('Google OAuth error:', err);
     res.status(500).json({ message: 'Server Error' });
