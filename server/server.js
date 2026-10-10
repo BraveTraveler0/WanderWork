@@ -382,6 +382,7 @@ const routes = {
   '/capitalwatch': './routes/capitalWatchRoutes',
   '/account-deletion': './routes/accountDeletionRoutes',
   '/revenuecat': './routes/revenueCatWebhook',
+  '/blog': './routes/blogRoutes',
 };
 
 // Register routes
