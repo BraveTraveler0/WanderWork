@@ -383,6 +383,7 @@ const routes = {
   '/account-deletion': './routes/accountDeletionRoutes',
   '/revenuecat': './routes/revenueCatWebhook',
   '/blog': './routes/blogRoutes',
+  '/': './routes/blogPublicRoutes',
 };
 
 // Register routes

@@ -3,14 +3,12 @@ import type { FormEvent, ReactNode } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Home, MessageCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { createBlogPost, deleteBlogPost, fetchBlogPosts, fetchNewsletterSubscribers, subscribeToNewsletter, updateBlogPost } from '../api/blog'
 import type { BlogPost, BlogPostInput } from '../api/blog'
-import imgHero from 'figma:asset/727bb285cb25e44e8a2e2ed68ca5c149c445f1a7.png'
-import imgBeachCreator from 'figma:asset/bd1dfdd1f7541a99c130874e76da6fe27ad072ff.png'
-import imgMountainCreator from 'figma:asset/c8a0a7b242b87c734d608cc38bf5905fcecbaab2.png'
-import imgBeachLaptop from 'figma:asset/17f56f62fc64ae1bb34eb9d3cd457cef5c9b04c3.png'
-import imgFrustrated from 'figma:asset/bcf7986aed3699a8b742711600244619e5c21657.png'
-import imgPaperChaos from 'figma:asset/35904082bd19768543c49f5873af7b0656a20011.png'
 
-const BLOG_PATH = '/aonverse/blog'
+// The public blog at /aonverse/blog is rendered by the server for search engines.
+// This React view is the admin side of it.
+const PUBLIC_BLOG_PATH = '/aonverse/blog'
+const BLOG_PATH = `${PUBLIC_BLOG_PATH}/admin`
+const imgHero = '/blog-images/hero.jpg'
 
 interface BlogPageProps {
   onBack: () => void
@@ -21,13 +19,14 @@ const FONT = 'Manrope, sans-serif'
 const POSTS_PER_PAGE = 3
 const CUSTOM_IMAGE = 'custom'
 
-// Test images bundled with the app. Posts reference them by key, or use an https link instead.
+// Images served from /blog-images (server/config/blogImages.js lists the same keys).
+// Posts reference them by key, or use an https link instead.
 const BUILT_IN_IMAGES: Record<string, { label: string; src: string }> = {
-  'beach-creator':    { label: 'Creator on the beach', src: imgBeachCreator },
-  'mountain-creator': { label: 'Creator on a mountain', src: imgMountainCreator },
-  'beach-laptop':     { label: 'Laptop on the sand', src: imgBeachLaptop },
-  'frustrated':       { label: 'Frustrated at a laptop', src: imgFrustrated },
-  'paper-chaos':      { label: 'Flying papers', src: imgPaperChaos },
+  'beach-creator':    { label: 'Creator on the beach', src: '/blog-images/beach-creator.jpg' },
+  'mountain-creator': { label: 'Creator on a mountain', src: '/blog-images/mountain-creator.jpg' },
+  'beach-laptop':     { label: 'Laptop on the sand', src: '/blog-images/beach-laptop.jpg' },
+  'frustrated':       { label: 'Frustrated at a laptop', src: '/blog-images/frustrated.jpg' },
+  'paper-chaos':      { label: 'Flying papers', src: '/blog-images/paper-chaos.png' },
 }
 
 const imageSrc = (image: string) => BUILT_IN_IMAGES[image]?.src ?? (/^https:\/\//i.test(image) ? image : imgHero)
@@ -39,10 +38,10 @@ const formatDate = (iso: string) =>
 const isSubheading = (paragraph: string) =>
   paragraph.length <= 70 && !paragraph.includes('\n') && !/[.!?:,;"]$/.test(paragraph)
 
-const PAGE_TITLE = 'Aonverse Blog | WanderWork'
+const PAGE_TITLE = 'Blog Admin | WanderWork'
 
 const slugFromPath = () =>
-  decodeURIComponent(window.location.pathname.slice(BLOG_PATH.length).replace(/^\/+|\/+$/g, '')) || null
+  decodeURIComponent(window.location.pathname.slice(PUBLIC_BLOG_PATH.length).replace(/^\/+|\/+$/g, '').replace(/^admin\/?/, '')) || null
 
 const SidebarHeading = ({ children }: { children: string }) => (
   <h3 className="text-[13px] font-semibold mb-4 pl-3" style={{ color: '#333', borderLeft: `2px solid ${TEAL}`, lineHeight: '14px' }}>
@@ -271,7 +270,7 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
     const originalDescription = description?.content
     if (description && activeExcerpt) description.content = activeExcerpt
     const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
-    if (canonical) canonical.href = `https://wanderwork.io${BLOG_PATH}${activeSlug ? `/${activeSlug}` : ''}`
+    if (canonical) canonical.href = `https://wanderwork.io${PUBLIC_BLOG_PATH}${activeSlug ? `/${activeSlug}` : ''}`
     return () => {
       if (description && originalDescription !== undefined) description.content = originalDescription
     }
@@ -320,6 +319,7 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 text-[12px]" style={{ color: TEAL }}>
             <span className="font-semibold">Admin view. You can add, edit, and delete posts.</span>
             <div className="flex items-center gap-2 shrink-0">
+              <a href={activePost ? `${PUBLIC_BLOG_PATH}/${activePost.slug}` : PUBLIC_BLOG_PATH} className="hidden sm:inline px-3 py-1.5 font-bold">View public page</a>
               <button onClick={handleExportSubscribers} className="flex items-center gap-1.5 px-3 py-1.5 font-bold border rounded-[3px]" style={{ borderColor: TEAL }}>
                 <Download size={13} />
                 <span className="hidden sm:inline">Newsletter list</span>
