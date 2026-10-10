@@ -22,6 +22,7 @@ const LoginPage = lazy(() => import('./components/LoginPage'))
 const SignupPage = lazy(() => import('./components/SignupPage'))
 const ForgotPasswordPage = lazy(() => import('./components/ForgotPasswordPage'))
 const LandingPage = lazy(() => import('./landing/LandingPage'))
+const BlogPage = lazy(() => import('./components/BlogPage'))
 import {
   getAllJobSeekerData,
   getJobs,
@@ -506,11 +507,12 @@ function App() {
   const [topVisibleJobRecord, setTopVisibleJobRecord] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNewOnly, setShowNewOnly] = useState(false)
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'>(() => {
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam' | 'blog'>(() => {
     const path = window.location.pathname
     if (path === '/privacy') return 'privacy'
     if (path === '/terms') return 'terms'
     if (path === '/bug-report' || path === '/report-bug') return 'reportbug'
+    if (path === '/aonverse/blog' || path.startsWith('/aonverse/blog/')) return 'blog'
     return 'dashboard'
   })
   const [unseenAppCount, setUnseenAppCount] = useState(0)
@@ -691,8 +693,8 @@ function App() {
     return () => clearInterval(interval)
   }, [_user?.email])
 
-  type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam'
-  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report' }
+  type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam' | 'blog'
+  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report', blog: '/aonverse/blog' }
   const navigateTo = (page: Page) => {
     const url = PAGE_URLS[page] ?? '/'
     window.history.pushState({ wanderPage: page }, '', url)
@@ -779,6 +781,8 @@ function App() {
       plans:          { title: 'Plans & Pricing | WanderWork', noindex: false },
       privacy:        { title: 'Privacy Policy | WanderWork', noindex: false },
       terms:          { title: 'Terms of Service | WanderWork', noindex: false },
+      // Placeholder posts for now; allow indexing once real content is published.
+      blog:           { title: 'Aonverse Blog | WanderWork', noindex: true },
     }
 
     const effectivePage = showLandingPage ? '__landing__' : showLogin || showSignup ? '__auth__' : currentPage
@@ -932,6 +936,7 @@ function App() {
         if (path === '/privacy') setCurrentPage('privacy')
         else if (path === '/terms') setCurrentPage('terms')
         else if (path === '/bug-report' || path === '/report-bug') setCurrentPage('reportbug')
+        else if (path === '/aonverse/blog' || path.startsWith('/aonverse/blog/')) setCurrentPage('blog')
         else setCurrentPage('dashboard')
       }
     }
@@ -1450,6 +1455,10 @@ function App() {
     return <TermsOfServicePage onBack={navigateBack} />
   }
 
+  if (currentPage === 'blog') {
+    return <BlogPage onBack={navigateBack} />
+  }
+
   if (currentPage === 'plans') {
     return <PlansPage onBack={() => setCurrentPage('dashboard')} userEmail={_user?.email} />
   }
@@ -1788,6 +1797,7 @@ function App() {
             <div className="flex items-center gap-4">
               <button onClick={() => navigateTo('privacy')} className="transition-colors hover:text-black">Privacy</button>
               <button onClick={() => navigateTo('terms')} className="transition-colors hover:text-black">Terms</button>
+              <button onClick={() => navigateTo('blog')} className="transition-colors hover:text-black">Blog</button>
               <button className="transition-colors hover:text-black">Support</button>
             </div>
           </div>
