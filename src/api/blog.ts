@@ -44,6 +44,21 @@ export function updateBlogPost(id: string, input: BlogPostInput): Promise<BlogPo
   return request(`/posts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) })
 }
 
+export function subscribeToNewsletter(email: string): Promise<{ message: string }> {
+  return request('/newsletter', { method: 'POST', body: JSON.stringify({ email }) })
+}
+
+export interface NewsletterSubscriber {
+  email: string
+  source: string
+  sendgridSynced: boolean
+  createdAt: string
+}
+
+export function fetchNewsletterSubscribers(): Promise<{ subscribers: NewsletterSubscriber[] }> {
+  return request('/newsletter')
+}
+
 export function deleteBlogPost(id: string): Promise<{ message: string }> {
   return request(`/posts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }

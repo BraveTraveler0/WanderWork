@@ -1,7 +1,9 @@
 const express = require('express')
 const mongoose = require('mongoose')
+const rateLimit = require('express-rate-limit')
 const BlogPost = require('../models/Blog/blog.Post')
-const SEED_POSTS = require('../config/blogSeedPosts')
+const NewsletterSubscriber = require('../models/Blog/blog.NewsletterSubscriber')
+const { SEED_POSTS, RETIRED_SAMPLE_SLUGS } = require('../config/blogSeedPosts')
 const { isBlogAdmin } = require('../config/blogAdmins')
 const { optionalAuth, requireAuth } = require('../middleware/requireAuth')
 
@@ -50,19 +52,40 @@ function readPostFields(body, { requireTitle }) {
   return { fields }
 }
 
-async function seedIfEmpty() {
-  if (await BlogPost.estimatedDocumentCount()) return
+// Installs any starter article whose slug has never existed (deleted ones still
+// exist as soft-deleted documents, so they stay deleted) and retires the original
+// placeholder posts unless an admin has edited them.
+async function installStarterPosts() {
+  const existing = new Set((await BlogPost.find({}).select('slug').lean()).map((p) => p.slug))
+  const missing = SEED_POSTS.filter((p) => !existing.has(p.slug))
+  if (!missing.length) return
   try {
-    await BlogPost.insertMany(SEED_POSTS, { ordered: false })
+    await BlogPost.insertMany(missing, { ordered: false })
   } catch (err) {
-    // Another request seeded at the same time; the unique slug index rejected the duplicates.
+    // Another instance inserted at the same time; the unique slug index rejected the duplicates.
     if (err.code !== 11000) throw err
   }
+  await BlogPost.updateMany(
+    { slug: { $in: RETIRED_SAMPLE_SLUGS }, updatedBy: { $exists: false }, deletedAt: null },
+    { deletedAt: new Date() },
+  )
+}
+
+// Runs once per server process; a failed attempt is retried on the next request.
+let starterPostsReady = null
+function ensureStarterPosts() {
+  if (!starterPostsReady) {
+    starterPostsReady = installStarterPosts().catch((err) => {
+      starterPostsReady = null
+      throw err
+    })
+  }
+  return starterPostsReady
 }
 
 router.get('/posts', optionalAuth, async (req, res) => {
   try {
-    await seedIfEmpty()
+    await ensureStarterPosts()
     const posts = await BlogPost.find({ deletedAt: null }).sort({ publishedAt: -1 }).select('-deletedAt -updatedBy -__v').lean()
     res.json({ posts, canEdit: isBlogAdmin(req.user?.email) })
   } catch (err) {
@@ -107,6 +130,63 @@ router.delete('/posts/:id', requireAuth, requireBlogAdmin, async (req, res) => {
     )
     if (!post) return res.status(404).json({ message: 'Post not found.' })
     res.json({ message: 'Post deleted.' })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+const newsletterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+})
+
+// Best effort: the subscriber is already saved in our database, so a SendGrid
+// failure (for example an API key without Marketing access) is only logged.
+async function addToSendGridContacts(email) {
+  if (!process.env.SENDGRID_API_KEY) return false
+  const listId = process.env.SENDGRID_NEWSLETTER_LIST_ID
+  const response = await fetch('https://api.sendgrid.com/v3/marketing/contacts', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...(listId ? { list_ids: [listId] } : {}), contacts: [{ email }] }),
+  })
+  if (!response.ok) throw new Error(`SendGrid responded ${response.status}`)
+  return true
+}
+
+router.post('/newsletter', newsletterLimiter, async (req, res) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address.' })
+    }
+    const subscriber = await NewsletterSubscriber.findOneAndUpdate(
+      { email },
+      { $setOnInsert: { email, source: 'blog' } },
+      { upsert: true, new: true },
+    )
+    if (!subscriber.sendgridSynced) {
+      try {
+        if (await addToSendGridContacts(email)) {
+          await NewsletterSubscriber.updateOne({ _id: subscriber._id }, { sendgridSynced: true })
+        }
+      } catch (err) {
+        console.error('[Newsletter] SendGrid contact sync failed:', err.message)
+      }
+    }
+    res.json({ message: 'You are subscribed.' })
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+router.get('/newsletter', requireAuth, requireBlogAdmin, async (req, res) => {
+  try {
+    const subscribers = await NewsletterSubscriber.find({}).sort({ createdAt: -1 }).select('email source sendgridSynced createdAt -_id').lean()
+    res.json({ subscribers })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }

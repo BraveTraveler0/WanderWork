@@ -62,7 +62,7 @@ router.get('/sitemap.xml', (req, res) => {
 
 // ─── Static pages sitemap ─────────────────────────────────────────────────────
 
-router.get('/sitemaps/static.xml', (req, res) => {
+router.get('/sitemaps/static.xml', async (req, res) => {
   res.setHeader('Content-Type', 'application/xml; charset=utf-8')
   res.setHeader('Cache-Control', 'public, max-age=86400')
   const now = xmlDate(new Date())
@@ -77,7 +77,19 @@ router.get('/sitemaps/static.xml', (req, res) => {
     { url: '/about', priority: '0.6', changefreq: 'monthly' },
     { url: '/privacy', priority: '0.3', changefreq: 'monthly' },
     { url: '/support', priority: '0.3', changefreq: 'monthly' },
+    { url: '/aonverse/blog', priority: '0.7', changefreq: 'weekly' },
   ]
+
+  // Blog articles. If the database is not reachable the sitemap still lists the pages above.
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const posts = await mongoose.connection.collection('aonverse.blogposts')
+        .find({ deletedAt: null }, { projection: { slug: 1 } }).limit(1000).toArray()
+      posts.forEach((post) => staticPages.push({ url: `/aonverse/blog/${encodeURIComponent(post.slug)}`, priority: '0.6', changefreq: 'monthly' }))
+    }
+  } catch (err) {
+    console.error('[SEO] Could not add blog posts to sitemap:', err.message)
+  }
 
   const urls = staticPages.map(p => `  <url>
     <loc>${APP_URL}${p.url}</loc>

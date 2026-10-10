@@ -6,6 +6,7 @@ const BLOG_ADMIN_EMAILS = [
   'sephrim07@gmail.com',
   'darrien@aontechnology.io',
   'mercedes.anthony20@gmail.com',
+  'dsdavisjr3@gmail.com',
 ]
 
 function getBlogAdminEmails() {
