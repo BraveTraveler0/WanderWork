@@ -781,8 +781,7 @@ function App() {
       plans:          { title: 'Plans & Pricing | WanderWork', noindex: false },
       privacy:        { title: 'Privacy Policy | WanderWork', noindex: false },
       terms:          { title: 'Terms of Service | WanderWork', noindex: false },
-      // Placeholder posts for now; allow indexing once real content is published.
-      blog:           { title: 'Aonverse Blog | WanderWork', noindex: true },
+      blog:           { title: 'Aonverse Blog | WanderWork', noindex: false },
     }
 
     const effectivePage = showLandingPage ? '__landing__' : showLogin || showSignup ? '__auth__' : currentPage

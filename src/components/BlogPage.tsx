@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight, Home, MessageCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { createBlogPost, deleteBlogPost, fetchBlogPosts, updateBlogPost } from '../api/blog'
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Home, MessageCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { createBlogPost, deleteBlogPost, fetchBlogPosts, fetchNewsletterSubscribers, subscribeToNewsletter, updateBlogPost } from '../api/blog'
 import type { BlogPost, BlogPostInput } from '../api/blog'
 import imgHero from 'figma:asset/727bb285cb25e44e8a2e2ed68ca5c149c445f1a7.png'
 import imgBeachCreator from 'figma:asset/bd1dfdd1f7541a99c130874e76da6fe27ad072ff.png'
@@ -34,6 +34,12 @@ const imageSrc = (image: string) => BUILT_IN_IMAGES[image]?.src ?? (/^https:\/\/
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+
+// A short single line with no closing punctuation is treated as a subheading.
+const isSubheading = (paragraph: string) =>
+  paragraph.length <= 70 && !paragraph.includes('\n') && !/[.!?:,;"]$/.test(paragraph)
+
+const PAGE_TITLE = 'Aonverse Blog | WanderWork'
 
 const slugFromPath = () =>
   decodeURIComponent(window.location.pathname.slice(BLOG_PATH.length).replace(/^\/+|\/+$/g, '')) || null
@@ -150,7 +156,7 @@ const PostEditor = ({ post, onClose, onSaved }: PostEditorProps) => {
         <Field label="Excerpt (shown in the post list)">
           <textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)} rows={3} maxLength={600} className={fieldClass} style={fieldStyle} />
         </Field>
-        <Field label="Article (leave a blank line between paragraphs)">
+        <Field label="Article (blank line between paragraphs, a short line on its own becomes a subheading)">
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} className={fieldClass} style={{ ...fieldStyle, lineHeight: 1.7 }} />
         </Field>
 
@@ -172,7 +178,9 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeSlug, setActiveSlug] = useState<string | null>(slugFromPath)
   const [page, setPage] = useState(1)
-  const [newsletterNotice, setNewsletterNotice] = useState(false)
+  const [newsletterEmail, setNewsletterEmail] = useState('')
+  const [newsletterStatus, setNewsletterStatus] = useState<{ text: string; ok: boolean } | null>(null)
+  const [newsletterSending, setNewsletterSending] = useState(false)
   // undefined = closed, null = new post, otherwise the post being edited
   const [editing, setEditing] = useState<BlogPost | null | undefined>(undefined)
 
@@ -195,6 +203,37 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
   const openPost = (slug: string | null) => {
     window.history.pushState({ wanderPage: 'blog' }, '', slug ? `${BLOG_PATH}/${slug}` : BLOG_PATH)
     setActiveSlug(slug)
+  }
+
+  const handleNewsletterSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setNewsletterSending(true)
+    setNewsletterStatus(null)
+    try {
+      await subscribeToNewsletter(newsletterEmail)
+      setNewsletterStatus({ text: 'Thanks. You are on the list.', ok: true })
+      setNewsletterEmail('')
+    } catch (err) {
+      setNewsletterStatus({ text: err instanceof Error ? err.message : 'Could not sign you up. Please try again.', ok: false })
+    } finally {
+      setNewsletterSending(false)
+    }
+  }
+
+  const handleExportSubscribers = async () => {
+    try {
+      const { subscribers } = await fetchNewsletterSubscribers()
+      if (!subscribers.length) { window.alert('No newsletter subscribers yet.'); return }
+      const rows = ['email,subscribed_at,source', ...subscribers.map((s) => `${s.email},${s.createdAt},${s.source}`)]
+      const url = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'newsletter-subscribers.csv'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not load subscribers.')
+    }
   }
 
   const handleSaved = (saved: BlogPost) => {
@@ -222,6 +261,21 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
   const currentPage = Math.min(page, totalPages)
   const visiblePosts = allPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE)
   const isSignedIn = (() => { try { return !!localStorage.getItem('wanderworkToken') } catch { return false } })()
+
+  // Each article gets its own title, description and canonical link for search engines.
+  const activeTitle = activePost?.title
+  const activeExcerpt = activePost?.excerpt
+  useEffect(() => {
+    document.title = activeTitle ? `${activeTitle} | WanderWork` : PAGE_TITLE
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    const originalDescription = description?.content
+    if (description && activeExcerpt) description.content = activeExcerpt
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+    if (canonical) canonical.href = `https://wanderwork.io${BLOG_PATH}${activeSlug ? `/${activeSlug}` : ''}`
+    return () => {
+      if (description && originalDescription !== undefined) description.content = originalDescription
+    }
+  }, [activeSlug, activeTitle, activeExcerpt])
 
   const statusMessage = loadError ?? (posts === null ? 'Loading posts...' : null)
 
@@ -265,10 +319,16 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
         <div style={{ background: '#F1F7F8', borderBottom: '1px solid #DCE9EB' }}>
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 text-[12px]" style={{ color: TEAL }}>
             <span className="font-semibold">Admin view. You can add, edit, and delete posts.</span>
-            <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 font-bold text-white rounded-[3px] shrink-0" style={{ background: TEAL }}>
-              <Plus size={13} />
-              New post
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={handleExportSubscribers} className="flex items-center gap-1.5 px-3 py-1.5 font-bold border rounded-[3px]" style={{ borderColor: TEAL }}>
+                <Download size={13} />
+                <span className="hidden sm:inline">Newsletter list</span>
+              </button>
+              <button onClick={() => setEditing(null)} className="flex items-center gap-1.5 px-3 py-1.5 font-bold text-white rounded-[3px]" style={{ background: TEAL }}>
+                <Plus size={13} />
+                New post
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -297,8 +357,10 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
               <div className="mt-4 pb-4 border-b" style={{ borderColor: '#EDEDED' }}>
                 <PostMeta post={activePost} />
               </div>
-              {activePost.body.split(/\n\s*\n/).filter((p) => p.trim()).map((paragraph, i) => (
-                <p key={i} className="mt-5 text-[14px] whitespace-pre-line" style={{ color: '#555', lineHeight: 1.85 }}>{paragraph.trim()}</p>
+              {activePost.body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((paragraph, i) => (
+                isSubheading(paragraph)
+                  ? <h3 key={i} className="mt-8 text-[17px] font-bold" style={{ color: '#333' }}>{paragraph}</h3>
+                  : <p key={i} className="mt-5 text-[14px] whitespace-pre-line" style={{ color: '#555', lineHeight: 1.85 }}>{paragraph}</p>
               ))}
             </article>
           ) : allPosts.length === 0 ? (
@@ -382,10 +444,10 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
           <section className="mb-10">
             <SidebarHeading>Newsletter</SidebarHeading>
             <p className="text-[12px] mb-3" style={{ color: '#666', lineHeight: 1.7 }}>
-              Get the latest Aonverse content delivered to your email a few times a month.
+              Get the latest remote work and job search articles delivered to your email a few times a month.
             </p>
             <form
-              onSubmit={(e) => { e.preventDefault(); setNewsletterNotice(true) }}
+              onSubmit={handleNewsletterSubmit}
               className="flex items-center gap-2 p-1.5 border"
               style={{ borderColor: '#E3E3E3' }}
             >
@@ -393,16 +455,18 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
                 type="email"
                 required
                 placeholder="Your Email"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
                 aria-label="Your email"
                 className="flex-1 min-w-0 px-2 py-1.5 text-[12px] outline-none"
                 style={{ background: '#fff', color: '#333' }}
               />
-              <button type="submit" className="px-4 py-2 text-[10px] font-bold uppercase text-white rounded-[3px]" style={{ background: TEAL, letterSpacing: '0.8px' }}>
+              <button type="submit" disabled={newsletterSending} className="px-4 py-2 text-[10px] font-bold uppercase text-white rounded-[3px] disabled:opacity-60" style={{ background: TEAL, letterSpacing: '0.8px' }}>
                 Go
               </button>
             </form>
-            {newsletterNotice && (
-              <p className="mt-2 text-[11px]" style={{ color: '#9A9A9A' }}>Newsletter sign-up is coming soon.</p>
+            {newsletterStatus && (
+              <p className="mt-2 text-[11px]" style={{ color: newsletterStatus.ok ? TEAL : '#C0392B' }}>{newsletterStatus.text}</p>
             )}
           </section>
 
