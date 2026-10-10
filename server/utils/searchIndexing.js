@@ -154,4 +154,4 @@ async function notifyJobsRemoved(jobs) {
   }
 }
 
-module.exports = { notifyJobsAdded, notifyJobsRemoved, jobUrl }
+module.exports = { notifyJobsAdded, notifyJobsRemoved, jobUrl, indexNowNotify }

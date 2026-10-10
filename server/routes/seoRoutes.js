@@ -84,8 +84,8 @@ router.get('/sitemaps/static.xml', async (req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
       const posts = await mongoose.connection.collection('aonverse.blogposts')
-        .find({ deletedAt: null }, { projection: { slug: 1 } }).limit(1000).toArray()
-      posts.forEach((post) => staticPages.push({ url: `/aonverse/blog/${encodeURIComponent(post.slug)}`, priority: '0.6', changefreq: 'monthly' }))
+        .find({ deletedAt: null }, { projection: { slug: 1, updatedAt: 1 } }).limit(1000).toArray()
+      posts.forEach((post) => staticPages.push({ url: `/aonverse/blog/${encodeURIComponent(post.slug)}`, priority: '0.7', changefreq: 'monthly', lastmod: xmlDate(post.updatedAt) }))
     }
   } catch (err) {
     console.error('[SEO] Could not add blog posts to sitemap:', err.message)
@@ -93,7 +93,7 @@ router.get('/sitemaps/static.xml', async (req, res) => {
 
   const urls = staticPages.map(p => `  <url>
     <loc>${APP_URL}${p.url}</loc>
-    <lastmod>${now}</lastmod>
+    <lastmod>${p.lastmod || now}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
   </url>`).join('\n')

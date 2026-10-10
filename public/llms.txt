@@ -14,6 +14,13 @@ WanderWork helps job seekers find remote jobs, understand whether those jobs are
 - [AI Resume Builder](https://wanderwork.io/resume-cover-letter-ai): Generate tailored resumes and cover letters matched to a specific job posting.
 - [AI Job Matching](https://wanderwork.io/ai-job-search): AI-powered job matching that scores job fit and surfaces the most relevant listings for your profile.
 
+## Blog
+
+- [Wander/Work Blog](https://wanderwork.io/aonverse/blog): Guides on finding remote jobs, working while traveling, tailoring resumes, reaching recruiters, and AI job matching.
+- [Article index for AI tools](https://wanderwork.io/feeds/blog-llms.txt): Every article with a link to its Markdown version.
+- [Blog RSS feed](https://wanderwork.io/feeds/blog.xml): Full article text.
+- Any article is available as Markdown by adding `.md` to its URL.
+
 ## Job Data
 
 - Jobs are refreshed every 6 hours from ATS sources (Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Jobvite) and Remotive.
@@ -42,6 +49,7 @@ WanderWork helps job seekers find remote jobs, understand whether those jobs are
 - https://wanderwork.io/work-from-home-jobs
 - https://wanderwork.io/ai-job-search
 - https://wanderwork.io/about
+- https://wanderwork.io/aonverse/blog
 
 ## Data Feed
 

@@ -694,7 +694,7 @@ function App() {
   }, [_user?.email])
 
   type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam' | 'blog'
-  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report', blog: '/aonverse/blog' }
+  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report', blog: '/aonverse/blog/admin' }
   const navigateTo = (page: Page) => {
     const url = PAGE_URLS[page] ?? '/'
     window.history.pushState({ wanderPage: page }, '', url)
@@ -781,7 +781,8 @@ function App() {
       plans:          { title: 'Plans & Pricing | WanderWork', noindex: false },
       privacy:        { title: 'Privacy Policy | WanderWork', noindex: false },
       terms:          { title: 'Terms of Service | WanderWork', noindex: false },
-      blog:           { title: 'Aonverse Blog | WanderWork', noindex: false },
+      // Admin view of the blog. The public, indexable pages are rendered by the server.
+      blog:           { title: 'Blog Admin | WanderWork', noindex: true },
     }
 
     const effectivePage = showLandingPage ? '__landing__' : showLogin || showSignup ? '__auth__' : currentPage
@@ -1796,7 +1797,7 @@ function App() {
             <div className="flex items-center gap-4">
               <button onClick={() => navigateTo('privacy')} className="transition-colors hover:text-black">Privacy</button>
               <button onClick={() => navigateTo('terms')} className="transition-colors hover:text-black">Terms</button>
-              <button onClick={() => navigateTo('blog')} className="transition-colors hover:text-black">Blog</button>
+              <a href="/aonverse/blog" className="transition-colors hover:text-black">Blog</a>
               <button className="transition-colors hover:text-black">Support</button>
             </div>
           </div>

@@ -16,6 +16,10 @@
     { "source": "/sitemaps/:path*", "destination": "https://wanderwork-backend-server.onrender.com/sitemaps/:path*" },
     { "source": "/feeds/:path*", "destination": "https://wanderwork-backend-server.onrender.com/feeds/:path*" },
     { "source": "/jobs/:path*", "destination": "https://wanderwork-backend-server.onrender.com/jobs/:path*" },
+    { "source": "/aonverse/blog/admin", "destination": "/index.html" },
+    { "source": "/aonverse/blog/admin/:path*", "destination": "/index.html" },
+    { "source": "/aonverse/blog", "destination": "https://wanderwork-backend-server.onrender.com/aonverse/blog" },
+    { "source": "/aonverse/blog/:path*", "destination": "https://wanderwork-backend-server.onrender.com/aonverse/blog/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

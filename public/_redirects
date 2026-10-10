@@ -18,5 +18,11 @@
 # Job pages — SSR from Express (enables JobPosting schema + real crawlable content)
 /jobs/* https://wanderwork-backend-server.onrender.com/jobs/:splat 200
 
+# Blog — SSR from Express for search engines and AI crawlers; the admin view stays in the SPA
+/aonverse/blog/admin /index.html 200
+/aonverse/blog/admin/* /index.html 200
+/aonverse/blog https://wanderwork-backend-server.onrender.com/aonverse/blog 200
+/aonverse/blog/* https://wanderwork-backend-server.onrender.com/aonverse/blog/:splat 200
+
 # SPA fallback — must be last
 /* /index.html 200
