@@ -193,10 +193,26 @@ const connectorLimiter = rateLimit({
   message: { message: 'Too many requests. Please try again later.' },
 })
 
+// Reads the key, tolerating stray spaces or different letter case in the variable
+// name or value, which are easy to introduce when typing it into a hosting dashboard.
+function connectorKey() {
+  const name = Object.keys(process.env).find((k) => k.trim().toUpperCase() === 'MARKETGENIUS_BLOG_KEY')
+  return name ? String(process.env[name]).trim() : ''
+}
+
+// Says which hosting service answered and whether a misnamed variable exists, so a
+// key added to the wrong service or under the wrong name is easy to spot. Names only.
+function connectorSetupHint() {
+  const service = process.env.RENDER_SERVICE_NAME ? ` This request was answered by the Render service "${process.env.RENDER_SERVICE_NAME}".` : ''
+  const similar = Object.keys(process.env).filter((k) => /market.?genius|blog.?key/i.test(k))
+  const found = similar.length ? ` Found similarly named variables: ${similar.map((k) => `"${k}"`).join(', ')}.` : ' No variable with a similar name exists on it.'
+  return `The blog connector is not set up on this server. Add MARKETGENIUS_BLOG_KEY to its environment.${service}${found}`
+}
+
 function requireConnectorKey(req, res, next) {
-  const expected = process.env.MARKETGENIUS_BLOG_KEY || ''
-  if (!expected) return res.status(503).json({ message: 'The blog connector is not set up on this server.' })
-  const given = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+  const expected = connectorKey()
+  if (!expected) return res.status(503).json({ message: connectorSetupHint() })
+  const given = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
   const digest = (value) => crypto.createHash('sha256').update(value).digest()
   if (!crypto.timingSafeEqual(digest(given), digest(expected))) {
     return res.status(401).json({ message: 'That blog key is not valid.' })
