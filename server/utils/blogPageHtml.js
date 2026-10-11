@@ -51,7 +51,13 @@ function bodyBlocks(body) {
 const wordCount = (post) => String(post.body || '').split(/\s+/).filter(Boolean).length
 const readingMinutes = (post) => Math.max(1, Math.round(wordCount(post) / 220))
 
-const publisher = { '@type': 'Organization', name: 'WanderWork', url: APP_URL }
+const publisher = {
+  '@type': 'Organization',
+  '@id': `${APP_URL}/#organization`,
+  name: 'WanderWork',
+  url: APP_URL,
+  logo: { '@type': 'ImageObject', url: `${APP_URL}/favicon.svg` },
+}
 
 function head({ title, description, canonical, image, ogType, extraMeta = '', schemas = [] }) {
   return `<meta charset="UTF-8"/>
@@ -64,6 +70,8 @@ function head({ title, description, canonical, image, ogType, extraMeta = '', sc
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <meta property="og:type" content="${ogType}"/>
 <meta property="og:site_name" content="WanderWork"/>
+<meta property="og:locale" content="en_US"/>
+<meta name="author" content="WanderWork"/>
 <meta property="og:title" content="${esc(title)}"/>
 <meta property="og:description" content="${esc(description)}"/>
 <meta property="og:url" content="${esc(canonical)}"/>
@@ -120,6 +128,13 @@ aside p{font-size:12px;color:#666;line-height:1.7;margin-bottom:12px}
 .news input{flex:1;min-width:0;border:0;outline:0;padding:6px 8px;font-size:12px;background:#fff;color:#333}
 .news button{border:0;background:#306770;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:8px 16px;border-radius:3px;cursor:pointer}
 .note{margin-top:8px;font-size:11px;color:#306770}
+.adminbar{background:#f1f7f8;border-bottom:1px solid #dce9eb;color:#306770;font-size:12px;font-weight:600}
+.adminbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px;padding-bottom:12px}
+.adminbar .btn{background:#306770;color:#fff;padding:7px 14px;border-radius:3px;font-weight:700}
+.adminbar .btn.alt{background:none;color:#306770;border:1px solid #306770;margin-right:8px}
+.tools{display:flex;gap:8px;margin-bottom:12px;font-size:11px;font-weight:600}
+.tools a,.tools button{font:inherit;background:#fff;cursor:pointer;padding:4px 10px;border:1px solid #306770;border-radius:3px;color:#306770}
+.tools button{border-color:#c0392b;color:#c0392b}
 footer{border-top:1px solid #ededed;padding:24px 0 40px;font-size:12px;color:#8a8a8a;text-align:center}
 footer a{margin:0 8px}
 `
@@ -128,7 +143,7 @@ function hero({ heading, sub, crumbs }) {
   return `<header class="hero"><div class="wrap">
 <nav class="nav" aria-label="Main">
   <a class="brand" href="${APP_URL}/">WANDER/WORK</a>
-  <span class="links"><a href="${APP_URL}/remote-jobs">Remote Jobs</a><a href="${BLOG_URL}">Blog</a><a class="cta" href="${APP_URL}/?signup=true">Sign Up</a></span>
+  <span class="links"><a href="${APP_URL}/remote-jobs">Remote Jobs</a><a href="${BLOG_URL}">Blog</a><a id="signin" href="${APP_URL}/?login=true" rel="nofollow">Sign In</a><a class="cta" id="signup" href="${APP_URL}/?signup=true">Sign Up</a></span>
 </nav>
 <div class="hero-title">
   ${heading}
@@ -157,6 +172,42 @@ function sidebar(posts) {
 </aside>`
 }
 
+// Sign-in link and admin tools. The HTML is cached and identical for every visitor,
+// so the tools are added in the browser, and only after the server confirms the
+// signed-in account may edit the blog. Crawlers never see them.
+const ADMIN_SCRIPT = `<script>
+(function(){
+var signin=document.getElementById('signin');if(!signin)return;
+signin.href='${APP_URL}/?login=true&next='+encodeURIComponent(location.pathname);
+var token;try{token=localStorage.getItem('wanderworkToken')}catch(e){}
+if(!token)return;
+var auth={Authorization:'Bearer '+token};
+fetch('${BACKEND_URL}/blog/posts',{headers:auth}).then(function(r){return r.json()}).then(function(data){
+if(!data.signedIn)return;
+signin.textContent='Dashboard';signin.href='${APP_URL}/';
+var signup=document.getElementById('signup');if(signup)signup.style.display='none';
+if(!data.canEdit)return;
+var bar=document.createElement('div');bar.className='adminbar';
+bar.innerHTML='<div class="wrap"><span>Admin view. You can add, edit, and delete posts.</span><span><a class="btn alt" href="${BLOG_PATH}/admin">Manage all</a><a class="btn" href="${BLOG_PATH}/admin?new=1">New post</a></span></div>';
+var hero=document.querySelector('.hero');hero.parentNode.insertBefore(bar,hero.nextSibling);
+Array.prototype.forEach.call(document.querySelectorAll('[data-post-id]'),function(el){
+var tools=document.createElement('div');tools.className='tools';
+var edit=document.createElement('a');edit.textContent='Edit';edit.href='${BLOG_PATH}/admin/'+encodeURIComponent(el.getAttribute('data-slug'))+'?edit=1';
+var del=document.createElement('button');del.type='button';del.textContent='Delete';
+del.addEventListener('click',function(){
+if(!confirm('Delete "'+el.getAttribute('data-title')+'"? It will be removed from the blog.'))return;
+del.disabled=true;
+fetch('${BACKEND_URL}/blog/posts/'+el.getAttribute('data-post-id'),{method:'DELETE',headers:auth}).then(function(r){
+return r.json().then(function(j){if(!r.ok)throw new Error(j.message||'Could not delete the post.');
+if(el.className==='card')el.parentNode.removeChild(el);else location.href='${BLOG_PATH}/admin'})})
+.catch(function(err){del.disabled=false;alert(err.message||'Could not delete the post.')})});
+tools.appendChild(edit);tools.appendChild(del);
+var target=el.className==='card'?el.lastElementChild:el;target.insertBefore(tools,target.firstChild);
+});
+}).catch(function(){});
+})();
+</script>`
+
 const FOOTER = `<footer><div class="wrap">
 <p><a href="${APP_URL}/">WanderWork</a><a href="${APP_URL}/remote-jobs">Remote Jobs</a><a href="${APP_URL}/about">About</a><a href="${APP_URL}/privacy">Privacy</a><a href="${APP_URL}/terms">Terms</a><a href="${FEED_URL}">RSS</a><a href="${BLOG_URL}/admin" rel="nofollow">Admin</a></p>
 <p style="margin-top:8px">&copy; 2026 Wander/Work, Inc.</p>
@@ -166,7 +217,8 @@ document.getElementById('newsletter').addEventListener('submit',function(e){e.pr
 fetch('${BACKEND_URL}/blog/newsletter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:f.email.value})})
 .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.message||'Could not sign you up.');n.textContent='Thanks. You are on the list.';f.reset()})})
 .catch(function(err){n.textContent=err.message||'Could not sign you up. Please try again.'})});
-</script>`
+</script>
+${ADMIN_SCRIPT}`
 
 function imgTag(post, { className = '', eager = false } = {}) {
   const image = resolveBlogImage(post.image, APP_URL)
@@ -175,6 +227,9 @@ function imgTag(post, { className = '', eager = false } = {}) {
   const src = image.url.startsWith(`${APP_URL}/`) ? image.url.slice(APP_URL.length) : image.url
   return `<img${className ? ` class="${className}"` : ''} src="${esc(src)}" alt="${esc(post.title)}"${size} ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"/>`
 }
+
+// Lets the admin tools know which post an element shows.
+const adminAttrs = (post) => ` data-post-id="${esc(post._id)}" data-slug="${esc(post.slug)}" data-title="${esc(post.title)}"`
 
 function blogIndexHtml(posts) {
   const heroImage = { url: `${APP_URL}/blog-images/${HERO_IMAGE.file}`, width: HERO_IMAGE.width, height: HERO_IMAGE.height }
@@ -208,7 +263,7 @@ function blogIndexHtml(posts) {
     },
   ]
 
-  const cards = posts.map((p, i) => `<article class="card">
+  const cards = posts.map((p, i) => `<article class="card"${adminAttrs(p)}>
   <a class="thumb" href="${postUrl(p)}">${imgTag(p, { eager: i === 0 })}</a>
   <div>
     ${p.category ? `<span class="cat">${esc(p.category)}</span>` : ''}
@@ -299,7 +354,7 @@ ${hero({
   })}
 <div class="wrap layout">
 <main>
-<article class="post">
+<article class="post"${adminAttrs(post)}>
   ${imgTag(post, { className: 'lead-img', eager: true })}
   ${post.category ? `<span class="cat">${esc(post.category)}</span>` : ''}
   <h1>${esc(post.title)}</h1>
