@@ -3,6 +3,7 @@
 const express = require('express')
 const mongoose = require('mongoose')
 const router = express.Router()
+const { resolveBlogImage } = require('../config/blogImages')
 
 const APP_URL = 'https://wanderwork.io'
 const BACKEND_URL = process.env.BACKEND_URL || 'https://wanderwork-backend-server.onrender.com'
@@ -57,6 +58,10 @@ router.get('/sitemap.xml', (req, res) => {
     <loc>${APP_URL}/sitemaps/jobs-live.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
+  <sitemap>
+    <loc>${APP_URL}/sitemaps/blog.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
 </sitemapindex>`)
 })
 
@@ -77,19 +82,7 @@ router.get('/sitemaps/static.xml', async (req, res) => {
     { url: '/about', priority: '0.6', changefreq: 'monthly' },
     { url: '/privacy', priority: '0.3', changefreq: 'monthly' },
     { url: '/support', priority: '0.3', changefreq: 'monthly' },
-    { url: '/blog', priority: '0.7', changefreq: 'weekly' },
   ]
-
-  // Blog articles. If the database is not reachable the sitemap still lists the pages above.
-  try {
-    if (mongoose.connection.readyState === 1) {
-      const posts = await mongoose.connection.collection('aonverse.blogposts')
-        .find({ deletedAt: null }, { projection: { slug: 1, updatedAt: 1 } }).limit(1000).toArray()
-      posts.forEach((post) => staticPages.push({ url: `/blog/${encodeURIComponent(post.slug)}`, priority: '0.7', changefreq: 'monthly', lastmod: xmlDate(post.updatedAt) }))
-    }
-  } catch (err) {
-    console.error('[SEO] Could not add blog posts to sitemap:', err.message)
-  }
 
   const urls = staticPages.map(p => `  <url>
     <loc>${APP_URL}${p.url}</loc>
@@ -100,6 +93,52 @@ router.get('/sitemaps/static.xml', async (req, res) => {
 
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`)
+})
+
+// ─── Blog sitemap ─────────────────────────────────────────────────────────────
+// Each article carries its real last-edited date and its lead image. If the
+// database is not reachable the sitemap still lists the blog home page.
+
+router.get('/sitemaps/blog.xml', async (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8')
+  res.setHeader('Cache-Control', 'public, max-age=900')
+
+  let posts = []
+  try {
+    if (mongoose.connection.readyState === 1) {
+      posts = await mongoose.connection.collection('aonverse.blogposts')
+        .find({ deletedAt: null }, { projection: { slug: 1, title: 1, image: 1, updatedAt: 1, publishedAt: 1 } })
+        .sort({ publishedAt: -1 }).limit(5000).toArray()
+    }
+  } catch (err) {
+    console.error('[SEO] blog sitemap error:', err.message)
+  }
+
+  const modified = (post) => new Date(post.updatedAt || post.publishedAt || Date.now()).getTime()
+  const newest = posts.length ? Math.max(...posts.map(modified)) : Date.now()
+
+  const urls = posts.map((post) => `  <url>
+    <loc>${APP_URL}/blog/${encodeURIComponent(post.slug)}</loc>
+    <lastmod>${xmlDate(modified(post))}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <image:image>
+      <image:loc>${escapeXml(resolveBlogImage(post.image, APP_URL).url)}</image:loc>
+      <image:title>${escapeXml(post.title)}</image:title>
+    </image:image>
+  </url>`).join('\n')
+
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>${APP_URL}/blog</loc>
+    <lastmod>${xmlDate(newest)}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 ${urls}
 </urlset>`)
 })
@@ -232,6 +271,28 @@ ${items}
 
 // ─── Individual job page (SSR) ───────────────────────────────────────────────
 
+// JSON-LD goes inside a <script> tag, so "<" must not be able to close it.
+const jsonLd = (data) => JSON.stringify(data).replace(/</g, '\\u003c')
+
+// Google only reads a salary given as numbers. Turns text such as "$90k - $120k"
+// or "$45/hour" into that form, and returns null when no amount can be read.
+function salarySchema(salary) {
+  const text = String(salary || '')
+  const amounts = (text.match(/\d[\d,]*(?:\.\d+)?\s*k?/gi) || [])
+    .map((part) => parseFloat(part.replace(/,/g, '')) * (/k$/i.test(part.trim()) ? 1000 : 1))
+    .filter((n) => Number.isFinite(n) && n > 0)
+  if (!amounts.length || amounts.length > 2) return null
+  const unitText = /hour|\/\s*hr|hourly/i.test(text) ? 'HOUR' : /month/i.test(text) ? 'MONTH' : 'YEAR'
+  const currency = /€|eur/i.test(text) ? 'EUR' : /£|gbp/i.test(text) ? 'GBP' : 'USD'
+  const [min, max] = [Math.min(...amounts), Math.max(...amounts)]
+  // A yearly figure this small means the text was not read correctly (for example "60.000").
+  if (unitText === 'YEAR' && min < 1000) return null
+  const value = min === max
+    ? { '@type': 'QuantitativeValue', value: min, unitText }
+    : { '@type': 'QuantitativeValue', minValue: min, maxValue: max, unitText }
+  return { '@type': 'MonetaryAmount', currency, value }
+}
+
 function jobPageHtml(job) {
   const title = escapeXml(job.title || 'Job')
   const company = escapeXml(job.company || '')
@@ -247,6 +308,8 @@ function jobPageHtml(job) {
   const canonicalUrl = `${APP_URL}/jobs/${slug}`
   const tags = Array.isArray(job.tags) ? job.tags.slice(0, 8) : []
 
+  const baseSalary = salarySchema(job.salary)
+
   // JobPosting JSON-LD
   const schema = {
     '@context': 'https://schema.org',
@@ -254,8 +317,7 @@ function jobPageHtml(job) {
     '@id': `${canonicalUrl}#job`,
     title: job.title || '',
     description: job.description_short || '',
-    datePosted,
-    validThrough,
+    ...(datePosted ? { datePosted, validThrough } : {}),
     employmentType: jobType === 'FULL_TIME' ? 'FULL_TIME' : jobType === 'PART_TIME' ? 'PART_TIME' : 'CONTRACTOR',
     hiringOrganization: {
       '@type': 'Organization',
@@ -271,13 +333,7 @@ function jobPageHtml(job) {
     applicantLocationRequirements: { '@type': 'Country', name: 'Worldwide' },
     url: canonicalUrl,
     directApply: Boolean(job.ats_direct),
-    ...(salary ? {
-      baseSalary: {
-        '@type': 'MonetaryAmount',
-        currency: 'USD',
-        value: { '@type': 'QuantitativeValue', value: salary, unitText: 'YEAR' },
-      },
-    } : {}),
+    ...(baseSalary ? { baseSalary } : {}),
   }
 
   const breadcrumbSchema = {
@@ -306,8 +362,11 @@ function jobPageHtml(job) {
   <meta property="og:description" content="${escapeXml(metaDesc)}"/>
   <meta property="og:url" content="${canonicalUrl}"/>
   <meta property="og:site_name" content="WanderWork"/>
-  <script type="application/ld+json">${JSON.stringify(schema)}</script>
-  <script type="application/ld+json">${JSON.stringify(breadcrumbSchema)}</script>
+  <meta name="twitter:card" content="summary"/>
+  <meta name="twitter:title" content="${title} at ${company} | WanderWork"/>
+  <meta name="twitter:description" content="${escapeXml(metaDesc)}"/>
+  <script type="application/ld+json">${jsonLd(schema)}</script>
+  <script type="application/ld+json">${jsonLd(breadcrumbSchema)}</script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,-apple-system,sans-serif;background:#f4f6f7;color:#1f2937;line-height:1.6}
@@ -377,6 +436,7 @@ function jobPageHtml(job) {
     <a href="${APP_URL}/remote-jobs" class="related-link">Browse all remote jobs →</a>
     <a href="${APP_URL}/digital-nomad-jobs" class="related-link">Digital nomad jobs →</a>
     <a href="${APP_URL}/work-from-home-jobs" class="related-link">Work from home jobs →</a>
+    <a href="${APP_URL}/blog" class="related-link">Remote work and job search guides →</a>
     <a href="${APP_URL}?signup=true" class="related-link">Get AI-matched jobs for your profile →</a>
   </div>
 

@@ -189,6 +189,17 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
       .catch(() => setLoadError('We could not load the blog right now. Please try again in a moment.'))
   }, [])
 
+  // The Edit and New post buttons on the public blog link here with ?edit=1 or ?new=1.
+  useEffect(() => {
+    if (!posts || !canEdit) return
+    const params = new URLSearchParams(window.location.search)
+    const wantsNew = params.get('new') === '1'
+    const target = params.get('edit') === '1' ? posts.find((p) => p.slug === slugFromPath()) : undefined
+    if (!wantsNew && !target) return
+    window.history.replaceState(window.history.state, '', window.location.pathname)
+    setEditing(wantsNew ? null : target)
+  }, [posts, canEdit])
+
   useEffect(() => {
     const handlePopState = () => setActiveSlug(slugFromPath())
     window.addEventListener('popstate', handlePopState)
@@ -493,7 +504,7 @@ const BlogPage = ({ onBack }: BlogPageProps) => {
           )}
 
           {!isSignedIn && (
-            <a href="/?login=true" className="text-[11px] transition-colors hover:text-[#306770]" style={{ color: '#9A9A9A' }}>Admin sign in</a>
+            <a href={`/?login=true&next=${encodeURIComponent(window.location.pathname)}`} className="text-[11px] transition-colors hover:text-[#306770]" style={{ color: '#9A9A9A' }}>Admin sign in</a>
           )}
         </aside>
       </div>

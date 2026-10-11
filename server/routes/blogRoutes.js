@@ -72,7 +72,7 @@ router.get('/posts', optionalAuth, async (req, res) => {
   try {
     await ensureStarterPosts()
     const posts = await BlogPost.find({ deletedAt: null }).sort({ publishedAt: -1 }).select('-deletedAt -updatedBy -__v').lean()
-    res.json({ posts, canEdit: isBlogAdmin(req.user?.email) })
+    res.json({ posts, canEdit: isBlogAdmin(req.user?.email), signedIn: !!req.user })
   } catch (err) {
     res.status(500).json({ message: err.message })
   }

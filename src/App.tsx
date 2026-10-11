@@ -1424,6 +1424,12 @@ function App() {
         setUser(userData)
         setToken(authToken)
         setShowLogin(false)
+        // The blog's Sign In link passes ?next= so the visitor lands back on the blog.
+        const next = new URLSearchParams(window.location.search).get('next') || ''
+        if (/^\/blog(\/[\w\-./%]*)?$/.test(next)) {
+          window.location.assign(next)
+          return
+        }
         if (window.location.search.includes('login=true')) {
           window.history.replaceState({}, '', window.location.pathname)
         }

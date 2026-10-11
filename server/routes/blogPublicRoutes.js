@@ -2,7 +2,7 @@ const express = require('express')
 const BlogPost = require('../models/Blog/blog.Post')
 const { ensureStarterPosts } = require('../utils/blogStarterPosts')
 const {
-  BLOG_URL, blogIndexHtml, blogPostHtml, blogNotFoundHtml, blogPostMarkdown, blogIndexMarkdown, blogRssXml,
+  BLOG_URL, postUrl, blogIndexHtml, blogPostHtml, blogNotFoundHtml, blogPostMarkdown, blogIndexMarkdown, blogRssXml,
 } = require('../utils/blogPageHtml')
 
 // Public, crawlable blog pages. Visitors see them at wanderwork.io/blog: the
@@ -44,6 +44,7 @@ router.get('/aonverse/blog', handle(async (req, res) => {
 }))
 
 router.get('/aonverse/blog/index.md', handle(async (req, res) => {
+  res.setHeader('Link', `<${BLOG_URL}>; rel="canonical"`)
   send(res, 'text/markdown', blogIndexMarkdown(await livePosts()))
 }))
 
@@ -60,8 +61,16 @@ router.get('/aonverse/blog/:slug', handle(async (req, res) => {
   const slug = wantsMarkdown ? req.params.slug.slice(0, -3) : req.params.slug
   const posts = await livePosts()
   const post = posts.find((p) => p.slug === slug)
-  if (!post) return send(res, 'text/html', blogNotFoundHtml(), 404)
-  if (wantsMarkdown) return send(res, 'text/markdown', blogPostMarkdown(post))
+  if (!post) {
+    // A deleted article answers 410 Gone, which search engines drop faster than a 404.
+    const wasDeleted = await BlogPost.exists({ slug, deletedAt: { $ne: null } })
+    return send(res, 'text/html', blogNotFoundHtml(), wasDeleted ? 410 : 404)
+  }
+  if (wantsMarkdown) {
+    // Points search engines at the HTML article so the Markdown copy is not a duplicate.
+    res.setHeader('Link', `<${postUrl(post)}>; rel="canonical"`)
+    return send(res, 'text/markdown', blogPostMarkdown(post))
+  }
   send(res, 'text/html', blogPostHtml(post, posts))
 }))
 
