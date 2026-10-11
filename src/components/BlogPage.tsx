@@ -4,9 +4,9 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, Home, MessageCircle, Pe
 import { createBlogPost, deleteBlogPost, fetchBlogPosts, fetchNewsletterSubscribers, subscribeToNewsletter, updateBlogPost } from '../api/blog'
 import type { BlogPost, BlogPostInput } from '../api/blog'
 
-// The public blog at /aonverse/blog is rendered by the server for search engines.
+// The public blog at /blog is rendered by the server for search engines.
 // This React view is the admin side of it.
-const PUBLIC_BLOG_PATH = '/aonverse/blog'
+const PUBLIC_BLOG_PATH = '/blog'
 const BLOG_PATH = `${PUBLIC_BLOG_PATH}/admin`
 const imgHero = '/blog-images/hero.jpg'
 
@@ -41,7 +41,7 @@ const isSubheading = (paragraph: string) =>
 const PAGE_TITLE = 'Blog Admin | WanderWork'
 
 const slugFromPath = () =>
-  decodeURIComponent(window.location.pathname.slice(PUBLIC_BLOG_PATH.length).replace(/^\/+|\/+$/g, '').replace(/^admin\/?/, '')) || null
+  decodeURIComponent(window.location.pathname.replace(/^\/(aonverse\/)?blog\/?/, '').replace(/\/+$/, '').replace(/^admin\/?/, '')) || null
 
 const SidebarHeading = ({ children }: { children: string }) => (
   <h3 className="text-[13px] font-semibold mb-4 pl-3" style={{ color: '#333', borderLeft: `2px solid ${TEAL}`, lineHeight: '14px' }}>

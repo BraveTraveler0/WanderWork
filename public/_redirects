@@ -10,9 +10,9 @@
 /terms.html /terms 301
 /about.html /about 301
 
-# Short blog address
-/blog /aonverse/blog 302
-/blog/* /aonverse/blog/:splat 302
+# Old blog address
+/aonverse/blog /blog 301
+/aonverse/blog/* /blog/:splat 301
 
 # Dynamic SEO routes — sitemaps and feeds from Express
 /sitemap.xml https://wanderwork-backend-server.onrender.com/sitemap.xml 200
@@ -23,10 +23,10 @@
 /jobs/* https://wanderwork-backend-server.onrender.com/jobs/:splat 200
 
 # Blog — SSR from Express for search engines and AI crawlers; the admin view stays in the SPA
-/aonverse/blog/admin /index.html 200
-/aonverse/blog/admin/* /index.html 200
-/aonverse/blog https://wanderwork-backend-server.onrender.com/aonverse/blog 200
-/aonverse/blog/* https://wanderwork-backend-server.onrender.com/aonverse/blog/:splat 200
+/blog/admin /index.html 200
+/blog/admin/* /index.html 200
+/blog https://wanderwork-backend-server.onrender.com/aonverse/blog 200
+/blog/* https://wanderwork-backend-server.onrender.com/aonverse/blog/:splat 200
 
 # SPA fallback — must be last
 /* /index.html 200

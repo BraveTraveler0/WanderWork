@@ -55,7 +55,7 @@ Credits/tokens can also be purchased individually.
 - `/ai-job-search` — AI-powered job matching feature page
 - `/resume-cover-letter-ai` — AI resume and cover letter tool page
 - `/about` — Company facts, mission, sourcing methodology
-- `/aonverse/blog` — Blog with guides on remote job search (server-rendered; each article also at `<url>.md`; index at `/feeds/blog-llms.txt`; RSS at `/feeds/blog.xml`)
+- `/blog` — Blog with guides on remote job search (server-rendered; each article also at `<url>.md`; index at `/feeds/blog-llms.txt`; RSS at `/feeds/blog.xml`)
 - `/privacy` — Privacy policy
 - `/support` — Support contact
 

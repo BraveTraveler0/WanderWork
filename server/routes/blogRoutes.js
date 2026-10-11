@@ -36,7 +36,7 @@ function slugify(title) {
   return String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'post'
 }
 
-// Paths under /aonverse/blog that are not articles.
+// Paths under the public blog address that are not articles.
 const RESERVED_SLUGS = ['admin', 'index']
 
 async function uniqueSlug(title) {

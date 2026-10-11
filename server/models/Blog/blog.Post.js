@@ -1,6 +1,6 @@
 const mongoose = require('mongoose')
 
-// An article on the Aonverse blog (/aonverse/blog). Deleting from the admin view
+// An article on the blog (wanderwork.io/blog). Deleting from the admin view
 // sets deletedAt instead of removing the document, so a post can be recovered.
 const blogPostSchema = new mongoose.Schema({
   slug:     { type: String, required: true, unique: true },
