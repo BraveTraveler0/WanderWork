@@ -512,7 +512,7 @@ function App() {
     if (path === '/privacy') return 'privacy'
     if (path === '/terms') return 'terms'
     if (path === '/bug-report' || path === '/report-bug') return 'reportbug'
-    if (path === '/aonverse/blog' || path.startsWith('/aonverse/blog/')) return 'blog'
+    if (/^\/(aonverse\/)?blog(\/|$)/.test(path)) return 'blog'
     return 'dashboard'
   })
   const [unseenAppCount, setUnseenAppCount] = useState(0)
@@ -694,7 +694,7 @@ function App() {
   }, [_user?.email])
 
   type Page = 'dashboard' | 'settings' | 'privacy' | 'terms' | 'plans' | 'profile' | 'accountsettings' | 'personal' | 'payment' | 'upgrade' | 'messages' | 'reportbug' | 'jointeam' | 'blog'
-  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report', blog: '/aonverse/blog/admin' }
+  const PAGE_URLS: Partial<Record<Page, string>> = { privacy: '/privacy', terms: '/terms', reportbug: '/bug-report', blog: '/blog/admin' }
   const navigateTo = (page: Page) => {
     const url = PAGE_URLS[page] ?? '/'
     window.history.pushState({ wanderPage: page }, '', url)
@@ -936,7 +936,7 @@ function App() {
         if (path === '/privacy') setCurrentPage('privacy')
         else if (path === '/terms') setCurrentPage('terms')
         else if (path === '/bug-report' || path === '/report-bug') setCurrentPage('reportbug')
-        else if (path === '/aonverse/blog' || path.startsWith('/aonverse/blog/')) setCurrentPage('blog')
+        else if (/^\/(aonverse\/)?blog(\/|$)/.test(path)) setCurrentPage('blog')
         else setCurrentPage('dashboard')
       }
     }
@@ -1797,7 +1797,7 @@ function App() {
             <div className="flex items-center gap-4">
               <button onClick={() => navigateTo('privacy')} className="transition-colors hover:text-black">Privacy</button>
               <button onClick={() => navigateTo('terms')} className="transition-colors hover:text-black">Terms</button>
-              <a href="/aonverse/blog" className="transition-colors hover:text-black">Blog</a>
+              <a href="/blog" className="transition-colors hover:text-black">Blog</a>
               <button className="transition-colors hover:text-black">Support</button>
             </div>
           </div>

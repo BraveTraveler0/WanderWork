@@ -1,4 +1,4 @@
-// Starter articles for the blog at /aonverse/blog. Each one is inserted once, the
+// Starter articles for the blog at wanderwork.io/blog. Each one is inserted once, the
 // first time the server sees that its slug is missing. Admins can edit or delete
 // them from the blog page, and a deleted starter article is not re-created.
 const SEED_POSTS = [

@@ -1507,7 +1507,7 @@ function Frame13({ onSignUp: _onSignUp }: { onSignUp?: () => void }) {
       <div className="flex items-center justify-center gap-10 flex-wrap">
         <a href="#" className="font-normal text-[#306770] text-[15px] hover:underline cursor-pointer" style={{ fontFamily: 'Manrope, sans-serif' }}>Privacy Policy</a>
         <a href="#" className="font-normal text-[#306770] text-[15px] hover:underline cursor-pointer" style={{ fontFamily: 'Manrope, sans-serif' }}>Terms of Service</a>
-        <a href="/aonverse/blog" className="font-normal text-[#306770] text-[15px] hover:underline cursor-pointer" style={{ fontFamily: 'Manrope, sans-serif' }}>Blog</a>
+        <a href="/blog" className="font-normal text-[#306770] text-[15px] hover:underline cursor-pointer" style={{ fontFamily: 'Manrope, sans-serif' }}>Blog</a>
         <p className="font-normal text-[#306770] text-[15px]" style={{ fontFamily: 'Manrope, sans-serif' }}>© 2026 Wander/Work, Inc.</p>
       </div>
     </div>

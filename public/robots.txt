@@ -9,7 +9,7 @@ Disallow: /saved-jobs
 Disallow: /applications
 Disallow: /resume-builder
 Disallow: /cover-letter-builder
-Disallow: /aonverse/blog/admin
+Disallow: /blog/admin
 
 # Filter/session URLs that create duplicate content
 Disallow: /*?sort=
@@ -28,22 +28,22 @@ Allow: /
 
 # OpenAI training crawler: blog articles only
 User-agent: GPTBot
-Allow: /aonverse/blog
+Allow: /blog
 Allow: /feeds/blog
 Allow: /blog-images/
 Allow: /llms.txt
 Allow: /llms-full.txt
-Disallow: /aonverse/blog/admin
+Disallow: /blog/admin
 Disallow: /
 
 # Common Crawl: blog articles only
 User-agent: CCBot
-Allow: /aonverse/blog
+Allow: /blog
 Allow: /feeds/blog
 Allow: /blog-images/
 Allow: /llms.txt
 Allow: /llms-full.txt
-Disallow: /aonverse/blog/admin
+Disallow: /blog/admin
 Disallow: /
 
 # AI search and assistant crawlers

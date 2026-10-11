@@ -2,12 +2,14 @@ const express = require('express')
 const BlogPost = require('../models/Blog/blog.Post')
 const { ensureStarterPosts } = require('../utils/blogStarterPosts')
 const {
-  blogIndexHtml, blogPostHtml, blogNotFoundHtml, blogPostMarkdown, blogIndexMarkdown, blogRssXml,
+  BLOG_URL, blogIndexHtml, blogPostHtml, blogNotFoundHtml, blogPostMarkdown, blogIndexMarkdown, blogRssXml,
 } = require('../utils/blogPageHtml')
 
-// Public, crawlable blog pages. The frontend host proxies /aonverse/blog and
+// Public, crawlable blog pages. Visitors see them at wanderwork.io/blog: the
+// frontend host proxies /blog to /aonverse/blog on this server, because /blog
+// here is the JSON API (see blogRoutes.js). The frontend host also proxies
 // /feeds here (see vercel.json and public/_redirects). The React admin view
-// lives at /aonverse/blog/admin and is served by the frontend instead.
+// lives at wanderwork.io/blog/admin and is served by the frontend instead.
 const router = express.Router()
 
 // Short cache so admin edits show up within a few minutes.
@@ -33,6 +35,9 @@ const handle = (fn) => async (req, res) => {
     send(res, 'text/html', blogNotFoundHtml(), 500)
   }
 }
+
+// Someone opening the API address in a browser is looking for the blog itself.
+router.get('/blog', (req, res) => res.redirect(302, BLOG_URL))
 
 router.get('/aonverse/blog', handle(async (req, res) => {
   send(res, 'text/html', blogIndexHtml(await livePosts()))

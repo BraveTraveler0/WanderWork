@@ -587,7 +587,7 @@ export default function MobileLanding({ onSignIn, onSignUp }: { onSignIn?: () =>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginBottom: 12 }}>
           <a href="#" style={{ fontSize: 13, color: TEAL, textDecoration: 'none', fontFamily: FONT }}>Privacy Policy</a>
           <a href="#" style={{ fontSize: 13, color: TEAL, textDecoration: 'none', fontFamily: FONT }}>Terms of Service</a>
-          <a href="/aonverse/blog" style={{ fontSize: 13, color: TEAL, textDecoration: 'none', fontFamily: FONT }}>Blog</a>
+          <a href="/blog" style={{ fontSize: 13, color: TEAL, textDecoration: 'none', fontFamily: FONT }}>Blog</a>
         </div>
         <p style={{ fontSize: 12, color: '#9ca3af', fontFamily: FONT }}>© 2026 Wander/Work, Inc.</p>
       </footer>

@@ -1,6 +1,6 @@
 'use strict'
 
-// Server-rendered HTML, Markdown and RSS for the public blog at /aonverse/blog.
+// Server-rendered HTML, Markdown and RSS for the public blog at wanderwork.io/blog.
 // These pages are written for search engines and AI crawlers first: all content
 // is in the initial HTML, with structured data, and no JavaScript is required.
 
@@ -8,7 +8,7 @@ const { HERO_IMAGE, resolveBlogImage } = require('../config/blogImages')
 
 const APP_URL = 'https://wanderwork.io'
 const BACKEND_URL = process.env.BACKEND_URL || 'https://wanderwork-backend-server.onrender.com'
-const BLOG_PATH = '/aonverse/blog'
+const BLOG_PATH = '/blog'
 const BLOG_URL = `${APP_URL}${BLOG_PATH}`
 const FEED_URL = `${APP_URL}/feeds/blog.xml`
 const BLOG_NAME = 'Wander/Work Blog'
