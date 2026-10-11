@@ -181,43 +181,80 @@ router.get('/newsletter', requireAuth, requireBlogAdmin, async (req, res) => {
 })
 
 // ---- MarketGenius connector ----
-// Lets MarketGenius publish, update and take down posts with a shared key
-// instead of a signed-in admin. Set MARKETGENIUS_BLOG_KEY on the server; while
-// it is unset the connector is off. The article text arrives as plain text
-// with blank lines between paragraphs, the same as the admin editor saves.
+// Lets MarketGenius publish, update and take down posts without a signed-in
+// admin and without any key to set up. MarketGenius signs each request and says
+// who asked for it; this checks the signature against MarketGenius's public key
+// (fetched from MarketGenius itself), that the request is fresh, and that the
+// person is one of this blog's own admins (config/blogAdmins.js).
+// A shared key still works too, for anyone who sets MARKETGENIUS_BLOG_KEY.
+// The article text arrives as plain text with blank lines between paragraphs,
+// the same as the admin editor saves.
 const connectorLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 120,
+  limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests. Please try again later.' },
 })
 
-// Reads the key, tolerating stray spaces or different letter case in the variable
-// name or value, which are easy to introduce when typing it into a hosting dashboard.
+const MARKETGENIUS_URL = (process.env.MARKETGENIUS_URL || 'https://marketinggenius-backend.onrender.com').replace(/\/+$/, '')
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000
+
+let marketGeniusKey = { pem: '', fetchedAt: 0 }
+async function loadMarketGeniusKey(refresh) {
+  const age = Date.now() - marketGeniusKey.fetchedAt
+  // A refresh (after a signature did not match) is allowed once a minute, so bad
+  // requests cannot make this server hammer MarketGenius.
+  if (marketGeniusKey.pem && (refresh ? age < 60 * 1000 : age < 60 * 60 * 1000)) return marketGeniusKey.pem
+  const response = await fetch(`${MARKETGENIUS_URL}/api/blog/signing-key`, { signal: AbortSignal.timeout(60000) })
+  const data = response.ok ? await response.json() : null
+  if (typeof data?.publicKey !== 'string') throw new Error('MarketGenius did not return a signing key')
+  marketGeniusKey = { pem: data.publicKey, fetchedAt: Date.now() }
+  return marketGeniusKey.pem
+}
+
+// The email of the person MarketGenius says asked for this, or null when the
+// request is not a fresh, correctly signed one.
+async function marketGeniusActor(req) {
+  const timestamp = String(req.headers['x-mg-timestamp'] || '')
+  const actor = String(req.headers['x-mg-actor'] || '').trim().toLowerCase()
+  const signature = String(req.headers['x-mg-signature'] || '')
+  if (!timestamp || !actor || !signature) return null
+  if (!(Math.abs(Date.now() - Number(timestamp)) < SIGNATURE_MAX_AGE_MS)) return null
+  const body = ['POST', 'PATCH', 'PUT'].includes(req.method) ? JSON.stringify(req.body || {}) : ''
+  const message = [
+    timestamp, req.method, req.originalUrl.split('?')[0],
+    crypto.createHash('sha256').update(body).digest('hex'), actor,
+  ].join('\n')
+  for (const refresh of [false, true]) {
+    const pem = await loadMarketGeniusKey(refresh)
+    if (crypto.verify(null, Buffer.from(message), pem, Buffer.from(signature, 'base64'))) return actor
+  }
+  return null
+}
+
+// Reads the optional shared key, tolerating stray spaces or different letter case
+// in the variable name or value.
 function connectorKey() {
   const name = Object.keys(process.env).find((k) => k.trim().toUpperCase() === 'MARKETGENIUS_BLOG_KEY')
   return name ? String(process.env[name]).trim() : ''
 }
 
-// Says which hosting service answered and whether a misnamed variable exists, so a
-// key added to the wrong service or under the wrong name is easy to spot. Names only.
-function connectorSetupHint() {
-  const service = process.env.RENDER_SERVICE_NAME ? ` This request was answered by the Render service "${process.env.RENDER_SERVICE_NAME}".` : ''
-  const similar = Object.keys(process.env).filter((k) => /market.?genius|blog.?key/i.test(k))
-  const found = similar.length ? ` Found similarly named variables: ${similar.map((k) => `"${k}"`).join(', ')}.` : ' No variable with a similar name exists on it.'
-  return `The blog connector is not set up on this server. Add MARKETGENIUS_BLOG_KEY to its environment.${service}${found}`
-}
+async function requireConnectorKey(req, res, next) {
+  try {
+    const expected = connectorKey()
+    const given = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+    const digest = (value) => crypto.createHash('sha256').update(value).digest()
+    if (expected && given && crypto.timingSafeEqual(digest(given), digest(expected))) return next()
 
-function requireConnectorKey(req, res, next) {
-  const expected = connectorKey()
-  if (!expected) return res.status(503).json({ message: connectorSetupHint() })
-  const given = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
-  const digest = (value) => crypto.createHash('sha256').update(value).digest()
-  if (!crypto.timingSafeEqual(digest(given), digest(expected))) {
-    return res.status(401).json({ message: 'That blog key is not valid.' })
+    const actor = await marketGeniusActor(req)
+    if (!actor) return res.status(401).json({ message: 'This request was not signed by MarketGenius.' })
+    if (!isBlogAdmin(actor)) return res.status(403).json({ message: `${actor} is not one of this blog's admins.` })
+    next()
+  } catch (err) {
+    console.error('[Blog] Connector check failed:', err.message)
+    res.status(502).json({ message: 'This blog could not reach MarketGenius to check the request. Try again in a minute.' })
   }
-  next()
 }
 
 const connectorPost = (post) => ({ id: String(post._id), slug: post.slug, url: postUrl(post) })
