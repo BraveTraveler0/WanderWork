@@ -1078,6 +1078,7 @@ const JOB_PROJECTION = {
     skills: 1, tags: 1, jobType: 1, job_type: 1,
     salary: 1,
     date_posted: 1, datePosted: 1, postedAt: 1, postedDate: 1, rawDate: 1, preparedAt: 1, last_seen_at: 1,
+    remote_scope: 1, remote_regions: 1, timezone_req: 1, ats_direct: 1,
     url: 1, apply_url: 1, applyUrl: 1, company_url: 1,
     source: 1, job_code: 1, job_id: 1, lang: 1, ats_direct: 1, ats: 1,
     has_recruiter: 1, interested: 1, hasNewBadge: 1,
@@ -1314,6 +1315,11 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
 
     const isSeenRecently = (job) => job.last_seen_at && new Date(job.last_seen_at).getTime() >= seenCutoff
     const seenCount = recentJobs.reduce((n, job) => n + (isSeenRecently(job) ? 1 : 0), 0)
+    // The same opening often arrives from the employer's ATS and from an
+    // aggregator (We Work Remotely, The Muse). Keep the ATS copy: it has the
+    // direct apply link and the structured location and pay.
+    const titleCompany = (job) => `${String(job.title || '').trim().toLowerCase()}|${String(job.company || '').trim().toLowerCase()}`
+    const atsTitles = new Set(recentJobs.filter((job) => job.ats_direct).map(titleCompany))
     const requireSeen = seenCount >= safeLimit
     const seenTitles = new Set()
 
@@ -1321,6 +1327,7 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
         .filter((job) => {
             if (requireSeen && !isSeenRecently(job)) return false
             if (isBlockedCompany(job.company, job.url || job.apply_url)) return false
+            if (!job.ats_direct && atsTitles.has(titleCompany(job))) return false
             if (isJunkJobRecord(job)) return false
             const jobUrl = String(job.url || job.apply_url || '')
             if (/linkedin\.com/i.test(jobUrl)) return false
@@ -1333,8 +1340,10 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
         .sort((a, b) => (parseJobDate(b) || 0) - (parseJobDate(a) || 0))
         // The same opening is often posted under several URLs; keep the newest.
         .filter((job) => {
-            const loc = typeof job.location === 'string' ? job.location : JSON.stringify(job.location || '')
-            const key = `${String(job.title || '').trim().toLowerCase()}|${String(job.company || '').trim().toLowerCase()}|${loc.toLowerCase()}`
+            // Same title and company in different regions (a US and a Canada
+            // posting) are different openings and both stay.
+            const where = job.remote_scope || (typeof job.location === 'string' ? job.location : JSON.stringify(job.location || ''))
+            const key = `${titleCompany(job)}|${String(where).toLowerCase()}`
             if (seenTitles.has(key)) return false
             seenTitles.add(key)
             return true
