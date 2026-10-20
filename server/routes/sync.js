@@ -150,6 +150,7 @@ async function upsertJobs(records) {
         date_posted: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
         description_short: descriptionShort,
         source: String(r.source || 'n8n').trim(),
+        last_seen_at: new Date(),
         score: 0,
         tags: [],
         cover_letter: '',

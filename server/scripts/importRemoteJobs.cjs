@@ -387,7 +387,7 @@ async function importRemoteJobs() {
         const result = await col.updateOne(
           { url_normalized: urlNormalized },
           {
-            $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
+            $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date(), last_seen_at: new Date() },
             $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
           },
           { upsert: true }

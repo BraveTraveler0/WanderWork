@@ -1076,7 +1076,7 @@ const JOB_PROJECTION = {
     description: 1, description_short: 1, shortDescription: 1, summary: 1, why_matched: 1,
     skills: 1, tags: 1, jobType: 1, job_type: 1,
     salary: 1,
-    date_posted: 1, datePosted: 1, postedAt: 1, postedDate: 1, rawDate: 1, preparedAt: 1,
+    date_posted: 1, datePosted: 1, postedAt: 1, postedDate: 1, rawDate: 1, preparedAt: 1, last_seen_at: 1,
     url: 1, apply_url: 1, applyUrl: 1, company_url: 1,
     source: 1, job_code: 1, job_id: 1, lang: 1, ats_direct: 1, ats: 1,
     has_recruiter: 1, interested: 1, hasNewBadge: 1,
@@ -1292,8 +1292,19 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
     ])
     const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000
 
+    // Importers stamp last_seen_at each time a job is still on its source
+    // board. Once most jobs carry a recent stamp, leave out the ones that have
+    // dropped off (closed by the employer); until then keep everything so the
+    // feed is never thin while the stamps roll out.
+    const seenCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000
+    const isSeenRecently = (job) => job.last_seen_at && new Date(job.last_seen_at).getTime() >= seenCutoff
+    const seenCount = recentJobs.reduce((n, job) => n + (isSeenRecently(job) ? 1 : 0), 0)
+    const requireSeen = seenCount >= safeLimit
+    const seenTitles = new Set()
+
     const recent = recentJobs
         .filter((job) => {
+            if (requireSeen && !isSeenRecently(job)) return false
             if (isJunkJobRecord(job)) return false
             const jobUrl = String(job.url || job.apply_url || '')
             if (/linkedin\.com/i.test(jobUrl)) return false
@@ -1304,6 +1315,14 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
             return !ts || ts >= cutoff
         })
         .sort((a, b) => (parseJobDate(b) || 0) - (parseJobDate(a) || 0))
+        // The same opening is often posted under several URLs; keep the newest.
+        .filter((job) => {
+            const loc = typeof job.location === 'string' ? job.location : JSON.stringify(job.location || '')
+            const key = `${String(job.title || '').trim().toLowerCase()}|${String(job.company || '').trim().toLowerCase()}|${loc.toLowerCase()}`
+            if (seenTitles.has(key)) return false
+            seenTitles.add(key)
+            return true
+        })
         .slice(0, safeLimit)
 
     // Pairings are authoritative even when the matched job is older than the
@@ -3006,7 +3025,14 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         scored.push({ job, score });
     }
 
-    scored.sort((a, b) => b.score - a.score);
+    // Public visitors judge the site by freshness: lead with jobs posted in the
+    // last 30 days and only fall back to older ones if there aren't enough.
+    const FRESH_DAYS = 30;
+    const isFresh = ({ job }) => {
+        const ts = new Date(job.date_posted || job.datePosted || job.postedAt || job.postedDate || 0).getTime();
+        return Number.isFinite(ts) && now - ts <= FRESH_DAYS * 24 * 60 * 60 * 1000;
+    };
+    scored.sort((a, b) => (isFresh(b) - isFresh(a)) || (b.score - a.score));
     res.json(scored.slice(0, limit).map(({ job }) => job));
 });
 

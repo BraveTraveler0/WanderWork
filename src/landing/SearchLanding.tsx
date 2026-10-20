@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, Check, ExternalLink, FileText, Search, SlidersHorizontal, Sparkles, Target, Users, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users, X } from 'lucide-react'
 import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import './searchLanding.css'
@@ -44,7 +44,8 @@ declare global {
 const PAGE_SIZE = 20
 const INVITE_AFTER = 8
 const OVERLAY_QUERY = '(max-width: 1023px)'
-const CACHE_KEY = 'ww_landing_jobs_v1'
+// v2: feeds cached before the posted-date fix carried wrong dates.
+const CACHE_KEY = 'ww_landing_jobs_v2'
 const CACHE_MAX_AGE = 12 * 3_600_000
 const PROD_API = 'https://wanderwork-backend-server.onrender.com'
 
@@ -63,7 +64,14 @@ function useMediaQuery(query: string) {
 function parseJobs(data: unknown): LandingJob[] {
   const raw: any[] = Array.isArray(data) ? data : ((data as any)?.jobs || (data as any)?.Jobs || [])
   const seen = new Set<string>()
-  return raw.map(toLandingJob).filter((j): j is LandingJob => !!j && !seen.has(j.id) && !!seen.add(j.id))
+  // Drop repeats by id and by identical title, company and location (employers
+  // often post one opening under several URLs).
+  const key = (j: LandingJob) => `${j.title}|${j.company}|${j.location}`.toLowerCase()
+  return raw.map(toLandingJob).filter((j): j is LandingJob => {
+    if (!j || seen.has(j.id) || seen.has(key(j))) return false
+    seen.add(j.id); seen.add(key(j))
+    return true
+  })
 }
 
 function readCachedJobs(): LandingJob[] {
@@ -433,7 +441,13 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
                 {!loading && !failed && results.slice(0, visible).map((job, i) => (
                   <Fragment key={job.id}>
-                    <JobRow job={job} selected={job.id === selectedId} onOpen={() => openJob(job)} onSave={isAuthenticated ? undefined : () => save(job)} />
+                    <JobRow
+                      job={job}
+                      selected={job.id === selectedId}
+                      onOpen={() => openJob(job)}
+                      onSave={isAuthenticated ? undefined : () => save(job)}
+                      onMatch={isAuthenticated ? undefined : () => customize(job, 'row_match_teaser')}
+                    />
                     {!isAuthenticated && i === INVITE_AFTER - 1 && (
                       <div className="wl-invite">
                         <div>
@@ -532,18 +546,26 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   )
 }
 
-function JobTags({ job }: { job: LandingJob }) {
+function JobTags({ job, onMatch }: { job: LandingJob; onMatch?: () => void }) {
   return (
     <div className="wl-tags">
       {isFresh(job.postedAt) && <span className="wl-tag wl-tag-new">New</span>}
       {job.eligibility.length ? job.eligibility.map((l) => <span key={l} className="wl-tag wl-tag-region">{l}</span>) : <span className="wl-tag wl-tag-region">Remote</span>}
       {job.salaryText && <span className="wl-tag wl-tag-pay">{job.salaryText}</span>}
       {job.jobType && <span className="wl-tag">{job.jobType}</span>}
+      {/* Guests: a locked match score, shown on hover (desktop) or always (touch). */}
+      {onMatch && (
+        <button type="button" className="wl-match-teaser" onClick={onMatch} aria-label={`Log in to see your match for ${job.title}`}>
+          <Lock size={12} aria-hidden />
+          <span className="wl-mt-long">Log in to see your match %</span>
+          <span className="wl-mt-short">See match %</span>
+        </button>
+      )}
     </div>
   )
 }
 
-function JobRow({ job, selected, onOpen, onSave }: { job: LandingJob; selected: boolean; onOpen: () => void; onSave?: () => void }) {
+function JobRow({ job, selected, onOpen, onSave, onMatch }: { job: LandingJob; selected: boolean; onOpen: () => void; onSave?: () => void; onMatch?: () => void }) {
   return (
     <article className={`wl-row${selected ? ' is-selected' : ''}`}>
       <div className="wl-logo-tile" aria-hidden>{initials(job.company)}</div>
@@ -564,8 +586,15 @@ function JobRow({ job, selected, onOpen, onSave }: { job: LandingJob; selected: 
             {job.title}
           </a>
         </h3>
-        <div className="wl-row-company">{job.company}</div>
-        <JobTags job={job} />
+        <div className="wl-row-company">
+          {job.company}
+          {onMatch && (
+            <button type="button" className="wl-match-teaser wl-mt-phone" onClick={onMatch} aria-label={`Log in to see your match for ${job.title}`}>
+              <Lock size={11} aria-hidden /> See match %
+            </button>
+          )}
+        </div>
+        <JobTags job={job} onMatch={onMatch} />
       </div>
       <div className="wl-row-side">
         <span className="wl-age">{postedAgo(job.postedAt)}</span>

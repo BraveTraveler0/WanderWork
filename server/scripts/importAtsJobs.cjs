@@ -287,8 +287,11 @@ async function resolveCompanyName(col, urlFragment, slug) {
 
 async function fetchGreenhouse(slug, company) {
   const res = await get(`https://boards.greenhouse.io/v1/boards/${slug}/jobs?content=true`);
+  const now = Date.now();
   return (res.data?.jobs || [])
     .filter(j => REMOTE_RE.test(j.location?.name || '') || !j.location?.name)
+    // Skip postings whose application deadline has passed.
+    .filter(j => !j.application_deadline || new Date(j.application_deadline).getTime() >= now)
     .map(j => ({
       title: stripHtml(j.title),
       company,
@@ -297,7 +300,9 @@ async function fetchGreenhouse(slug, company) {
       location: normalizeLocation(j.location?.name),
       job_type: 'Full-time',
       salary: 'Not Listed',
-      date_posted: j.updated_at ? new Date(j.updated_at) : new Date(),
+      // first_published is when the job went live. updated_at changes on any
+      // edit, which made months-old postings look new and dodge the 90-day purge.
+      date_posted: new Date(j.first_published || j.updated_at || Date.now()),
       description_short: truncateDesc(j.content || ''),
       lang: 'en',
       source: 'Greenhouse',
@@ -563,11 +568,25 @@ async function upsertJobs(col, jobs) {
   return { added, updated, errors };
 }
 
+// A board that fetched cleanly is the source of truth for that company: any job
+// we stored from it that is no longer listed has been closed by the employer.
+// Only runs when the fetch returned jobs, so an empty or odd API response can
+// never wipe a company's listings.
+async function pruneClosedJobs(col, atsName, slug, liveJobs) {
+  if (!liveJobs.length) return [];
+  const live = liveJobs.map(j => j.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim());
+  const filter = { ats: atsName, ats_slug: slug, url_normalized: { $nin: live } };
+  const closed = await col.find(filter, { projection: { _id: 1, title: 1, company: 1 } }).toArray();
+  if (closed.length) await col.deleteMany({ _id: { $in: closed.map(j => j._id) } });
+  return closed;
+}
+
 async function importAtsJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   const slugsByAts = await discoverAllSlugs(col);
 
   let totalNew = 0, totalUpdated = 0, totalErrors = 0;
+  const removedJobs = [];
 
   for (const [atsName, slugSet] of Object.entries(slugsByAts)) {
     const seeds = new Set(SEEDS[atsName] || []);
@@ -589,8 +608,20 @@ async function importAtsJobs() {
       const batchResults = await Promise.all(batch.map(async slug => {
         try {
           const company = await resolveCompanyName(col, urlFragment(slug), slug);
-          const jobs = await fetch(slug, company);
+          const seenAt = new Date();
+          // ats_slug ties each job to its board for pruning; last_seen_at marks
+          // it as still listed so feeds can leave out jobs no longer seen.
+          const jobs = (await fetch(slug, company)).map(j => ({ ...j, ats_slug: slug, last_seen_at: seenAt }));
           if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote jobs`);
+          try {
+            const closed = await pruneClosedJobs(col, atsName, slug, jobs.filter(j => j.url));
+            if (closed.length) {
+              removedJobs.push(...closed);
+              console.log(`  ${atsName}/${slug}: removed ${closed.length} closed jobs`);
+            }
+          } catch (pruneErr) {
+            console.warn(`  ${atsName}/${slug} prune failed: ${pruneErr.message}`);
+          }
           return jobs;
         } catch (err) {
           if (err.response?.status !== 404) {
@@ -612,8 +643,8 @@ async function importAtsJobs() {
     }
   }
 
-  console.log(`[importAtsJobs] Done. new=${totalNew} updated=${totalUpdated} errors=${totalErrors}`);
-  return { totalNew, totalUpdated, totalErrors };
+  console.log(`[importAtsJobs] Done. new=${totalNew} updated=${totalUpdated} removed=${removedJobs.length} errors=${totalErrors}`);
+  return { totalNew, totalUpdated, totalErrors, removedJobs };
 }
 
 if (require.main === module) {
