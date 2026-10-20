@@ -10,7 +10,7 @@
     <script>
       // The /landing job list is the main content. Start its request now, in
       // parallel with the app bundle, instead of after React has loaded.
-      if (location.pathname === '/landing') {
+      if (location.pathname.toLowerCase().replace(/\/+$/, '') === '/landing') {
         try {
           window.__wlJobs = fetch('https://wanderwork-backend-server.onrender.com/jobseeker/featured-jobs?limit=200')
             .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() });
