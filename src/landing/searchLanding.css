@@ -80,7 +80,7 @@
 .wl-hero { padding: 32px 0 20px; }
 .wl-hero-main { min-width: 0; }
 .wl-hero h1 { font-size: clamp(28px, 4.2vw, 44px); line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; }
-.wl-hero-sub { font-size: 17px; color: var(--wl-ink-2); margin: 0 0 22px; max-width: 620px; }
+.wl-hero-sub { font-size: 17px; color: var(--wl-ink-2); margin: 0 0 22px; }
 .wl-search { display: flex; gap: 8px; background: var(--wl-card); border: 1px solid var(--wl-line-strong); border-radius: 14px; padding: 6px; box-shadow: 0 1px 2px rgba(23, 43, 49, 0.04), 0 8px 24px -12px rgba(23, 43, 49, 0.12); }
 .wl-search:focus-within { border-color: var(--wl-primary); box-shadow: var(--wl-focus); }
 .wl-search :focus-visible { box-shadow: none; }
@@ -121,7 +121,7 @@
 /* Advanced filters */
 .wl-advanced { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-top: 14px; padding: 14px 16px; background: var(--wl-card); border: 1px solid var(--wl-line); border-radius: 12px; }
 .wl-advanced label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--wl-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.wl-advanced select, .wl-sort select { font: inherit; font-size: 14px; color: var(--wl-ink); border: 1px solid var(--wl-line-strong); border-radius: 8px; padding: 7px 10px; background: #fff; }
+.wl-advanced select { font: inherit; font-size: 14px; color: var(--wl-ink); border: 1px solid var(--wl-line-strong); border-radius: 8px; padding: 7px 10px; background: #fff; }
 .wl-advanced select { text-transform: none; letter-spacing: 0; min-width: 160px; min-height: 40px; }
 .wl-advanced .wl-check { flex-direction: row; align-items: center; gap: 8px; align-self: flex-end; min-height: 40px; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--wl-ink-2); font-weight: 600; cursor: pointer; }
 .wl-check input { width: 18px; height: 18px; accent-color: var(--wl-primary); }
@@ -132,8 +132,6 @@
 .wl-results-title-wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .wl-results-head h2 { font-size: 22px; font-weight: 800; margin: 0; }
 .wl-results-count { font-size: 15px; color: var(--wl-muted); font-weight: 700; }
-.wl-sort { font-size: 14px; color: var(--wl-muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.wl-sort select { font-weight: 700; min-height: 38px; }
 .wl-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .wl-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
@@ -317,7 +315,6 @@
   .wl-chips::-webkit-scrollbar { display: none; }
   .wl-chip { flex-shrink: 0; scroll-snap-align: start; }
   .wl-proof { margin-top: 12px; font-size: 13px; }
-  .wl-proof li:not(:first-child) { display: none; }
   /* Compact sign-up card: LinkedIn wide, Google as an icon button. */
   .wl-join { margin-top: 14px; padding: 14px; gap: 8px; grid-template-columns: minmax(0, 1fr) 52px; border-radius: 14px; }
   .wl-join h2 { font-size: 16px; }
@@ -331,7 +328,6 @@
   .wl-results { padding-top: 4px; }
   .wl-results-head { margin-top: 4px; flex-wrap: nowrap; }
   .wl-results-head h2 { font-size: 19px; white-space: nowrap; }
-  .wl-sort-label { display: none; }
   /* The hero already shows the live count on phones. */
   .wl-results-live { display: none; }
   .wl-row { padding: 12px; gap: 12px; align-items: flex-start; }
@@ -362,7 +358,7 @@
 @media (pointer: coarse) {
   .wl-chip { min-height: 40px; padding: 8px 14px; font-size: 14px; }
   .wl-icon-btn { width: 44px; height: 44px; }
-  .wl-advanced select, .wl-sort select { font-size: 16px; min-height: 44px; }
+  .wl-advanced select { font-size: 16px; min-height: 44px; }
   .wl-btn { min-height: 44px; }
   .wl-row-customize { height: 44px; }
   .wl-row:hover { box-shadow: none; }
