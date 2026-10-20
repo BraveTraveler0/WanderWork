@@ -29,6 +29,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+const { isBlockedCompany } = require('../config/blockedCompanies');
+
 const DRY_RUN = process.argv.includes('--dry-run');
 const LOW_SCORE_THRESHOLD = 2; // score ≤ this → soft remove
 const MIN_PURGE = 0;           // never forced to remove beyond hard+low-score
@@ -153,6 +155,9 @@ async function purgeJobs() {
 
     if (!title) {
       recordHard(job._id, 'no_title'); continue;
+    }
+    if (isBlockedCompany(job.company, url || applyUrl)) {
+      recordHard(job._id, 'blocked_company'); continue;
     }
     if (/linkedin\.com/i.test(url) || /linkedin\.com/i.test(applyUrl)) {
       recordHard(job._id, 'linkedin'); continue;

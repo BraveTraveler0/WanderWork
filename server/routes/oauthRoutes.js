@@ -170,6 +170,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 
       // Find or create User document
       let user = await User.findOne({ email });
+      const isNewUser = !user;
       if (!user) {
         const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
         user = await User.create({
@@ -240,7 +241,8 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 
       const token = jwtUtils.generateToken(user);
       const userData = encodeURIComponent(JSON.stringify({ ...user._doc, password: undefined }));
-      res.redirect(`${appTarget}?token=${token}&user=${userData}&source=linkedin`);
+      // new=1 lets the app report the sign-up to analytics (GA4, Meta).
+      res.redirect(`${appTarget}?token=${token}&user=${userData}&source=linkedin${isNewUser ? '&new=1' : ''}`);
     } catch (err) {
       console.error('LinkedIn OAuth error:', err);
       res.redirect(`${appTarget}?login=true&error=linkedin`);
@@ -322,6 +324,9 @@ router.post('/google', async (req, res) => {
     res.json({ user: { ...user._doc, password: undefined }, token, isNewUser });
   } catch (err) {
     console.error('Google OAuth error:', err);
+    if (/Invalid Google|Token used too|Wrong recipient|audience/i.test(String(err?.message))) {
+      return res.status(401).json({ message: 'Google sign-in could not be verified. Please try again.' });
+    }
     res.status(500).json({ message: 'Server Error' });
   }
 });

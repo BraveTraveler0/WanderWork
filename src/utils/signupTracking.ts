@@ -65,13 +65,15 @@ function sendToMarketGenius(eventType: 'signup_clicked' | 'signup_completed'): v
 }
 
 // The visitor pressed a sign-up button (intent).
-export function trackSignupStarted(method: 'email' | 'google'): void {
+export type SignupMethod = 'email' | 'google' | 'linkedin'
+
+export function trackSignupStarted(method: SignupMethod): void {
   try { window.gtag?.('event', 'sign_up_start', { method }) } catch { /* ignore */ }
   sendToMarketGenius('signup_clicked')
 }
 
 // A new account was really created.
-export function trackSignupCompleted(method: 'email' | 'google'): void {
+export function trackSignupCompleted(method: SignupMethod): void {
   const t = firstTouch()
   try {
     window.gtag?.('event', 'sign_up', { method, ...(t ? { first_source: t.source, first_medium: t.medium, first_campaign: t.campaign } : {}) })

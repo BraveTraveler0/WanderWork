@@ -1,5 +1,6 @@
 'use strict';
 const mongoose = require('mongoose');
+const { isBlockedCompany } = require('../config/blockedCompanies');
 const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -98,7 +99,7 @@ const SEEDS = {
   // migrated off Lever entirely and 404'd; only slugs confirmed live below).
   lever: [
     'secureframe', 'toptal', 'instrument', 'greenlight', 'transcarent',
-    'netflix', 'palantir', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
+    'netflix', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
     'lyrahealth', 'includedhealth', 'loadsmart',
   ],
   // Also revalidated live 2026-07: of 94 unique seeded companies, only 45
@@ -553,6 +554,7 @@ async function upsertJobs(col, jobs) {
   await Promise.all(jobs.map(async job => {
     try {
       if (!job.title || !job.url) return;
+      if (isBlockedCompany(job.company, job.url)) return;
       const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
       const r = await col.updateOne(
         { url_normalized: urlNormalized },

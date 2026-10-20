@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const { isBlockedCompany } = require('../config/blockedCompanies');
 const crypto = require('crypto');
 const { triggerSync, getSyncStatus } = require('../airtable-scheduler');
 const {
@@ -118,6 +119,7 @@ async function upsertJobs(records) {
       if (!title) { skipped++; continue; }
 
       const company = stripHtml(firstText(r.company, r.companyName, r.employer, 'Unknown'));
+      if (isBlockedCompany(company, url)) { skipped++; continue; }
       const descriptionRaw = firstText(
         r.description,
         r.description_short,

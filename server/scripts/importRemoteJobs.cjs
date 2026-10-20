@@ -1,5 +1,6 @@
 'use strict';
 const mongoose = require('mongoose');
+const { isBlockedCompany } = require('../config/blockedCompanies');
 const axios = require('axios');
 const path = require('path');
 const { OpenAI } = require('openai');
@@ -384,6 +385,7 @@ async function importRemoteJobs() {
       try {
         if (!job.title || !job.url || !job.description_short) { skipped++; continue; }
         const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
+        if (isBlockedCompany(job.company, job.url)) continue
         const result = await col.updateOne(
           { url_normalized: urlNormalized },
           {

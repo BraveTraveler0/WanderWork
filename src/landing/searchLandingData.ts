@@ -16,6 +16,8 @@ export interface LandingJob {
   applyUrl: string
   skills: string[]
   slug: string
+  // The feed record as received, for components shared with the dashboard.
+  raw: any
 }
 
 const JUNK_SALARY = /^(not listed|unlisted|competitive|tbd|negotiable|n\/a|see below|varies|open|flexible)$/i
@@ -128,6 +130,7 @@ export function toLandingJob(raw: any): LandingJob | null {
     skills: (Array.isArray(raw?.tags) && raw.tags.length ? raw.tags : Array.isArray(raw?.skills) ? raw.skills : [])
       .map((s: unknown) => cleanText(s)).filter(Boolean).slice(0, 8),
     slug: `${slugPart(title)}-at-${slugPart(company)}-${id}`,
+    raw,
   }
 }
 

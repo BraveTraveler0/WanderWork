@@ -40,6 +40,7 @@ import {
 } from './api/jobseeker.ts'
 import { deleteAccount } from './api/users'
 import { isNewJob } from './utils/jobUtils'
+import { trackSignupCompleted } from './utils/signupTracking'
 
 const API_BASE = API_BASE_URL
 
@@ -592,6 +593,8 @@ function App() {
     } else if (oauthToken && oauthUser) {
       try {
         const userData = JSON.parse(decodeURIComponent(oauthUser))
+        // The LinkedIn callback marks brand-new accounts so the sign-up counts.
+        if (params.get('source') === 'linkedin' && params.get('new') === '1') trackSignupCompleted('linkedin')
         localStorage.setItem('wanderworkToken', oauthToken)
         localStorage.setItem('wanderworkUser', JSON.stringify(userData))
         setToken(oauthToken)
@@ -1434,6 +1437,13 @@ function App() {
     return (
       <SearchLanding
         isAuthenticated={!!_token}
+        onAuthenticated={(userData, authToken) => {
+          setUser(userData)
+          setToken(authToken)
+          setShowLandingPage(false)
+          setCurrentPage('dashboard')
+          window.history.pushState({}, '', '/')
+        }}
         onSignIn={() => {
           authFromLandingRef.current = true
           writePendingCoverLetterJob(null)
