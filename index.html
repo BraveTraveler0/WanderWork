@@ -5,6 +5,19 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f9f8" />
+    <link rel="preconnect" href="https://wanderwork-backend-server.onrender.com" crossorigin />
+    <script>
+      // The /landing job list is the main content. Start its request now, in
+      // parallel with the app bundle, instead of after React has loaded.
+      if (location.pathname === '/landing') {
+        try {
+          window.__wlJobs = fetch('https://wanderwork-backend-server.onrender.com/jobseeker/featured-jobs?limit=200')
+            .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() });
+          window.__wlJobs.catch(function () {});
+        } catch (e) { window.__wlJobs = undefined }
+      }
+    </script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-WBD1D6JH1M"></script>
     <script>
@@ -27,20 +40,20 @@
       fbq('track', 'PageView');
     </script>
     <!-- End Meta Pixel Code -->
-    <title>WanderWork — Remote Jobs, AI Resume Builder & Digital Nomad Jobs</title>
-    <meta name="description" content="Find remote jobs, work-from-home jobs, and digital nomad-friendly jobs. AI tools to tailor your resume, generate cover letters, and find recruiter contacts — all in one place." />
+    <title>WanderWork | Remote Jobs, AI Resume Builder & Digital Nomad Jobs</title>
+    <meta name="description" content="Find remote jobs, work-from-home jobs, and digital nomad-friendly jobs. AI tools to tailor your resume, generate cover letters, and find recruiter contacts, all in one place." />
     <meta name="robots" content="index, follow" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="WanderWork" />
-    <meta property="og:title" content="WanderWork — Remote Jobs & AI Job Search" />
+    <meta property="og:title" content="WanderWork | Remote Jobs & AI Job Search" />
     <meta property="og:description" content="Find remote, work-from-home, and digital nomad-friendly jobs. AI tools to tailor your resume and cover letter per application." />
     <meta property="og:url" content="https://wanderwork.io/" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="WanderWork — Remote Jobs & AI Job Search" />
+    <meta name="twitter:title" content="WanderWork | Remote Jobs & AI Job Search" />
     <meta name="twitter:description" content="Find remote jobs and apply smarter with AI resume and cover letter tools." />
 
     <!-- Organization structured data -->

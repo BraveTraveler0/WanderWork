@@ -12,6 +12,9 @@ interface SignupPageProps {
   onSignup: (user: any, token: string) => void
   onSignIn: () => void
   onBackToLanding?: () => void
+  // The job a visitor picked on the landing page before signing up, shown so
+  // they know signing up gets them straight back to it.
+  pendingJob?: { title: string; company: string } | null
 }
 
 const BASE_URL = API_BASE_URL
@@ -25,24 +28,20 @@ const SIGNUP_STEPS = [
   },
   {
     title: 'Profile',
-    description: 'Only fill this out if you are not uploading a resume.',
+    description: 'Tell us the role you want so we can match jobs to you. Skip this if you uploaded a resume.',
   },
   {
     title: 'Links',
-    description: 'Add optional links recruiters can use to learn more about you.',
+    description: 'Optional. Add links recruiters can use to learn more about you.',
   },
 ]
 
 function GoogleSignupButton({
   onSignup,
   onError,
-  termsAccepted,
-  onRequireTerms,
 }: {
   onSignup: (user: any, token: string) => void
   onError: (message: string) => void
-  termsAccepted: boolean
-  onRequireTerms: () => void
 }) {
   const [googleLoading, setGoogleLoading] = useState(false)
 
@@ -75,10 +74,6 @@ function GoogleSignupButton({
     <button
       type="button"
       onClick={() => {
-        if (!termsAccepted) {
-          onRequireTerms()
-          return
-        }
         trackSignupStarted('google')
         googleSignup()
       }}
@@ -104,25 +99,13 @@ function GoogleSignupButton({
 function SocialSignupBox({
   onSignup,
   onError,
-  termsAccepted,
-  onTermsAcceptedChange,
   onShowTerms,
-  termsError,
-  onRequireTerms,
 }: {
   onSignup: (user: any, token: string) => void
   onError: (message: string) => void
-  termsAccepted: boolean
-  onTermsAcceptedChange: (checked: boolean) => void
   onShowTerms: () => void
-  termsError: string | null
-  onRequireTerms: () => void
 }) {
   const handleLinkedIn = () => {
-    if (!termsAccepted) {
-      onRequireTerms()
-      return
-    }
     window.location.href = `${BASE_URL}/oauth/linkedin`
   }
 
@@ -131,7 +114,7 @@ function SocialSignupBox({
       <p className="mb-3 text-center text-sm font-semibold text-[#306770]">Create your account faster</p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-          <GoogleSignupButton onSignup={onSignup} onError={onError} termsAccepted={termsAccepted} onRequireTerms={onRequireTerms} />
+          <GoogleSignupButton onSignup={onSignup} onError={onError} />
         </GoogleOAuthProvider>
         <button
           type="button"
@@ -144,14 +127,7 @@ function SocialSignupBox({
           Continue with LinkedIn
         </button>
       </div>
-      <TermsAgreement
-        id="signup-terms-social"
-        checked={termsAccepted}
-        onChange={onTermsAcceptedChange}
-        onShowTerms={onShowTerms}
-        error={termsError}
-        className="mt-4"
-      />
+      <TermsNotice action="Continue with Google or Continue with LinkedIn" onShowTerms={onShowTerms} className="mt-3 text-center" />
       <div className="mt-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-[#C8DEDE]" />
         <span className="text-xs font-medium text-gray-500">or fill out your profile manually</span>
@@ -204,7 +180,7 @@ function inferNameFromResumeFilename(filename: string): Partial<Pick<ReturnType<
   }
 }
 
-export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: SignupPageProps) {
+export default function SignupPage({ onSignup, onSignIn, onBackToLanding, pendingJob }: SignupPageProps) {
   const [form, setForm] = useState(getInitialSignupForm)
   const [showPassword, setShowPassword] = useState(false)
   const [resume, setResume] = useState<File | null>(null)
@@ -216,8 +192,6 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<SignupField, string>>>({})
   const [step, setStep] = useState(0)
-  const [termsAccepted, setTermsAccepted] = useState(false)
-  const [termsError, setTermsError] = useState<string | null>(null)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const resumeParseRunRef = useRef(0)
@@ -328,20 +302,6 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     void setResumeFile(event.dataTransfer.files?.[0] || null)
   }
 
-  const requireTerms = () => {
-    const message = 'Please accept the Terms of Service before creating an account.'
-    setTermsError(message)
-    setError(message)
-  }
-
-  const setTermsAgreement = (checked: boolean) => {
-    setTermsAccepted(checked)
-    if (checked) {
-      setTermsError(null)
-      if (error === 'Please accept the Terms of Service before creating an account.') setError(null)
-    }
-  }
-
   const setField = (field: SignupField, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
     setFieldErrors((current) => {
@@ -370,10 +330,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       }
     }
 
+    // Only the target role is needed to match jobs. Phone and location are
+    // optional: required fields that look unnecessary drive sign-up drop-off.
     if (targetStep === 1 && !resume) {
-      if (!requireValue(form.phone)) nextFieldErrors.phone = 'Phone number is required.'
-      if (!requireValue(form.location)) nextFieldErrors.location = 'Location is required.'
-      if (!requireValue(form.targetRole)) nextFieldErrors.targetRole = 'Target role is required.'
+      if (!requireValue(form.targetRole)) nextFieldErrors.targetRole = 'Add the role you want so we can match jobs to you.'
 
       if (Object.keys(nextFieldErrors).length > 0) {
         setFieldErrors(nextFieldErrors)
@@ -406,10 +366,6 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
     }
     if (!resume && !validateStep(1)) {
       setStep(1)
-      return
-    }
-    if (!termsAccepted) {
-      requireTerms()
       return
     }
     setLoading(true)
@@ -562,10 +518,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
           </div>
         )}
         <div className="grid grid-cols-1 gap-7 md:grid-cols-2">
-          <Field icon={<Phone size={18} />} label="Phone Number" required={!resume} error={fieldErrors.phone}>
-            <input className={getInputClass('phone')} value={form.phone} onChange={(e) => setField('phone', e.target.value)} autoComplete="tel" aria-invalid={Boolean(fieldErrors.phone)} />
+          <Field icon={<Phone size={18} />} label="Phone Number (optional)" error={fieldErrors.phone}>
+            <input className={getInputClass('phone')} type="tel" inputMode="tel" value={form.phone} onChange={(e) => setField('phone', e.target.value)} autoComplete="tel" aria-invalid={Boolean(fieldErrors.phone)} />
           </Field>
-          <Field icon={<MapPin size={18} />} label="Location" required={!resume} error={fieldErrors.location}>
+          <Field icon={<MapPin size={18} />} label="Location (optional)" error={fieldErrors.location}>
             <input className={getInputClass('location')} value={form.location} onChange={(e) => setField('location', e.target.value)} placeholder="New York, NY" aria-invalid={Boolean(fieldErrors.location)} />
           </Field>
           <Field icon={<Briefcase size={18} />} label="Target Role" required={!resume} error={fieldErrors.targetRole}>
@@ -595,10 +551,11 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
       </div>
     ),
   ]
-  const canSubmitFromCurrentStep = step === SIGNUP_STEPS.length - 1 || (Boolean(resume) && step === 0)
+  // The Links step is optional, so the account can be created from Profile.
+  const canSubmitFromCurrentStep = step >= 1 || (Boolean(resume) && step === 0)
 
   return (
-    <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", animation: 'bgBreathe 6s ease-in-out infinite', background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
+    <div className="min-h-screen p-4" style={{ fontFamily: "'Manrope', sans-serif", background: 'linear-gradient(135deg, #a8cece, #c4dede, #e0eeee)' }}>
       <style>{`
         @keyframes bgBreathe {
           0%, 100% { filter: brightness(1); }
@@ -626,17 +583,22 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             <h1 className="mb-2 break-words text-3xl font-bold tracking-wide text-[#306770] md:text-4xl" style={{ lineHeight: 1.1 }}>
               WANDER<span style={{ opacity: 0.45 }}>/</span>WORK
             </h1>
-            <p className="text-base text-gray-600">Create your profile and start matching with remote jobs</p>
+            <p className="text-base text-gray-600">Create your free account and start matching with remote jobs</p>
           </div>
+
+          {pendingJob && (
+            <div className="mb-6 rounded-xl border border-[#C8DEDE] bg-[#F1F8F5] p-4 text-left text-sm text-gray-800">
+              <span className="font-bold text-[#306770]">Almost there.</span>{' '}
+              Create your free account and we will take you straight back to tailor your application for{' '}
+              <span className="font-semibold">{pendingJob.title}</span>
+              {pendingJob.company ? <> at <span className="font-semibold">{pendingJob.company}</span></> : null}.
+            </div>
+          )}
 
           <SocialSignupBox
             onSignup={onSignup}
             onError={setError}
-            termsAccepted={termsAccepted}
-            onTermsAcceptedChange={setTermsAgreement}
             onShowTerms={() => setShowTermsModal(true)}
-            termsError={termsError}
-            onRequireTerms={requireTerms}
           />
         </div>
 
@@ -697,14 +659,6 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             </AnimatePresence>
           </div>
 
-          <TermsAgreement
-            id="signup-terms-manual"
-            checked={termsAccepted}
-            onChange={setTermsAgreement}
-            onShowTerms={() => setShowTermsModal(true)}
-            error={termsError}
-            className="mt-5"
-          />
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             {step > 0 && (
@@ -736,6 +690,10 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
             )}
           </div>
 
+          {canSubmitFromCurrentStep && (
+            <TermsNotice action="Create Account" onShowTerms={() => setShowTermsModal(true)} className="mt-4 text-center" />
+          )}
+
           <p className="mt-5 text-center text-sm text-gray-600">
             Already have an account?{' '}
             <button type="button" onClick={onSignIn} className="font-semibold text-[#306770] hover:underline">
@@ -755,42 +713,17 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding }: Sign
   )
 }
 
-function TermsAgreement({
-  id = 'signup-terms',
-  checked,
-  onChange,
-  onShowTerms,
-  error,
-  className = '',
-}: {
-  id?: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-  onShowTerms: () => void
-  error?: string | null
-  className?: string
-}) {
+// Terms are accepted by pressing a sign-up button, with this notice placed
+// beside it naming that button and linking the terms.
+function TermsNotice({ action, onShowTerms, className = '' }: { action: string; onShowTerms: () => void; className?: string }) {
   return (
-    <div className={`rounded-xl border p-3 text-left ${error ? 'border-red-300 bg-red-50/95' : 'border-[#C8DEDE] bg-[#F7FBFB]'} ${className}`}>
-      <div className="flex items-start gap-3">
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          className="mt-1 h-4 w-4 rounded border-gray-300 text-[#306770] focus:ring-[#306770]"
-          aria-invalid={Boolean(error)}
-        />
-        <div className="text-sm font-medium text-gray-700">
-          <label htmlFor={id}>I agree to the </label>
-          <button type="button" onClick={onShowTerms} className="font-semibold text-[#306770] underline-offset-2 hover:underline">
-            Terms of Service
-          </button>
-          <span>.</span>
-        </div>
-      </div>
-      {error && <span className="mt-2 block text-xs font-semibold text-red-700">{error}</span>}
-    </div>
+    <p className={`text-xs font-medium text-gray-600 ${className}`}>
+      By clicking {action}, you agree to the WanderWork{' '}
+      <button type="button" onClick={onShowTerms} className="font-semibold text-[#306770] underline underline-offset-2">
+        Terms of Service
+      </button>
+      .
+    </p>
   )
 }
 
