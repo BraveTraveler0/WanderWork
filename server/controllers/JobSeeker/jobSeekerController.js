@@ -2971,11 +2971,17 @@ const FEATURED_JOBS_DEFAULT_LIMIT = 60;
 const FEATURED_JOBS_MAX_LIMIT = 200;
 const NEW_JOB_WINDOW_DAYS = 3;
 
-const getJobStats = asyncHandler(async (_req, res) => {
+const getJobStats = asyncHandler(async (req, res) => {
+    // ?days=N (1-30) widens the window, e.g. the landing page counts 7 days.
+    const requestedDays = parseInt(req.query.days, 10);
+    const windowDays = Number.isFinite(requestedDays) && requestedDays >= 1 && requestedDays <= 30
+        ? requestedDays
+        : NEW_JOB_WINDOW_DAYS;
     const all = await getAllJobsPure();
     const now = Date.now();
-    const cutoff = now - NEW_JOB_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const cutoff = now - windowDays * 24 * 60 * 60 * 1000;
     const newJobs = all.reduce((count, job) => {
+        if (isBlockedCompany(job.company, job.url || job.apply_url)) return count;
         const postedAt = parseJobDate(job);
         return postedAt && postedAt >= cutoff && postedAt <= now ? count + 1 : count;
     }, 0);
@@ -2983,7 +2989,7 @@ const getJobStats = asyncHandler(async (_req, res) => {
     res.json({
         totalJobs: all.length,
         newJobs,
-        windowDays: NEW_JOB_WINDOW_DAYS,
+        windowDays,
         generatedAt: new Date(now).toISOString(),
     });
 });

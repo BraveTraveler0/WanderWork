@@ -48,6 +48,8 @@ declare global {
 }
 
 const PAGE_SIZE = 20
+// The live count covers a week: enough to show the site is busy.
+const NEW_JOBS_DAYS = 7
 const INVITE_AFTER = 8
 const OVERLAY_QUERY = '(max-width: 1023px)'
 // v2: feeds cached before the posted-date fix carried wrong dates.
@@ -211,9 +213,9 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   useEffect(() => {
     if (loading) return
     const controller = new AbortController()
-    fetch(`${API_BASE_URL}/jobseeker/job-stats`, { signal: controller.signal })
+    fetch(`${API_BASE_URL}/jobseeker/job-stats?days=${NEW_JOBS_DAYS}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => { if (s && Number.isFinite(s.newJobs) && s.newJobs > 0) setNewJobs({ count: s.newJobs, days: s.windowDays || 3 }) })
+      .then((s) => { if (s && Number.isFinite(s.newJobs) && s.newJobs > 0) setNewJobs({ count: s.newJobs, days: s.windowDays || NEW_JOBS_DAYS }) })
       .catch(() => {})
     return () => controller.abort()
   }, [loading])
@@ -300,7 +302,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const showNewOnly = () => {
-    setPostedWithinDays(3)
+    setPostedWithinDays(newJobs?.days === 3 ? 3 : 7)
     trackLandingEvent('job_filter', { filter: 'new_jobs_count' })
     scrollToResults()
   }
