@@ -3065,7 +3065,18 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         return Number.isFinite(ts) && now - ts <= FRESH_DAYS * 24 * 60 * 60 * 1000;
     };
     scored.sort((a, b) => (isFresh(b) - isFresh(a)) || (b.score - a.score));
-    res.json(scored.slice(0, limit).map(({ job }) => job));
+    // At most FEATURED_PER_COMPANY jobs per company, so one high-volume
+    // employer or staffing agency can't fill the public feed.
+    const FEATURED_PER_COMPANY = 5;
+    const perCompany = new Map();
+    const balanced = scored.filter(({ job }) => {
+        const key = String(job.company || '').trim().toLowerCase();
+        const n = perCompany.get(key) || 0;
+        if (n >= FEATURED_PER_COMPANY) return false;
+        perCompany.set(key, n + 1);
+        return true;
+    });
+    res.json(balanced.slice(0, limit).map(({ job }) => job));
 });
 
 module.exports =

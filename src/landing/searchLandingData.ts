@@ -108,7 +108,11 @@ export function annualSalary(text: string): number | null {
 
 export function toLandingJob(raw: any): LandingJob | null {
   const id = cleanText(raw?._id)
+  // Leading requisition codes ("CPT-11414 Appointment Setter") are noise.
   const title = cleanText(raw?.title || raw?.positionName)
+    .replace(/^\[[A-Z0-9-]{3,}\]\s*/i, '')
+    .replace(/^#?(?:[A-Z]{1,6}-){0,3}\d{3,}[A-Z]?\s*(?:[-–:|]\s*)?(?=[A-Za-z])/, '')
+    .trim()
   const company = cleanText(raw?.company)
   if (!id || !title || !company) return null
   const summary = cleanSummary(cleanText(raw?.description_short || raw?.shortDescription || raw?.description), title)

@@ -113,3 +113,21 @@ describe('entities', () => {
     expect(signals.decodeEntities('Ops &amp;amp; Sales &lt;b&gt;')).toBe('Ops & Sales <b>')
   })
 })
+
+describe('application-instruction preambles and coded titles', () => {
+  it('skips how-to-apply text to the role', () => {
+    const raw = "APPLICATION INSTRUCTIONS: If you’ve already completed the 20four7VA Recruiting Process, please apply via the Team Portal. Log in using your email. If you're interested, click APPLY TO POSITION. ******************** Title: T-CPT-11612 Technical Executive Assistant Independent Contractor. Overview 20four7VA is seeking offshore independent contractors. A cybersecurity professional is seeking a technically inclined VA."
+    const out = signals.buildSummary(raw, 'Technical Executive Assistant')
+    expect(out).toMatch(/^20four7VA is seeking offshore independent contractors/)
+    expect(out).not.toMatch(/APPLICATION|Portal|\*{3}/)
+  })
+  it('strips requisition codes from titles', () => {
+    expect(signals.cleanTitle('CPT-11414 Financial Services Appointment Setter')).toBe('Financial Services Appointment Setter')
+    expect(signals.cleanTitle('T-CPT-11612 Technical Executive Assistant')).toBe('Technical Executive Assistant')
+    expect(signals.cleanTitle('[REQ-204] Analyst')).toBe('Analyst')
+    expect(signals.cleanTitle('#4411 - Designer')).toBe('Designer')
+    expect(signals.cleanTitle('Software Engineer II')).toBe('Software Engineer II')
+    expect(signals.cleanTitle('3D Artist')).toBe('3D Artist')
+    expect(signals.cleanTitle('401(k) Plan Specialist')).toBe('401(k) Plan Specialist')
+  })
+})

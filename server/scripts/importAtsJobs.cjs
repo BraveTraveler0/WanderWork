@@ -1,7 +1,7 @@
 'use strict';
 const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
-const { jobSignals, extractSalaryFromText, formatRange, buildSummary, remoteLocation } = require('../utils/jobSignals');
+const { jobSignals, extractSalaryFromText, formatRange, buildSummary, remoteLocation, cleanTitle } = require('../utils/jobSignals');
 const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
@@ -296,7 +296,8 @@ function inferJobType(title, fallback) {
 
 // Adds who-can-apply, time zone, pay, job type and a role-first summary,
 // computed from every location field and the FULL posting text.
-function finalizeJob(job, { locationTexts = [], fullText = '', salary = null }) {
+function finalizeJob(rawJob, { locationTexts = [], fullText = '', salary = null }) {
+  const job = { ...rawJob, title: cleanTitle(rawJob.title) };
   const locs = locationTexts.filter(Boolean);
   const signals = jobSignals({ title: job.title, locationTexts: locs, fullText });
   return {

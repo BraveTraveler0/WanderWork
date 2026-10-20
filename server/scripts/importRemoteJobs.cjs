@@ -1,7 +1,7 @@
 'use strict';
 const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
-const { jobSignals, extractSalaryFromText, buildSummary, remoteLocation } = require('../utils/jobSignals');
+const { jobSignals, extractSalaryFromText, buildSummary, remoteLocation, cleanTitle } = require('../utils/jobSignals');
 const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
@@ -70,7 +70,8 @@ function truncateDesc(text) {
 // who-can-apply, time zone, pay and a role-first summary come from those
 // before anything is shortened.
 function withSignals(job) {
-  const { _loc = [], _text = '', ...rest } = job;
+  const { _loc = [], _text = '', ...raw } = job;
+  const rest = { ...raw, title: cleanTitle(raw.title) };
   const fullText = stripJunkLeads(stripHtml(_text || ''));
   const locs = _loc.map(l => stripHtml(String(l || ''))).filter(Boolean);
   const signals = jobSignals({ title: rest.title, locationTexts: locs, fullText });

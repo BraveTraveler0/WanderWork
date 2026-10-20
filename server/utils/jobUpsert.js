@@ -15,7 +15,7 @@ const crypto = require('crypto');
 // Bump when the summary logic in utils/jobSignals.js improves: every job then
 // gets a fresh summary (and AI cleanup) on its next import, not only jobs
 // whose posting text changed.
-const SUMMARY_VERSION = 2;
+const SUMMARY_VERSION = 3;
 
 function textHash(text) {
   return crypto.createHash('sha1').update(`v${SUMMARY_VERSION}|${String(text || '')}`).digest('hex').slice(0, 16);
