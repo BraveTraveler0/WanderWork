@@ -22,7 +22,13 @@ async function runImport() {
 
     console.log('[Import] Starting ATS import cycle...');
     // ATS-direct: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Jobvite
-    try { await importAtsJobs(); } catch (e) { console.warn('[Import] ATS error:', e.message); }
+    try {
+      const ats = await importAtsJobs();
+      if (ats?.removedJobs?.length) {
+        notifyJobsRemoved(ats.removedJobs).catch(() => {});
+        console.log(`[Import] Notified search engines of ${ats.removedJobs.length} closed jobs`);
+      }
+    } catch (e) { console.warn('[Import] ATS error:', e.message); }
 
     // Remotive + The Muse — runs every cycle, not just as a volume fallback.
     // Tech-company ATS boards rarely post writing/PR/social-media-marketing

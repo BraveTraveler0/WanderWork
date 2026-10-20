@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { annualSalary, deriveEligibility, filterJobs, spreadCompanies, toLandingJob, type LandingFilters, type LandingJob } from './searchLandingData'
+import { annualSalary, cleanSummary, deriveEligibility, filterJobs, spreadCompanies, toLandingJob, type LandingFilters, type LandingJob } from './searchLandingData'
 
 const base: LandingFilters = { query: '', quick: [], jobType: '', postedWithinDays: 0, salaryOnly: false, sort: 'newest' }
 
@@ -60,5 +60,27 @@ describe('spreadCompanies', () => {
     const make = (id: string, company: string) => toLandingJob({ _id: id, title: 'Role', company }) as LandingJob
     const list = [make('1', 'Palantir'), make('2', 'Palantir'), make('3', 'Palantir'), make('4', 'Acme'), make('5', 'Orbit')]
     expect(spreadCompanies(list, 1).map((j) => j.id)).toEqual(['1', '4', '2', '5', '3'])
+  })
+})
+
+describe('cleanSummary', () => {
+  it('drops ATS metadata, hashtags and the repeated title', () => {
+    const raw = 'Requisition #: 20523 Functional Area: Inside Sales Employment Type: Full-Time Work Options: Remote / Work from Home in the US #LI-Remote Work Hours: 8:00 - 4:30pm (CST) Inside Sales Representative (B2B Outbound) About J. J. Keller J. J. Keller is a national leader in safety and compliance solutions.'
+    expect(cleanSummary(raw, 'Inside Sales Representative (B2B Outbound)')).toBe('J. J. Keller is a national leader in safety and compliance solutions.')
+  })
+  it('strips a title the summary starts with', () => {
+    expect(cleanSummary('AI Automation Engineer (Remote - U.S.) Join a healthcare company as a builder.', 'AI Automation Engineer (Remote - U.S.)'))
+      .toBe('Join a healthcare company as a builder.')
+  })
+  it('strips leading section headings', () => {
+    expect(cleanSummary('About the role: You will lead design.', 'Designer')).toBe('You will lead design.')
+    expect(cleanSummary('ABOUT THE TEAM The Mural team is ambitious.', 'Engineering Manager')).toBe('The Mural team is ambitious.')
+  })
+  it('marks text cut mid-sentence', () => {
+    expect(cleanSummary('We build tools for teams and', 'X')).toBe('We build tools for teams and…')
+  })
+  it('leaves normal prose alone', () => {
+    const t = 'Pinterest is hiring a product manager. Location: Remote.'
+    expect(cleanSummary(t, 'Product Manager')).toBe(t)
   })
 })

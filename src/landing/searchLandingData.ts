@@ -45,6 +45,37 @@ function slugPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+// Postings often open with ATS metadata ("Requisition #: 20523 Functional
+// Area: ... #LI-Remote") and repeat the job title before the real text. Strip
+// that so the summary reads as prose.
+const META_LABEL = /\b(?:Requisition(?: #| ID| Number)?|Req(?:uisition)? ?ID|Job (?:ID|Code|Number|Type|Family|Category)|Functional Area|Department|Employment Type|Position Type|Work Options|Work Location|Work Arrangement|Work Hours|Work Schedule|Schedule|Shift|Location(?:s)?|Travel|Pay Range|Salary Range|Compensation|Category|Reports To|Team)\s*#?\s*:/gi
+const LEADING_HEADING = /^(?:About (?:the|this) (?:role|job|position|opportunity|team|company)|About us|Job Description|Position Summary|Role Summary|Job Summary|Overview|Summary|Description|The Role)\s*:?\s+/i
+
+export function cleanSummary(text: string, title = ''): string {
+  let s = text.replace(/#(?:LI|BI|IND|ZR)-[\w-]+/gi, ' ').replace(/\s+/g, ' ').trim()
+  const head = s.slice(0, 600)
+  const labels = Array.from(head.matchAll(META_LABEL))
+  if (labels.length >= 2) {
+    const last = labels[labels.length - 1]
+    const after = (last.index ?? 0) + last[0].length
+    const rest = s.slice(after)
+    const lower = rest.toLowerCase()
+    const starts = [
+      title ? lower.indexOf(title.toLowerCase()) : -1,
+      rest.search(/\bAbout (?:the|us|our|[A-Z])/),
+      rest.search(/\b(?:We are|We're|Our |As an? |In this role|You will|Join )/),
+    ].filter((i) => i > 0)
+    if (starts.length) s = rest.slice(Math.min(...starts)).trim()
+  }
+  if (title && s.toLowerCase().startsWith(title.toLowerCase())) s = s.slice(title.length).replace(/^[\s:,.\-–|]+/, '')
+  s = s.replace(LEADING_HEADING, '')
+  // "About Acme Acme is a ..." -> "Acme is a ..."
+  s = s.replace(/^About (.{2,60}?) (?=\1\b)/, '')
+  s = s.replace(/\s+/g, ' ').trim()
+  if (s && !/[.!?)"”]$/.test(s)) s += '…'
+  return s
+}
+
 export function deriveEligibility(title: string, location: string, summary: string): { labels: string[]; worldwide: boolean } {
   const haystack = `${title} | ${location} | ${summary.slice(0, 400)}`
   const labels = REGIONS.filter((r) => r.re.test(haystack)).map((r) => r.label)
@@ -74,7 +105,7 @@ export function toLandingJob(raw: any): LandingJob | null {
   const title = cleanText(raw?.title || raw?.positionName)
   const company = cleanText(raw?.company)
   if (!id || !title || !company) return null
-  const summary = cleanText(raw?.description_short || raw?.shortDescription || raw?.description)
+  const summary = cleanSummary(cleanText(raw?.description_short || raw?.shortDescription || raw?.description), title)
   const location = cleanText(typeof raw?.location === 'string' ? raw.location : '') || 'Remote'
   const salaryRaw = cleanText(raw?.salary)
   const hasSalary = !!salaryRaw && !JUNK_SALARY.test(salaryRaw) && /\d/.test(salaryRaw)
