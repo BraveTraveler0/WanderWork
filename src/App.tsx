@@ -22,6 +22,7 @@ const LoginPage = lazy(() => import('./components/LoginPage'))
 const SignupPage = lazy(() => import('./components/SignupPage'))
 const ForgotPasswordPage = lazy(() => import('./components/ForgotPasswordPage'))
 const LandingPage = lazy(() => import('./landing/LandingPage'))
+const SearchLanding = lazy(() => import('./landing/SearchLanding'))
 const BlogPage = lazy(() => import('./components/BlogPage'))
 import {
   getAllJobSeekerData,
@@ -41,6 +42,20 @@ import { deleteAccount } from './api/users'
 import { isNewJob } from './utils/jobUtils'
 
 const API_BASE = API_BASE_URL
+
+// A job picked on the landing page ("Customize my application") is kept here
+// so it survives sign-up, including OAuth redirects that reload the page.
+const PENDING_COVER_LETTER_KEY = 'ww_pending_cover_letter_job'
+const readPendingCoverLetterJob = () => {
+  try { return sessionStorage.getItem(PENDING_COVER_LETTER_KEY) } catch { return null }
+}
+const writePendingCoverLetterJob = (jobId: string | null) => {
+  try {
+    if (jobId) sessionStorage.setItem(PENDING_COVER_LETTER_KEY, jobId)
+    else sessionStorage.removeItem(PENDING_COVER_LETTER_KEY)
+  } catch { /* storage blocked: the in-memory state still works */ }
+}
+const isLandingPath = (path: string) => path === '/landing' || path.startsWith('/landing/')
 
 const NON_ENGLISH_CHARS = /[äöüßéèêëàâçñïîùûœæøåãõ]/i
 const NON_ENGLISH_WORDS = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|bewirb|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|cargo|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|lavoro|siamo|cerchiamo|offerta)\b/i
@@ -517,7 +532,7 @@ function App() {
   })
   const [unseenAppCount, setUnseenAppCount] = useState(0)
   const [settingsTab, setSettingsTab] = useState<'account' | 'personal' | 'payment' | 'upgrade' | 'extension'>('personal')
-  const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(null)
+  const [pendingCoverLetterJobId, setPendingCoverLetterJobId] = useState<string | null>(readPendingCoverLetterJob)
   const [autoOpenCoverLetterJobId, setAutoOpenCoverLetterJobId] = useState<number | null>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [hamburgerHovered, setHamburgerHovered] = useState(false)
@@ -670,6 +685,7 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showWelcomeModal, _user])
 
+  const pendingJobFetchRef = useRef<string | null>(null)
   useEffect(() => {
     if (!pendingCoverLetterJobId || !transformedJobs.length) return
     const match = transformedJobs.find((j: any) => j.backendId === pendingCoverLetterJobId || j.backendId?.toString() === pendingCoverLetterJobId)
@@ -677,8 +693,25 @@ function App() {
       setSelectedJobId(match.id)
       setAutoOpenCoverLetterJobId(match.id)
       setPendingCoverLetterJobId(null)
+      writePendingCoverLetterJob(null)
+      return
     }
-  }, [pendingCoverLetterJobId, transformedJobs])
+    // A job chosen on the public landing page may not be in this user's feed
+    // yet. Fetch it once and add it to the top so the cover letter can open.
+    if (loading || !_token || pendingJobFetchRef.current === pendingCoverLetterJobId) return
+    pendingJobFetchRef.current = pendingCoverLetterJobId
+    fetch(`${API_BASE}/jobseeker/job/${encodeURIComponent(pendingCoverLetterJobId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((job) => {
+        if (!job?._id) { setPendingCoverLetterJobId(null); writePendingCoverLetterJob(null); return }
+        setTransformedJobs((prev) => {
+          if (prev.some((j: any) => String(j.backendId) === String(job._id))) return prev
+          const nextId = prev.reduce((max: number, j: any) => Math.max(max, Number(j.id) || 0), 0) + 1
+          return [{ ...transformJob(job as Job, nextId - 1), id: nextId }, ...prev]
+        })
+      })
+      .catch(() => {})
+  }, [pendingCoverLetterJobId, transformedJobs, loading, _token])
 
   useEffect(() => {
     if (!_user?.email) { setUnseenAppCount(0); return }
@@ -737,7 +770,7 @@ function App() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
-    return window.location.pathname === '/landing'
+    return isLandingPath(window.location.pathname)
   })
 
   useEffect(() => {
@@ -749,7 +782,9 @@ function App() {
   // Push a history entry when navigating to auth screens so the browser back button
   // returns to the landing page instead of potentially bypassing auth.
   useEffect(() => {
-    if (showLogin || showSignup) {
+    // Skip when the caller already pushed an auth entry (the landing pages do),
+    // or Back would need two presses to leave the auth screen.
+    if ((showLogin || showSignup) && !(window.history.state as any)?.wanderAuth) {
       window.history.pushState({ wanderAuth: true }, '')
     }
   }, [showLogin, showSignup])
@@ -928,6 +963,7 @@ function App() {
       setShowSignup(false)
       setShowForgotPassword(false)
       if (!_token) setShowPlans(false)
+      setShowLandingPage(isLandingPath(window.location.pathname))
       const page = (e.state as any)?.wanderPage
       if (page) {
         setCurrentPage(page)
@@ -1369,19 +1405,56 @@ function App() {
     </div>
   )
 
-  // Marketing landing page — always shown at /landing regardless of auth state
+  // Search-first landing page at /landing. The earlier marketing page is kept
+  // at /landing/classic. Both show regardless of auth state.
+  if (showLandingPage && !window.location.pathname.startsWith('/landing/classic')) {
+    return (
+      <SearchLanding
+        isAuthenticated={!!_token}
+        onSignIn={() => {
+          setShowLandingPage(false)
+          setShowLogin(true)
+          window.history.pushState({ wanderAuth: true }, '', '/?login=true')
+        }}
+        onSignUp={() => {
+          setShowLandingPage(false)
+          setShowSignup(true)
+          window.history.pushState({ wanderAuth: true }, '', '/?signup=true')
+        }}
+        onCustomize={(jobId) => {
+          writePendingCoverLetterJob(jobId)
+          pendingJobFetchRef.current = null
+          setPendingCoverLetterJobId(jobId)
+          setShowLandingPage(false)
+          setCurrentPage('dashboard')
+          if (_token) {
+            window.history.pushState({}, '', '/')
+          } else {
+            setShowSignup(true)
+            window.history.pushState({ wanderAuth: true }, '', '/?signup=true')
+          }
+        }}
+        onOpenDashboard={() => {
+          setShowLandingPage(false)
+          setCurrentPage('dashboard')
+          window.history.pushState({}, '', '/')
+        }}
+      />
+    )
+  }
+
   if (showLandingPage) {
     return (
       <LandingPage
         onSignIn={() => {
           setShowLandingPage(false)
           setShowLogin(true)
-          window.history.pushState({}, '', '/?login=true')
+          window.history.pushState({ wanderAuth: true }, '', '/?login=true')
         }}
         onSignUp={() => {
           setShowLandingPage(false)
           setShowSignup(true)
-          window.history.pushState({}, '', '/?signup=true')
+          window.history.pushState({ wanderAuth: true }, '', '/?signup=true')
         }}
       />
     )
