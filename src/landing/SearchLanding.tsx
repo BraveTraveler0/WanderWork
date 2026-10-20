@@ -462,6 +462,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               <ul className="wl-proof">
                 <li><Check size={14} aria-hidden /> Find remote jobs from all over the world</li>
                 <li><Check size={14} aria-hidden /> Talk to recruiters and get jobs faster</li>
+                <li><Check size={14} aria-hidden /> Apply to jobs in seconds</li>
                 <li><Check size={14} aria-hidden /> No ghost jobs</li>
               </ul>
             </div>
