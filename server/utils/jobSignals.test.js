@@ -106,3 +106,10 @@ describe('source quirks', () => {
     expect(signals.remoteLocation('Anywhere in the World', 'Worldwide')).toBe('Anywhere in the World')
   })
 })
+
+describe('entities', () => {
+  it('decodes double-escaped text', () => {
+    expect(signals.buildSummary('GTM Strategy &amp;amp; Operations takes product initiatives and ships them.', 'Lead')).toBe('GTM Strategy & Operations takes product initiatives and ships them.')
+    expect(signals.decodeEntities('Ops &amp;amp; Sales &lt;b&gt;')).toBe('Ops & Sales <b>')
+  })
+})

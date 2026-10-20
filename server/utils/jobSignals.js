@@ -30,6 +30,22 @@ const WORLDWIDE = /\bworldwide\b|\banywhere in the world\b|\bwork from anywhere\
 // to "offices in the US and Europe".
 const REQUIREMENT = /(?:based|located|resid(?:e|ing|ent)|living|live|reside|work authori[sz]ation|authori[sz]ed to work|eligible to work|legally (?:able|permitted)|hiring|open to (?:candidates|applicants|people)|candidates|must be|need to be|only|work(?:ing)? from home|remote)\s(?:in|within|from|for)?\s?(?:the\s)?[^.;:]{0,40}?/gi;
 
+// Some boards send text HTML-escaped twice ("&amp;amp;"), so one decode pass
+// leaves "&amp;" behind. Decode until nothing changes (at most three passes).
+function decodeEntities(text) {
+  let s = String(text || '');
+  for (let i = 0; i < 3; i++) {
+    const next = s
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+      .replace(/&rsquo;|&lsquo;/g, "'").replace(/&ldquo;|&rdquo;/g, '"').replace(/&ndash;/g, '–').replace(/&mdash;/g, ', ')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
 function cleanLocationText(s) {
   return String(s || '').replace(/\s+/g, ' ').trim();
 }
@@ -154,7 +170,7 @@ function stripMetadata(text, title) {
 }
 
 function buildSummary(fullText, title = '', maxLen = 500) {
-  let s = String(fullText || '').replace(/#(?:LI|BI|IND|ZR)-[\w-]+/gi, ' ').replace(/\s+/g, ' ').trim();
+  let s = decodeEntities(fullText).replace(/<[^>]+>/g, ' ').replace(/#(?:LI|BI|IND|ZR)-[\w-]+/gi, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return '';
   s = stripMetadata(s, title);
   const heading = findRoleHeading(s);
@@ -171,8 +187,9 @@ function buildSummary(fullText, title = '', maxLen = 500) {
 }
 
 // Everything an importer stores about where and when the job can be worked.
-function jobSignals({ title = '', locationTexts = [], fullText = '' }) {
-  const locs = locationTexts.map(cleanLocationText).filter(Boolean);
+function jobSignals({ title = '', locationTexts = [], fullText: rawText = '' }) {
+  const fullText = decodeEntities(rawText);
+  const locs = locationTexts.map((l) => cleanLocationText(decodeEntities(l))).filter(Boolean);
   const regions = detectRegions(locs, title, fullText);
   const worldwide = !regions.length && isWorldwide(locs, fullText);
   return {
@@ -201,6 +218,7 @@ function displayLocation(loc) {
 }
 
 module.exports = {
+  decodeEntities,
   jobSignals,
   detectRegions,
   detectTimezone,
