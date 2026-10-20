@@ -63,7 +63,21 @@ const writePendingCoverLetterJob = (jobId: string | null, meta?: PendingJobMeta)
     else sessionStorage.removeItem(PENDING_COVER_LETTER_META_KEY)
   } catch { /* storage blocked: the in-memory state still works */ }
 }
-const isLandingPath = (path: string) => path === '/landing' || path.startsWith('/landing/')
+// Case-insensitive: people type and share /LANDING or /Landing too.
+const isLandingPath = (path: string) => {
+  const p = path.toLowerCase().replace(/\/+$/, '')
+  return p === '/landing' || p.startsWith('/landing/')
+}
+const isClassicLandingPath = (path: string) => path.toLowerCase().startsWith('/landing/classic')
+
+// Send /LANDING, /Landing/ etc. to the one canonical lowercase URL, keeping
+// the query (ad parameters) and hash.
+if (typeof window !== 'undefined' && isLandingPath(window.location.pathname)) {
+  const canonical = window.location.pathname.toLowerCase().replace(/\/+$/, '')
+  if (canonical !== window.location.pathname) {
+    window.history.replaceState(window.history.state, '', `${canonical}${window.location.search}${window.location.hash}`)
+  }
+}
 
 const NON_ENGLISH_CHARS = /[äöüßéèêëàâçñïîùûœæøåãõ]/i
 const NON_ENGLISH_WORDS = /\b(und|oder|mit|für|auf|bei|wir|sind|haben|wird|eine|nicht|aber|mehr|auch|nach|wenn|noch|kann|muss|über|unter|durch|statt|unsere|unser|bewirb|stellenangebot|et|pour|avec|dans|sur|les|une|qui|par|notre|vous|nous|leur|des|offre|emploi|poste|empresa|trabajo|para|que|del|los|nuestro|con|desde|puesto|vaga|vagas|nosso|nossa|com|cargo|em|uma|och|eller|med|för|på|vid|är|har|bli|en|ett|og|til|av|er|som|vi|kan|dit|het|een|van|der|bij|zijn|naar|deze|wordt|worden|onze|per|con|nel|della|delle|lavoro|siamo|cerchiamo|offerta)\b/i
@@ -1433,7 +1447,7 @@ function App() {
 
   // Search-first landing page at /landing. The earlier marketing page is kept
   // at /landing/classic. Both show regardless of auth state.
-  if (showLandingPage && !window.location.pathname.startsWith('/landing/classic')) {
+  if (showLandingPage && !isClassicLandingPath(window.location.pathname)) {
     return (
       <SearchLanding
         isAuthenticated={!!_token}
