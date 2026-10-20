@@ -12,8 +12,13 @@ const crypto = require('crypto');
 // stored hash. Every value is wrapped in $literal: a salary like "$120,000"
 // would otherwise be read as a field path.
 
+// Bump when the summary logic in utils/jobSignals.js improves: every job then
+// gets a fresh summary (and AI cleanup) on its next import, not only jobs
+// whose posting text changed.
+const SUMMARY_VERSION = 2;
+
 function textHash(text) {
-  return crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 16);
+  return crypto.createHash('sha1').update(`v${SUMMARY_VERSION}|${String(text || '')}`).digest('hex').slice(0, 16);
 }
 
 function normalizeUrl(url) {
