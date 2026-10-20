@@ -363,7 +363,26 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
             ) : (
               <>
                 <button className="wl-nav-link" onClick={onSignIn}>Sign in</button>
-                <button className="wl-btn wl-btn-primary" onClick={() => signUp('header')}>
+                {/* Desktop: one-click sign-up lives in the nav bar. */}
+                <div className="wl-nav-social">
+                  <div className="wl-nav-social-row">
+                    <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('header')}>
+                      <LinkedInIcon color="#ffffff" size={16} />
+                      <span className="wl-ns-long">Continue with LinkedIn</span><span className="wl-ns-short">LinkedIn</span>
+                    </button>
+                    <GoogleAuthButton
+                      className="wl-social-btn wl-social-google"
+                      label="Continue with Google"
+                      onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'header', method: 'google' }); onAuthenticated(user, token) }}
+                      onError={setAuthError}
+                    />
+                    <button type="button" className="wl-nav-email" onClick={() => signUp('header_email')}>Sign up with email</button>
+                  </div>
+                  {authError
+                    ? <p className="wl-nav-terms wl-nav-error" role="alert">{authError}</p>
+                    : <p className="wl-nav-terms">By continuing with LinkedIn or Google, you agree to the <a href="/terms">Terms of Service</a>.</p>}
+                </div>
+                <button className="wl-btn wl-btn-primary wl-nav-join" onClick={() => signUp('header')}>
                   <span className="wl-label-long">Get matched free</span><span className="wl-label-short">Join free</span>
                 </button>
               </>
