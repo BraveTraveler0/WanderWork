@@ -1281,22 +1281,36 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
     const normalizedRequiredIds = [...new Set(requiredJobIds.map(String))]
         .filter((id) => mongoose.Types.ObjectId.isValid(id))
         .map((id) => new mongoose.Types.ObjectId(id))
-    const [recentJobs, requiredJobs] = await Promise.all([
+    // Importers stamp last_seen_at each time a job is still on its source
+    // board. Once most jobs carry a recent stamp, leave out the ones that have
+    // dropped off (closed by the employer); until then keep everything so the
+    // feed is never thin while the stamps roll out.
+    const seenCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000
+    const [insertedJobs, listedJobs, requiredJobs] = await Promise.all([
         JobDynamic.find({}, JOB_PROJECTION)
             .sort({ _id: -1 })
+            .limit(safeLimit * 3)
+            .lean().exec(),
+        // Newest postings that are still listed. Insertion order alone is not
+        // enough: one import of a large board adds hundreds of open but
+        // months-old postings that would crowd out this week's jobs.
+        JobDynamic.find({ last_seen_at: { $gte: new Date(seenCutoff) } }, JOB_PROJECTION)
+            .sort({ date_posted: -1 })
             .limit(safeLimit * 3)
             .lean().exec(),
         normalizedRequiredIds.length
             ? JobDynamic.find({ _id: { $in: normalizedRequiredIds } }, JOB_PROJECTION).lean().exec()
             : Promise.resolve([]),
     ])
+    const poolIds = new Set()
+    const recentJobs = [...listedJobs, ...insertedJobs].filter((job) => {
+        const id = String(job._id)
+        if (poolIds.has(id)) return false
+        poolIds.add(id)
+        return true
+    })
     const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000
 
-    // Importers stamp last_seen_at each time a job is still on its source
-    // board. Once most jobs carry a recent stamp, leave out the ones that have
-    // dropped off (closed by the employer); until then keep everything so the
-    // feed is never thin while the stamps roll out.
-    const seenCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000
     const isSeenRecently = (job) => job.last_seen_at && new Date(job.last_seen_at).getTime() >= seenCutoff
     const seenCount = recentJobs.reduce((n, job) => n + (isSeenRecently(job) ? 1 : 0), 0)
     const requireSeen = seenCount >= safeLimit
