@@ -99,6 +99,19 @@
 .wl-proof li { display: inline-flex; align-items: center; gap: 6px; }
 .wl-proof svg { color: var(--wl-primary); flex-shrink: 0; }
 
+/* Nav bar one-click sign-up: full-screen desktop (1280px and up) only.
+   Smaller laptops keep the card beside the hero; phones and tablets keep the
+   compact card under the search box. */
+.wl-nav-social { display: none; }
+.wl-nav-social-row { display: flex; align-items: center; gap: 8px; }
+.wl-nav-social .wl-social-btn { width: auto; min-height: 40px; padding: 8px 14px; font-size: 14px; gap: 8px; }
+.wl-nav-social .wl-social-google svg { width: 16px; height: 16px; }
+.wl-ns-short { display: none; }
+.wl-nav-email { background: none; border: none; padding: 8px 6px; color: var(--wl-primary); font-size: 14px; font-weight: 700; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
+.wl-nav-terms { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: var(--wl-muted); text-align: right; white-space: nowrap; }
+.wl-nav-terms a { color: var(--wl-primary); font-weight: 700; }
+.wl-nav-error { color: #b42318; font-weight: 600; white-space: normal; }
+
 /* Hero sign-up card */
 .wl-join { background: var(--wl-card); border: 1px solid var(--wl-line); border-radius: 16px; padding: 22px; box-shadow: 0 12px 32px -20px rgba(23, 43, 49, 0.3); display: flex; flex-direction: column; gap: 10px; }
 .wl-join h2 { font-size: 19px; font-weight: 800; margin: 0; }
@@ -228,12 +241,20 @@
 
 /* ---------- Desktop ---------- */
 @media (min-width: 1024px) {
-  .wl-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: start; }
   .wl-layout.has-panel { grid-template-columns: minmax(0, 1fr) var(--wl-panel-w); }
+}
+/* Full screen: sign-up moves into the nav bar and the hero gets the full width. */
+@media (min-width: 1280px) {
+  .wl-header-inner { height: 76px; }
+  .wl-nav { gap: 10px; }
+  .wl-nav-social { display: flex; flex-direction: column; align-items: flex-end; }
+  .wl-nav-join, .wl-join { display: none; }
+  .wl-side { top: 88px; max-height: calc(100vh - 100px); }
+  .wl-results { scroll-margin-top: 84px; }
 }
 @media (min-width: 1024px) and (max-width: 1279px) {
   .wl { --wl-panel-w: 400px; }
-  .wl-hero-grid { grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
+  .wl-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
   .wl-row-title { white-space: normal; }
   .wl-rc-long { display: none; }
   .wl-rc-short { display: inline; }
