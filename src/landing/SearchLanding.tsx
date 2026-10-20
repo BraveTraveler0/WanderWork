@@ -591,6 +591,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                       onNewJobsClick={showNewOnly}
                       onRecruiterContactsClick={() => contactRecruiter('panel')}
                       isAuthenticated={false}
+                      showStats={false}
                       onSignUp={() => customize(displayed, 'panel')}
                     />
                     {isOverlay && (

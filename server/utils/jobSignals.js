@@ -131,7 +131,23 @@ function formatRange(min, max, currency = 'USD', interval = '') {
 
 // Start the summary at the role itself when the posting opens with a company
 // blurb, and drop ATS metadata ("Requisition #: ...", "#LI-Remote").
-const ROLE_HEADING = /\b(?:About the (?:Role|Job|Position|Opportunity)|The Role|Your Role|Role Overview|Position Overview|The Opportunity|What You['’]ll Do|What you will do|In this role|Job Summary|Position Summary|Role Summary|Job Description)\b\s*:?\s*/gi;
+const ROLE_HEADING = /\b(?:About the (?:Role|Job|Position|Opportunity)|The Role|Your Role|Role Overview|Position Overview|Job Overview|Overview|The Opportunity|What You['’]ll Do|What you will do|In this role|Job Summary|Position Summary|Role Summary|Job Description)\b\s*:?\s*/gi;
+
+// Postings that open with how-to-apply instructions instead of the role
+// ("APPLICATION INSTRUCTIONS: If you've already completed our process, log in
+// to the Team Portal..."). The role starts after a divider or a heading.
+const APPLY_PREAMBLE = /^(?:APPLICATION INSTRUCTIONS|HOW TO APPLY|APPLICATION PROCESS|IMPORTANT(?: NOTE)?|PLEASE NOTE|NOTE TO (?:APPLICANTS|CANDIDATES)|BEFORE YOU APPLY|ATTENTION)\b/i;
+const DIVIDER = /[*=_~#-]{5,}/;
+
+// Leading requisition codes in titles: "CPT-11414 Appointment Setter",
+// "T-CPT-11612 Technical VA", "[REQ-204] Analyst", "#4411 - Designer".
+function cleanTitle(title) {
+  return String(title || '')
+    .replace(/^\s*\[[A-Z0-9-]{3,}\]\s*/i, '')
+    .replace(/^\s*#?(?:[A-Z]{1,6}-){0,3}\d{3,}[A-Z]?\s*(?:[-–:|]\s*)?(?=[A-Za-z])/, '')
+    .replace(/\s+/g, ' ')
+    .trim() || String(title || '').trim();
+}
 
 // A heading, not the same words mid-sentence ("...learn more about the role"):
 // it starts with a capital and the text after it starts a new sentence.
@@ -172,6 +188,13 @@ function stripMetadata(text, title) {
 function buildSummary(fullText, title = '', maxLen = 500) {
   let s = decodeEntities(fullText).replace(/<[^>]+>/g, ' ').replace(/#(?:LI|BI|IND|ZR)-[\w-]+/gi, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return '';
+  if (APPLY_PREAMBLE.test(s)) {
+    const divider = s.search(DIVIDER);
+    const heading = findRoleHeading(s);
+    const cut = divider > 0 ? divider : (heading ? heading.index : -1);
+    if (cut > 0) s = s.slice(cut);
+  }
+  s = s.replace(new RegExp(DIVIDER.source, 'g'), ' ').replace(/\s+/g, ' ').trim();
   s = stripMetadata(s, title);
   const heading = findRoleHeading(s);
   // Skip a company blurb when the role section starts reasonably early.
@@ -218,6 +241,7 @@ function displayLocation(loc) {
 }
 
 module.exports = {
+  cleanTitle,
   decodeEntities,
   jobSignals,
   detectRegions,

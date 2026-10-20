@@ -75,9 +75,11 @@ interface StatsPanelProps {
   onSignUp?: () => void
   autoOpenCoverLetterJobId?: number | null
   onAutoOpenCoverLetterHandled?: () => void
+  // The landing page shows its own live count, so it hides this row.
+  showStats?: boolean
 }
 
-const StatsPanel = ({ jobId, selectedJob, data, jobs = [], newJobsCount: liveNewJobsCount, onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled }: StatsPanelProps) => {
+const StatsPanel = ({ jobId, selectedJob, data, jobs = [], newJobsCount: liveNewJobsCount, onNewJobsClick, onRecruiterContactsClick, isAuthenticated = true, onSignUp, autoOpenCoverLetterJobId, onAutoOpenCoverLetterHandled, showStats = true }: StatsPanelProps) => {
   // Calculate stats from backend data or use sensible defaults
   const allJobs = Array.isArray(jobs) && jobs.length ? jobs : (data?.Jobs ?? [])
   const newJobsCount = liveNewJobsCount ?? allJobs.filter(isNewJob).length
@@ -336,7 +338,7 @@ const StatsPanel = ({ jobId, selectedJob, data, jobs = [], newJobsCount: liveNew
     <div className="flex flex-col gap-4 lg:gap-6 xl:gap-8 w-full pl-2 lg:pl-2 pr-0 min-h-full overflow-visible pt-2 lg:pt-3 xl:pt-4" style={{ fontFamily: 'Manrope' }}>
       <style>{`@keyframes tokenFloat { 0% { opacity: 1; transform: translate(-50%, 0); } 85% { opacity: 1; transform: translate(-50%, -36px); } 100% { opacity: 0; transform: translate(-50%, -72px); } }`}</style>
       {/* Stats - Desktop only */}
-      <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
+      {showStats && <div className="hidden lg:flex gap-4 xl:gap-6 justify-center">
         <StatCard number={newJobsCount.toString()} label="New Jobs" onClick={onNewJobsClick} clickable />
         {!isAuthenticated && <TokenCoinIcon onClick={onSignUp} />}
         {isAuthenticated && <>
@@ -377,7 +379,7 @@ const StatsPanel = ({ jobId, selectedJob, data, jobs = [], newJobsCount: liveNew
             </button>
           </div>
         </>}
-      </div>
+      </div>}
       {/* Job Detail Card */}
       {(() => {
         // First try to find in jobs array, then in data
