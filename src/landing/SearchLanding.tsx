@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, Check, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users } from 'lucide-react'
 import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import './searchLanding.css'
 import { API_BASE_URL } from '../api/config'
+import StatsPanel from '../components/StatsPanel'
+import { GoogleAuthButton, LinkedInIcon, startLinkedInAuth } from '../components/SocialAuthButtons'
 import { trackLandingEvent } from '../utils/landingTracking'
 import {
   QUICK_FILTERS,
@@ -23,7 +25,9 @@ import { readFiltersFromUrl, writeFiltersToUrl } from './landingUrlState'
 
 // Search-first landing page: a compact hero, then real jobs anyone can browse.
 // Accounts are only asked for when a visitor wants something that needs one
-// (tailoring an application, a match score, saving jobs).
+// (tailoring an application, a match score, a recruiter, saving jobs).
+// The job details column is the dashboard's own StatsPanel, so nothing about
+// it changes when a visitor signs in.
 
 export interface PickedJob { id: string; title: string; company: string }
 
@@ -33,6 +37,8 @@ interface SearchLandingProps {
   onSignUp: () => void
   onCustomize: (job: PickedJob) => void
   onOpenDashboard: () => void
+  // Google sign-up finishes in place (popup); LinkedIn redirects and returns.
+  onAuthenticated: (user: any, token: string) => void
 }
 
 declare global {
@@ -48,6 +54,7 @@ const OVERLAY_QUERY = '(max-width: 1023px)'
 const CACHE_KEY = 'ww_landing_jobs_v2'
 const CACHE_MAX_AGE = 12 * 3_600_000
 const PROD_API = 'https://wanderwork-backend-server.onrender.com'
+const GUEST_DATA = { Jobs: [], Candidates: [], Applications: [], Contacts: [] }
 
 function useMediaQuery(query: string) {
   const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
@@ -90,6 +97,32 @@ function fetchFeed(signal: AbortSignal): Promise<unknown> {
     .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
 }
 
+// The same job shape the dashboard builds for its guest feed (App.tsx), so
+// StatsPanel renders it exactly as it does after sign-in.
+function toPanelJob(job: LandingJob, id: number) {
+  const r = job.raw || {}
+  return {
+    id,
+    backendId: job.id,
+    title: job.title,
+    company: job.company,
+    description: job.summary,
+    location: job.location,
+    salary: job.salaryText || 'Not Listed',
+    url: r.url || job.applyUrl,
+    apply_url: r.apply_url || r.applyUrl || null,
+    company_url: r.company_url || null,
+    jobType: job.jobType,
+    source: r.source || '',
+    skills: job.skills,
+    hasNewBadge: isFresh(job.postedAt),
+    interested: false,
+    showCoverLetter: false,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : null,
+    job_code: r.job_code,
+  }
+}
+
 const FIELD_HEADLINE: Partial<Record<QuickFilter, string>> = {
   engineering: 'Remote engineering jobs.',
   design: 'Remote design jobs.',
@@ -98,7 +131,7 @@ const FIELD_HEADLINE: Partial<Record<QuickFilter, string>> = {
   support: 'Remote customer support jobs.',
 }
 
-export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onCustomize, onOpenDashboard }: SearchLandingProps) {
+export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onCustomize, onOpenDashboard, onAuthenticated }: SearchLandingProps) {
   const initial = useMemo(readFiltersFromUrl, [])
   const [jobs, setJobs] = useState<LandingJob[]>(readCachedJobs)
   const [loading, setLoading] = useState(() => jobs.length === 0)
@@ -116,6 +149,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [pastHero, setPastHero] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const isOverlay = useMediaQuery(OVERLAY_QUERY)
   const heroRef = useRef<HTMLElement>(null)
   const resultsRef = useRef<HTMLElement>(null)
@@ -187,6 +221,11 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const filters: LandingFilters = { query, quick, jobType, postedWithinDays, salaryOnly, sort }
   const results = useMemo(() => filterJobs(jobs, filters), [jobs, query, quick, jobType, postedWithinDays, salaryOnly, sort])
   const selected = selectedId ? jobs.find((j) => j.id === selectedId) ?? null : null
+  // Desktop always shows a job in the right column, like the dashboard does.
+  const displayed = selected ?? (!isOverlay && !loading && !failed ? results[0] ?? null : null)
+  const numericIds = useMemo(() => new Map(jobs.map((j, i) => [j.id, i + 1])), [jobs])
+  const panelJobs = useMemo(() => jobs.map((j, i) => toPanelJob(j, i + 1)), [jobs])
+  const panelJob = displayed ? panelJobs[(numericIds.get(displayed.id) ?? 1) - 1] : null
   const filtersActive = !!(query.trim() || quick.length || jobType || postedWithinDays || salaryOnly)
 
   useEffect(() => { setVisible(PAGE_SIZE) }, [query, quick, jobType, postedWithinDays, salaryOnly, sort])
@@ -223,19 +262,6 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
     }
   }, [isOverlay, selected?.id])
 
-  // Desktop: on shorter screens the panel can open below the fold. Bring it up
-  // so the job and its Customize button are in view.
-  useEffect(() => {
-    if (isOverlay || !selected) return
-    const frame = requestAnimationFrame(() => {
-      const panel = document.querySelector('.wl-panel')
-      const cta = document.querySelector('.wl-panel-actions .wl-btn-primary')
-      if (!panel || !cta || cta.getBoundingClientRect().bottom <= window.innerHeight - 16) return
-      window.scrollBy({ top: panel.getBoundingClientRect().top - 80, behavior: 'smooth' })
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [isOverlay, selected?.id])
-
   const closeDetails = () => {
     if (isOverlay && (window.history.state as any)?.wlJob) window.history.back()
     else setSelectedId(null)
@@ -243,7 +269,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   }
 
   useEffect(() => {
-    if (!selected) return
+    if (!selected || !isOverlay) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDetails() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -251,7 +277,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
   const openJob = (job: LandingJob) => {
     lastFocused.current = document.activeElement as HTMLElement | null
-    if (selectedId === job.id && !isOverlay) return
+    if (displayed?.id === job.id && !isOverlay) return
     setSelectedId(job.id)
     trackLandingEvent('job_view', { job_id: job.id, company: job.company })
   }
@@ -272,6 +298,12 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   }
 
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  const showNewOnly = () => {
+    setPostedWithinDays(3)
+    trackLandingEvent('job_filter', { filter: 'new_jobs_count' })
+    scrollToResults()
+  }
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -294,14 +326,25 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
     onSignUp()
   }
 
+  const contactRecruiter = (from: string) => {
+    trackLandingEvent('recruiter_click', { from })
+    if (isAuthenticated) onOpenDashboard()
+    else onSignUp()
+  }
+
+  const linkedIn = (from: string) => {
+    trackLandingEvent('landing_signup_click', { from, method: 'linkedin' })
+    startLinkedInAuth()
+  }
+
   const save = (job: LandingJob) => {
     trackLandingEvent('job_save_click', { job_id: job.id })
     signUp('save')
   }
 
-  const countLabel = !filtersActive && newJobs
-    ? `${newJobs.count} new in the last ${newJobs.days} days`
-    : `${results.length} ${results.length === 1 ? 'job' : 'jobs'}`
+  const liveCount = newJobs
+    ? { n: newJobs.count, label: `new remote jobs in the last ${newJobs.days} days` }
+    : jobs.length ? { n: jobs.length, label: 'fresh remote jobs, updated every 6 hours' } : null
 
   return (
     <div className={`wl${!isAuthenticated ? ' has-sticky-cta' : ''}`}>
@@ -329,73 +372,101 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
       <main>
         <section className="wl-hero" ref={heroRef}>
-          <div className="wl-wrap">
-            <h1>{headlineLead} Skip the busywork.</h1>
-            <p className="wl-hero-sub">Browse remote jobs, see where you fit, and create tailored applications without starting from scratch.</p>
-
-            <form className="wl-search" role="search" onSubmit={submitSearch}>
-              <label className="wl-search-field">
-                <Search size={19} aria-hidden />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Job title, skill, or company"
-                  aria-label="Search jobs by title, skill, or company"
-                  enterKeyHint="search"
-                  autoComplete="off"
-                />
-              </label>
-              <button type="submit" className="wl-btn wl-btn-primary">
-                <span className="wl-label-long">Search jobs</span><span className="wl-label-short">Search</span>
-              </button>
-            </form>
-
-            <div className="wl-chips" role="group" aria-label="Quick filters">
-              {QUICK_FILTERS.map((f) => (
-                <button key={f.key} type="button" className="wl-chip" aria-pressed={quick.includes(f.key)} onClick={() => toggleQuick(f.key)}>
-                  {quick.includes(f.key) && <Check size={13} aria-hidden />}
-                  {f.label}
+          <div className={`wl-wrap${!isAuthenticated ? ' wl-hero-grid' : ''}`}>
+            <div className="wl-hero-main">
+              {liveCount && (
+                <button type="button" className="wl-live" onClick={showNewOnly}>
+                  <span className="wl-live-dot" aria-hidden />
+                  <strong>{liveCount.n.toLocaleString()}</strong> {liveCount.label}
                 </button>
-              ))}
-              <button type="button" className="wl-chip wl-chip-ghost" aria-expanded={showAdvanced} aria-controls="wl-advanced" onClick={() => setShowAdvanced((v) => !v)}>
-                <SlidersHorizontal size={13} aria-hidden /> Filters
-              </button>
+              )}
+              <h1>{headlineLead} Skip the busywork.</h1>
+              <p className="wl-hero-sub">Browse remote jobs, see where you fit, and create tailored applications without starting from scratch.</p>
+
+              <form className="wl-search" role="search" onSubmit={submitSearch}>
+                <label className="wl-search-field">
+                  <Search size={19} aria-hidden />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Job title, skill, or company"
+                    aria-label="Search jobs by title, skill, or company"
+                    enterKeyHint="search"
+                    autoComplete="off"
+                  />
+                </label>
+                <button type="submit" className="wl-btn wl-btn-primary">
+                  <span className="wl-label-long">Search jobs</span><span className="wl-label-short">Search</span>
+                </button>
+              </form>
+
+              <div className="wl-chips" role="group" aria-label="Quick filters">
+                {QUICK_FILTERS.map((f) => (
+                  <button key={f.key} type="button" className="wl-chip" aria-pressed={quick.includes(f.key)} onClick={() => toggleQuick(f.key)}>
+                    {quick.includes(f.key) && <Check size={13} aria-hidden />}
+                    {f.label}
+                  </button>
+                ))}
+                <button type="button" className="wl-chip wl-chip-ghost" aria-expanded={showAdvanced} aria-controls="wl-advanced" onClick={() => setShowAdvanced((v) => !v)}>
+                  <SlidersHorizontal size={13} aria-hidden /> Filters
+                </button>
+              </div>
+
+              {showAdvanced && (
+                <div className="wl-advanced" id="wl-advanced">
+                  <label>
+                    Job type
+                    <select value={jobType} onChange={(e) => setJobType(e.target.value as JobTypeFilter)}>
+                      <option value="">Any</option>
+                      <option value="full">Full-time</option>
+                      <option value="part">Part-time</option>
+                      <option value="contract">Contract or freelance</option>
+                    </select>
+                  </label>
+                  <label>
+                    Posted
+                    <select value={postedWithinDays} onChange={(e) => setPostedWithinDays(Number(e.target.value) as PostedFilter)}>
+                      <option value={0}>Any time</option>
+                      <option value={1}>Last 24 hours</option>
+                      <option value={3}>Last 3 days</option>
+                      <option value={7}>Last 7 days</option>
+                      <option value={30}>Last 30 days</option>
+                    </select>
+                  </label>
+                  <label className="wl-check">
+                    <input type="checkbox" checked={salaryOnly} onChange={(e) => setSalaryOnly(e.target.checked)} />
+                    Salary listed
+                  </label>
+                </div>
+              )}
+
+              <ul className="wl-proof">
+                <li><Check size={14} aria-hidden /> Free to browse, no account needed</li>
+                <li><Check size={14} aria-hidden /> Apply on the employer's site</li>
+                <li><Check size={14} aria-hidden /> Tailored resume and cover letter when you want one</li>
+              </ul>
             </div>
 
-            {showAdvanced && (
-              <div className="wl-advanced" id="wl-advanced">
-                <label>
-                  Job type
-                  <select value={jobType} onChange={(e) => setJobType(e.target.value as JobTypeFilter)}>
-                    <option value="">Any</option>
-                    <option value="full">Full-time</option>
-                    <option value="part">Part-time</option>
-                    <option value="contract">Contract or freelance</option>
-                  </select>
-                </label>
-                <label>
-                  Posted
-                  <select value={postedWithinDays} onChange={(e) => setPostedWithinDays(Number(e.target.value) as PostedFilter)}>
-                    <option value={0}>Any time</option>
-                    <option value={1}>Last 24 hours</option>
-                    <option value={3}>Last 3 days</option>
-                    <option value={7}>Last 7 days</option>
-                    <option value={30}>Last 30 days</option>
-                  </select>
-                </label>
-                <label className="wl-check">
-                  <input type="checkbox" checked={salaryOnly} onChange={(e) => setSalaryOnly(e.target.checked)} />
-                  Salary listed
-                </label>
-              </div>
+            {!isAuthenticated && (
+              <aside className="wl-join" aria-labelledby="wl-join-title">
+                <h2 id="wl-join-title">Join free in one click</h2>
+                <p className="wl-join-sub">Get matched to jobs, tailor your resume and cover letter, and reach recruiters.</p>
+                <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('hero')}>
+                  <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
+                </button>
+                <GoogleAuthButton
+                  className="wl-social-btn wl-social-google"
+                  onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'hero', method: 'google' }); onAuthenticated(user, token) }}
+                  onError={setAuthError}
+                />
+                <button type="button" className="wl-join-email" onClick={() => signUp('hero_email')}>Sign up with email</button>
+                {authError && <p className="wl-join-error" role="alert">{authError}</p>}
+                <p className="wl-join-terms">
+                  By clicking Continue with LinkedIn or Continue with Google, you agree to the WanderWork <a href="/terms">Terms of Service</a>.
+                </p>
+              </aside>
             )}
-
-            <ul className="wl-proof">
-              <li><Check size={14} aria-hidden /> Free to browse, no account needed</li>
-              <li><Check size={14} aria-hidden /> Apply on the employer's site</li>
-              <li><Check size={14} aria-hidden /> Tailored resume and cover letter when you want one</li>
-            </ul>
           </div>
         </section>
 
@@ -404,18 +475,27 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
             <div className="wl-results-head">
               <div className="wl-results-title-wrap">
                 <h2 id="wl-results-title">{filtersActive ? 'Matching remote jobs' : 'Latest remote jobs'}</h2>
-                {!loading && !failed && <span className="wl-results-count" aria-live="polite">{countLabel}</span>}
+                {!loading && !failed && (
+                  filtersActive || !newJobs
+                    ? <span className="wl-results-count" aria-live="polite">{results.length} {results.length === 1 ? 'job' : 'jobs'}</span>
+                    : (
+                      <button type="button" className="wl-results-live" onClick={showNewOnly} aria-live="polite">
+                        <span className="wl-live-dot" aria-hidden />
+                        <strong>{newJobs.count.toLocaleString()}</strong> new in the last {newJobs.days} days
+                      </button>
+                    )
+                )}
               </div>
               <label className="wl-sort">
-                Sort
-                <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+                <span className="wl-sort-label">Sort</span>
+                <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort jobs">
                   <option value="newest">Newest first</option>
                   <option value="salary">Highest salary</option>
                 </select>
               </label>
             </div>
 
-            <div className={`wl-layout${selected ? ' has-panel' : ''}`}>
+            <div className={`wl-layout${panelJob && !isOverlay ? ' has-panel' : ''}`}>
               <div className="wl-list">
                 {loading && Array.from({ length: 6 }, (_, i) => <div key={i} className="wl-skeleton" aria-hidden />)}
                 {loading && <span className="wl-sr">Loading jobs</span>}
@@ -443,18 +523,32 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                   <Fragment key={job.id}>
                     <JobRow
                       job={job}
-                      selected={job.id === selectedId}
+                      selected={job.id === displayed?.id}
                       onOpen={() => openJob(job)}
+                      onCustomize={() => customize(job, 'row')}
                       onSave={isAuthenticated ? undefined : () => save(job)}
                       onMatch={isAuthenticated ? undefined : () => customize(job, 'row_match_teaser')}
                     />
-                    {!isAuthenticated && i === INVITE_AFTER - 1 && (
+                    {i === INVITE_AFTER - 1 && (
                       <div className="wl-invite">
-                        <div>
-                          <strong>Make your next application easier</strong>
-                          <span>Found a job you like? Create a free account to tailor your resume and cover letter to the role.</span>
+                        {!isAuthenticated && (
+                          <div className="wl-invite-part">
+                            <div>
+                              <strong>Make your next application easier</strong>
+                              <span>Found a job you like? Create a free account to tailor your resume and cover letter to the role.</span>
+                            </div>
+                            <button className="wl-btn wl-btn-primary" onClick={() => signUp('list_invite')}>Create free account</button>
+                          </div>
+                        )}
+                        <div className="wl-invite-part">
+                          <div>
+                            <strong>Want it even easier? Contact a recruiter.</strong>
+                            <span>We connect you with recruiters hiring for remote roles like these, so the right people see your profile.</span>
+                          </div>
+                          <button className="wl-btn wl-btn-secondary" onClick={() => contactRecruiter('list_invite')}>
+                            <Users size={15} aria-hidden /> Contact a recruiter
+                          </button>
                         </div>
-                        <button className="wl-btn wl-btn-primary" onClick={() => signUp('list_invite')}>Create free account</button>
                       </div>
                     )}
                   </Fragment>
@@ -469,17 +563,54 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 )}
               </div>
 
-              {selected && (
+              {panelJob && displayed && (
                 <>
                   {isOverlay && <div className="wl-backdrop" onClick={closeDetails} aria-hidden />}
-                  <JobDetails
-                    job={selected}
-                    isAuthenticated={isAuthenticated}
-                    isOverlay={isOverlay}
-                    onClose={closeDetails}
-                    onCustomize={(from) => customize(selected, from)}
-                    onApply={() => trackLandingEvent('job_apply_click', { job_id: selected.id, company: selected.company })}
-                  />
+                  <aside
+                    className={isOverlay ? 'wl-panel' : 'wl-side'}
+                    aria-label={`${displayed.title} details`}
+                    role={isOverlay ? 'dialog' : undefined}
+                    aria-modal={isOverlay ? true : undefined}
+                  >
+                    {isOverlay && (
+                      <div className="wl-panel-bar">
+                        <button className="wl-icon-btn" onClick={closeDetails} aria-label="Back to jobs" autoFocus><ArrowLeft size={18} aria-hidden /></button>
+                        <span className="wl-panel-bar-title">Back to jobs</span>
+                      </div>
+                    )}
+                    <StatsPanel
+                      key={panelJob.id}
+                      jobId={panelJob.id}
+                      selectedJob={panelJob}
+                      onClose={closeDetails}
+                      data={GUEST_DATA}
+                      jobs={panelJobs}
+                      newJobsCount={newJobs?.count ?? null}
+                      onNewJobsClick={showNewOnly}
+                      onRecruiterContactsClick={() => contactRecruiter('panel')}
+                      isAuthenticated={false}
+                      onSignUp={() => customize(displayed, 'panel')}
+                    />
+                    {isOverlay && (
+                      <div className="wl-panel-dock">
+                        <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => customize(displayed, 'panel_dock')}>
+                          <Sparkles size={16} aria-hidden /> Customize application
+                        </button>
+                        {displayed.applyUrl && (
+                          <a
+                            className="wl-btn wl-btn-secondary wl-btn-lg"
+                            href={displayed.applyUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => trackLandingEvent('job_apply_click', { job_id: displayed.id, company: displayed.company })}
+                            aria-label="Apply on company site"
+                          >
+                            Apply <ExternalLink size={15} aria-hidden />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </aside>
                 </>
               )}
             </div>
@@ -504,7 +635,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               <div className="wl-value-card">
                 <div className="wl-value-icon"><Users size={20} aria-hidden /></div>
                 <h3>Reach the right people</h3>
-                <p>Use recruiter outreach tools to get in front of the hiring team, beyond the job listing.</p>
+                <p>Contact recruiters hiring for the role and get in front of the hiring team, beyond the job listing.</p>
               </div>
             </div>
 
@@ -514,9 +645,14 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                   <h3>Your next remote job, without the endless search.</h3>
                   <p>Free to get started. No credit card, no commitment.</p>
                 </div>
-                <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => signUp('footer_cta')}>
-                  Get matched free <ArrowRight size={16} aria-hidden />
-                </button>
+                <div className="wl-cta-actions">
+                  <button className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('footer_cta')}>
+                    <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
+                  </button>
+                  <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => signUp('footer_cta')}>
+                    Get matched free <ArrowRight size={16} aria-hidden />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -538,7 +674,9 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
       {!isAuthenticated && (
         <div className={`wl-sticky-cta${pastHero && !selected ? ' is-visible' : ''}`} aria-hidden={!pastHero || !!selected}>
-          <span>Tailored applications, free</span>
+          <button className="wl-social-btn wl-social-linkedin" tabIndex={pastHero && !selected ? 0 : -1} onClick={() => linkedIn('sticky_bar')}>
+            <LinkedInIcon color="#ffffff" size={16} /> <span className="wl-label-long">Continue with LinkedIn</span><span className="wl-label-short">LinkedIn</span>
+          </button>
           <button className="wl-btn wl-btn-primary" tabIndex={pastHero && !selected ? 0 : -1} onClick={() => signUp('sticky_bar')}>Get matched free</button>
         </div>
       )}
@@ -565,14 +703,21 @@ function JobTags({ job, onMatch }: { job: LandingJob; onMatch?: () => void }) {
   )
 }
 
-function JobRow({ job, selected, onOpen, onSave, onMatch }: { job: LandingJob; selected: boolean; onOpen: () => void; onSave?: () => void; onMatch?: () => void }) {
+function JobRow({ job, selected, onOpen, onCustomize, onSave, onMatch }: {
+  job: LandingJob
+  selected: boolean
+  onOpen: () => void
+  onCustomize: () => void
+  onSave?: () => void
+  onMatch?: () => void
+}) {
   return (
     <article className={`wl-row${selected ? ' is-selected' : ''}`}>
       <div className="wl-logo-tile" aria-hidden>{initials(job.company)}</div>
       <div className="wl-row-main">
         <h3 className="wl-row-title">
           {/* A real link (crawlable, opens in a new tab with a modifier key);
-              a plain click opens the details panel instead. */}
+              a plain click opens the job in the details column instead. */}
           <a
             className="wl-row-link"
             href={`/jobs/${job.slug}`}
@@ -598,121 +743,24 @@ function JobRow({ job, selected, onOpen, onSave, onMatch }: { job: LandingJob; s
       </div>
       <div className="wl-row-side">
         <span className="wl-age">{postedAgo(job.postedAt)}</span>
-        {onSave && (
-          <button type="button" className="wl-icon-btn wl-row-save" aria-label={`Save ${job.title}`} title="Save job" onClick={onSave}>
-            <Bookmark size={16} aria-hidden />
+        {onMatch && (
+          <button type="button" className="wl-match-teaser wl-mt-side" onClick={onMatch} aria-label={`Log in to see your match for ${job.title}`}>
+            <Lock size={12} aria-hidden /> Log in to see your match %
           </button>
         )}
-      </div>
-    </article>
-  )
-}
-
-function JobDetails({ job, isAuthenticated, isOverlay, onClose, onCustomize, onApply }: {
-  job: LandingJob
-  isAuthenticated: boolean
-  isOverlay: boolean
-  onClose: () => void
-  onCustomize: (from: string) => void
-  onApply: () => void
-}) {
-  const panelRef = useRef<HTMLElement>(null)
-  const backRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    panelRef.current?.scrollTo({ top: 0 })
-    if (isOverlay) backRef.current?.focus({ preventScroll: true })
-  }, [job.id, isOverlay])
-
-  return (
-    <aside
-      className="wl-panel"
-      ref={panelRef}
-      aria-label={`${job.title} details`}
-      role={isOverlay ? 'dialog' : undefined}
-      aria-modal={isOverlay ? true : undefined}
-    >
-      <div className="wl-panel-bar">
-        <button ref={backRef} className="wl-icon-btn" onClick={onClose} aria-label="Back to jobs"><ArrowLeft size={18} aria-hidden /></button>
-        <span className="wl-panel-bar-title">Back to jobs</span>
-      </div>
-
-      <div className="wl-panel-top">
-        <div className="wl-logo-tile" aria-hidden>{initials(job.company)}</div>
-        <div style={{ minWidth: 0 }}>
-          <h2>{job.title}</h2>
-          <div className="wl-panel-company">{job.company}</div>
-        </div>
-        <button className="wl-icon-btn wl-panel-close" onClick={onClose} aria-label="Close details"><X size={16} aria-hidden /></button>
-      </div>
-
-      <dl className="wl-facts">
-        <div className="wl-fact"><dt>Who can apply</dt><dd>{job.eligibility.length ? job.eligibility.join(', ') : 'Remote, region not stated'}</dd></div>
-        <div className="wl-fact"><dt>Salary</dt><dd>{job.salaryText || 'Not disclosed'}</dd></div>
-        <div className="wl-fact"><dt>Job type</dt><dd>{job.jobType || 'Not stated'}</dd></div>
-        <div className="wl-fact"><dt>Posted</dt><dd>{job.postedAt ? postedAgo(job.postedAt) : 'Recently'}</dd></div>
-      </dl>
-
-      <div className="wl-panel-actions">
-        <button className="wl-btn wl-btn-primary wl-btn-lg wl-btn-block" onClick={() => onCustomize('panel_primary')}>
-          <Sparkles size={16} aria-hidden /> Customize my application
-        </button>
-        {job.applyUrl && (
-          <a className="wl-btn wl-btn-secondary wl-btn-lg wl-btn-block" href={job.applyUrl} target="_blank" rel="noopener noreferrer" onClick={onApply}>
-            Apply on company site <ExternalLink size={15} aria-hidden />
-          </a>
-        )}
-      </div>
-
-      <div className="wl-match">
-        <div className="wl-match-head">
-          <div className="wl-match-ring"><Target size={18} aria-hidden /></div>
-          {isAuthenticated ? 'See how you match' : 'How well do you match?'}
-        </div>
-        <p>
-          {isAuthenticated
-            ? 'Open this role in your dashboard to see your match and generate a resume and cover letter written for it.'
-            : 'Add your resume to see your match for this role, which of your skills to lead with, and a tailored resume and cover letter.'}
-        </p>
-        <button className="wl-btn wl-btn-secondary wl-btn-block" onClick={() => onCustomize('panel_match')}>
-          {isAuthenticated ? 'Open in dashboard' : 'Get my match, free'}
-        </button>
-        {!isAuthenticated && <div className="wl-match-note">Free to get started. We bring you right back to this job.</div>}
-      </div>
-
-      {job.summary && (
-        <div className="wl-panel-section">
-          <h3>About the role</h3>
-          <p>{job.summary}</p>
-          {job.applyUrl && (
-            <a className="wl-panel-link" href={job.applyUrl} target="_blank" rel="noopener noreferrer" onClick={onApply}>
-              Read the full posting on the employer's site
-            </a>
+        <div className="wl-row-actions">
+          <button type="button" className="wl-row-customize" onClick={onCustomize} aria-label={`Customize application for ${job.title}`}>
+            <Sparkles size={15} aria-hidden />
+            <span className="wl-rc-long">Customize Application</span>
+            <span className="wl-rc-short">Customize</span>
+          </button>
+          {onSave && (
+            <button type="button" className="wl-icon-btn wl-row-save" aria-label={`Save ${job.title}`} title="Save job" onClick={onSave}>
+              <Bookmark size={16} aria-hidden />
+            </button>
           )}
         </div>
-      )}
-
-      {job.skills.length > 0 && (
-        <div className="wl-panel-section">
-          <h3>Skills</h3>
-          <div className="wl-tags">{job.skills.map((s) => <span key={s} className="wl-tag">{s}</span>)}</div>
-        </div>
-      )}
-
-      <div className="wl-panel-section">
-        <a className="wl-panel-link" href={`/jobs/${job.slug}`}>Open this job's page</a>
       </div>
-
-      {/* Phones and tablets: the main actions stay in reach while reading. */}
-      <div className="wl-panel-dock">
-        <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => onCustomize('panel_dock')}>
-          <Sparkles size={16} aria-hidden /> Customize application
-        </button>
-        {job.applyUrl && (
-          <a className="wl-btn wl-btn-secondary wl-btn-lg" href={job.applyUrl} target="_blank" rel="noopener noreferrer" onClick={onApply} aria-label="Apply on company site">
-            Apply <ExternalLink size={15} aria-hidden />
-          </a>
-        )}
-      </div>
-    </aside>
+    </article>
   )
 }

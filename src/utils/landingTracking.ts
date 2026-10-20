@@ -14,6 +14,7 @@ export type LandingEvent =
   | 'job_save_click'
   | 'customize_click'
   | 'landing_signup_click'
+  | 'recruiter_click'
 
 export function trackLandingEvent(name: LandingEvent, params: Record<string, unknown> = {}): void {
   try { window.gtag?.('event', name, { page_path: window.location.pathname, ...params }) } catch { /* ignore */ }

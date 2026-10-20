@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const mongoose = require('mongoose');
+const { isBlockedCompany, blockedCompanyQuery } = require('../../config/blockedCompanies');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -1287,14 +1288,14 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
     // feed is never thin while the stamps roll out.
     const seenCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000
     const [insertedJobs, listedJobs, requiredJobs] = await Promise.all([
-        JobDynamic.find({}, JOB_PROJECTION)
+        JobDynamic.find(blockedCompanyQuery(), JOB_PROJECTION)
             .sort({ _id: -1 })
             .limit(safeLimit * 3)
             .lean().exec(),
         // Newest postings that are still listed. Insertion order alone is not
         // enough: one import of a large board adds hundreds of open but
         // months-old postings that would crowd out this week's jobs.
-        JobDynamic.find({ last_seen_at: { $gte: new Date(seenCutoff) } }, JOB_PROJECTION)
+        JobDynamic.find({ last_seen_at: { $gte: new Date(seenCutoff) }, ...blockedCompanyQuery() }, JOB_PROJECTION)
             .sort({ date_posted: -1 })
             .limit(safeLimit * 3)
             .lean().exec(),
@@ -1319,6 +1320,7 @@ async function getDashboardJobsPure(limit = 300, requiredJobIds = []) {
     const recent = recentJobs
         .filter((job) => {
             if (requireSeen && !isSeenRecently(job)) return false
+            if (isBlockedCompany(job.company, job.url || job.apply_url)) return false
             if (isJunkJobRecord(job)) return false
             const jobUrl = String(job.url || job.apply_url || '')
             if (/linkedin\.com/i.test(jobUrl)) return false
@@ -3006,6 +3008,7 @@ const getFeaturedJobs = asyncHandler(async (req, res) => {
         if (!title || title === 'Untitled') continue;
         if (!company || company === 'Unknown') continue;
         if (!job.url && !job.apply_url && !job.applyUrl) continue;
+        if (isBlockedCompany(company, job.url || job.apply_url)) continue;
 
         // English-only for the public guest feed
         const desc = String(job.description_short || job.shortDescription || job.description || '').trim();
