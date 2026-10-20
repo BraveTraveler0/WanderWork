@@ -145,7 +145,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const [jobType, setJobType] = useState<JobTypeFilter>(initial.jobType)
   const [postedWithinDays, setPostedWithinDays] = useState<PostedFilter>(initial.postedWithinDays)
   const [salaryOnly, setSalaryOnly] = useState(initial.salaryOnly)
-  const [sort, setSort] = useState<SortKey>(initial.sort)
+  const [sort] = useState<SortKey>(initial.sort)
   const [showAdvanced, setShowAdvanced] = useState(!!(initial.jobType || initial.postedWithinDays || initial.salaryOnly))
   const [visible, setVisible] = useState(PAGE_SIZE)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -460,10 +460,9 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               )}
 
               <ul className="wl-proof">
-                <li><Check size={14} aria-hidden /> Free to browse, no account needed</li>
-                <li><Check size={14} aria-hidden /> Apply on the employer's site</li>
-                <li><Check size={14} aria-hidden /> Tailored resume and cover letter when you want one</li>
-                <li><Check size={14} aria-hidden /> Contact recruiters matched with you</li>
+                <li><Check size={14} aria-hidden /> Find remote jobs from all over the world</li>
+                <li><Check size={14} aria-hidden /> Talk to recruiters and get jobs faster</li>
+                <li><Check size={14} aria-hidden /> No ghost jobs</li>
               </ul>
             </div>
 
@@ -505,13 +504,6 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                     )
                 )}
               </div>
-              <label className="wl-sort">
-                <span className="wl-sort-label">Sort</span>
-                <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort jobs">
-                  <option value="newest">Newest first</option>
-                  <option value="salary">Highest salary</option>
-                </select>
-              </label>
             </div>
 
             <div className={`wl-layout${panelJob && !isOverlay ? ' has-panel' : ''}`}>
@@ -640,7 +632,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
         <section className="wl-value" aria-labelledby="wl-value-title">
           <div className="wl-wrap">
             <h2 id="wl-value-title">More than a job board</h2>
-            <p className="wl-value-sub">Browsing is free. When you find a role worth going after, WanderWork helps you land it.</p>
+            <p className="wl-value-sub">When you find a role worth going after, WanderWork helps you land it.</p>
             <div className="wl-value-grid">
               <div className="wl-value-card">
                 <div className="wl-value-icon"><Target size={20} aria-hidden /></div>
