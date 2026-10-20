@@ -101,16 +101,13 @@
 
 /* Nav bar one-click sign-up: full-screen desktop (1280px and up) only.
    Smaller laptops keep the card beside the hero; phones and tablets keep the
-   compact card under the search box. */
-.wl-nav-social { display: none; }
-.wl-nav-social-row { display: flex; align-items: center; gap: 8px; }
+   compact card under the search box. Sign in and Sign up sit together. */
+.wl-nav-social { display: none; position: relative; align-items: center; gap: 8px; }
 .wl-nav-social .wl-social-btn { width: auto; min-height: 40px; padding: 8px 14px; font-size: 14px; gap: 8px; }
 .wl-nav-social .wl-social-google svg { width: 16px; height: 16px; }
-.wl-ns-short { display: none; }
-.wl-nav-email { background: none; border: none; padding: 8px 6px; color: var(--wl-primary); font-size: 14px; font-weight: 700; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
-.wl-nav-terms { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: var(--wl-muted); text-align: right; white-space: nowrap; }
-.wl-nav-terms a { color: var(--wl-primary); font-weight: 700; }
-.wl-nav-error { color: #b42318; font-weight: 600; white-space: normal; }
+.wl-nav-error { position: absolute; top: 100%; right: 0; margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; white-space: nowrap; }
+.wl-nav-account { display: flex; align-items: center; gap: 6px; }
+.wl-nj-full, .wl-nj-short { display: none; }
 
 /* Hero sign-up card */
 .wl-join { background: var(--wl-card); border: 1px solid var(--wl-line); border-radius: 16px; padding: 22px; box-shadow: 0 12px 32px -20px rgba(23, 43, 49, 0.3); display: flex; flex-direction: column; gap: 10px; }
@@ -245,12 +242,12 @@
 }
 /* Full screen: sign-up moves into the nav bar and the hero gets the full width. */
 @media (min-width: 1280px) {
-  .wl-header-inner { height: 76px; }
-  .wl-nav { gap: 10px; }
-  .wl-nav-social { display: flex; flex-direction: column; align-items: flex-end; }
-  .wl-nav-join, .wl-join { display: none; }
-  .wl-side { top: 88px; max-height: calc(100vh - 100px); }
-  .wl-results { scroll-margin-top: 84px; }
+  .wl-nav { gap: 16px; }
+  .wl-nav-social { display: flex; }
+  .wl-nav-account .wl-btn { min-height: 40px; padding: 8px 18px; }
+  .wl-nj-full { display: inline; }
+  .wl-nj-long { display: none; }
+  .wl-join { display: none; }
 }
 @media (min-width: 1024px) and (max-width: 1279px) {
   .wl { --wl-panel-w: 400px; }
@@ -303,7 +300,6 @@
   .wl-header-inner { height: 56px; gap: 8px; }
   .wl-nav { gap: 2px; }
   .wl-nav-link { padding: 10px 8px; font-size: 14px; }
-  .wl-nav-link.wl-hide-sm { display: none; }
   .wl-header .wl-btn { min-height: 40px; padding: 8px 12px; font-size: 13px; }
   .wl-logo-text { font-size: 15px; letter-spacing: 1.5px; }
   .wl-beta { display: none; }
@@ -358,8 +354,8 @@
   .wl-sticky-cta .wl-label-short { display: inline; }
 }
 @media (max-width: 380px) {
-  .wl-label-long { display: none; }
-  .wl-label-short { display: inline; }
+  .wl-label-long, .wl-nj-long { display: none; }
+  .wl-label-short, .wl-nj-short { display: inline; }
 }
 
 /* Touch screens: targets of about 1cm (NN/g) and no iOS zoom on focus. */

@@ -357,34 +357,31 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
             <span className="wl-beta">BETA</span>
           </a>
           <nav className="wl-nav" aria-label="Main">
-            <button className="wl-nav-link wl-hide-sm" onClick={scrollToResults}>Browse jobs</button>
             {isAuthenticated ? (
               <button className="wl-btn wl-btn-primary" onClick={onOpenDashboard}>Open dashboard</button>
             ) : (
               <>
-                <button className="wl-nav-link" onClick={onSignIn}>Sign in</button>
-                {/* Desktop: one-click sign-up lives in the nav bar. */}
+                {/* Full-screen desktop: one-click sign-up lives in the nav bar. */}
                 <div className="wl-nav-social">
-                  <div className="wl-nav-social-row">
-                    <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('header')}>
-                      <LinkedInIcon color="#ffffff" size={16} />
-                      <span className="wl-ns-long">Continue with LinkedIn</span><span className="wl-ns-short">LinkedIn</span>
-                    </button>
-                    <GoogleAuthButton
-                      className="wl-social-btn wl-social-google"
-                      label="Continue with Google"
-                      onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'header', method: 'google' }); onAuthenticated(user, token) }}
-                      onError={setAuthError}
-                    />
-                    <button type="button" className="wl-nav-email" onClick={() => signUp('header_email')}>Sign up with email</button>
-                  </div>
-                  {authError
-                    ? <p className="wl-nav-terms wl-nav-error" role="alert">{authError}</p>
-                    : <p className="wl-nav-terms">By continuing with LinkedIn or Google, you agree to the <a href="/terms">Terms of Service</a>.</p>}
+                  <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('header')}>
+                    <LinkedInIcon color="#ffffff" size={16} /> Continue with LinkedIn
+                  </button>
+                  <GoogleAuthButton
+                    className="wl-social-btn wl-social-google"
+                    label="Continue with Google"
+                    onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'header', method: 'google' }); onAuthenticated(user, token) }}
+                    onError={setAuthError}
+                  />
+                  {authError && <p className="wl-nav-error" role="alert">{authError}</p>}
                 </div>
-                <button className="wl-btn wl-btn-primary wl-nav-join" onClick={() => signUp('header')}>
-                  <span className="wl-label-long">Get matched free</span><span className="wl-label-short">Join free</span>
-                </button>
+                <div className="wl-nav-account">
+                  <button className="wl-nav-link" onClick={onSignIn}>Sign in</button>
+                  <button className="wl-btn wl-btn-primary wl-nav-join" onClick={() => signUp('header')}>
+                    <span className="wl-nj-full">Sign up</span>
+                    <span className="wl-nj-long">Get matched free</span>
+                    <span className="wl-nj-short">Join free</span>
+                  </button>
+                </div>
               </>
             )}
           </nav>
@@ -466,13 +463,14 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 <li><Check size={14} aria-hidden /> Free to browse, no account needed</li>
                 <li><Check size={14} aria-hidden /> Apply on the employer's site</li>
                 <li><Check size={14} aria-hidden /> Tailored resume and cover letter when you want one</li>
+                <li><Check size={14} aria-hidden /> Contact recruiters matched with you</li>
               </ul>
             </div>
 
             {!isAuthenticated && (
               <aside className="wl-join" aria-labelledby="wl-join-title">
                 <h2 id="wl-join-title">Join free in one click</h2>
-                <p className="wl-join-sub">Get matched to jobs, tailor your resume and cover letter, and reach recruiters.</p>
+                <p className="wl-join-sub">Get matched to jobs, tailor your resume and cover letter, and contact recruiters matched with you.</p>
                 <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('hero')}>
                   <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
                 </button>
@@ -656,8 +654,8 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               </div>
               <div className="wl-value-card">
                 <div className="wl-value-icon"><Users size={20} aria-hidden /></div>
-                <h3>Reach the right people</h3>
-                <p>Contact recruiters hiring for the role and get in front of the hiring team, beyond the job listing.</p>
+                <h3>Reach recruiters</h3>
+                <p>Contact recruiters matched with you and hiring for the role, so you get in front of the hiring team instead of waiting in the applicant pile.</p>
               </div>
             </div>
 
