@@ -143,6 +143,7 @@
 .wl-tag { font-size: 12px; font-weight: 700; color: var(--wl-ink-2); background: #eef2f2; border-radius: 6px; padding: 3px 8px; line-height: 1.4; }
 .wl-tag-region { background: #e7eff7; color: #234a66; }
 .wl-tag-pay { background: var(--wl-accent); color: var(--wl-accent-ink); }
+.wl-tag-tz { display: inline-flex; align-items: center; gap: 4px; background: #fbf1e2; color: #74480d; }
 .wl-tag-new { background: var(--wl-ink); color: #fff; }
 .wl-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
 .wl-row-actions { display: flex; align-items: center; gap: 8px; }

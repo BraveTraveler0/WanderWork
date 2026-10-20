@@ -9,6 +9,10 @@ export interface LandingJob {
   location: string
   eligibility: string[]
   worldwide: boolean
+  // Open to people in the US (US-only, North America, Americas or worldwide).
+  usEligible: boolean
+  // Working-hours requirement from the posting, e.g. "US time zones".
+  timezone: string | null
   salaryText: string | null
   salaryAnnual: number | null
   jobType: string
@@ -113,7 +117,16 @@ export function toLandingJob(raw: any): LandingJob | null {
   const hasSalary = !!salaryRaw && !JUNK_SALARY.test(salaryRaw) && /\d/.test(salaryRaw)
   const dateRaw = raw?.date_posted || raw?.datePosted || raw?.postedAt
   const date = dateRaw ? new Date(dateRaw) : null
-  const { labels, worldwide } = deriveEligibility(title, location, summary)
+  // The importer reads who can apply from the ATS location fields and the full
+  // posting (remote_scope); the guess from title and summary is the fallback.
+  const serverScope = cleanText(raw?.remote_scope)
+  const serverRegions: string[] = Array.isArray(raw?.remote_regions) ? raw.remote_regions.map(String) : []
+  const derived = deriveEligibility(title, location, summary)
+  const labels = serverScope ? [serverScope] : derived.labels
+  const worldwide = serverScope ? serverScope === 'Worldwide' : derived.worldwide
+  const usEligible = worldwide
+    || serverRegions.some((r) => r === 'US' || r === 'North America' || r === 'Americas')
+    || labels.some((l) => l === 'US only' || l === 'Americas')
   return {
     id,
     title,
@@ -122,6 +135,8 @@ export function toLandingJob(raw: any): LandingJob | null {
     location,
     eligibility: labels,
     worldwide,
+    usEligible,
+    timezone: cleanText(raw?.timezone_req) || null,
     salaryText: hasSalary ? salaryRaw : null,
     salaryAnnual: hasSalary ? annualSalary(salaryRaw) : null,
     jobType: cleanText(raw?.job_type || raw?.jobType),
@@ -192,9 +207,7 @@ export function filterJobs(jobs: LandingJob[], f: LandingFilters, now = Date.now
       if (!terms.every((t) => text.includes(t))) return false
     }
     if (regions.length) {
-      const ok = regions.some((r) => r === 'worldwide'
-        ? j.worldwide
-        : j.worldwide || j.eligibility.some((l) => l === 'US only' || l === 'Americas'))
+      const ok = regions.some((r) => r === 'worldwide' ? j.worldwide : j.usEligible)
       if (!ok) return false
     }
     if (fields.length && !fields.some((k) => FIELD_RE[k].test(j.title))) return false

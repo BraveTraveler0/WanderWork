@@ -84,3 +84,15 @@ describe('cleanSummary', () => {
     expect(cleanSummary(t, 'Product Manager')).toBe(t)
   })
 })
+
+describe('server-provided signals', () => {
+  it('prefers the importer region and time zone', () => {
+    const j = toLandingJob({ _id: 'z', title: 'Analyst', company: 'Affirm', location: 'Remote - Canada', remote_scope: 'Canada', remote_regions: ['Canada'], timezone_req: 'Eastern business hours' })!
+    expect(j.eligibility).toEqual(['Canada'])
+    expect(j.usEligible).toBe(false)
+    expect(j.timezone).toBe('Eastern business hours')
+    const us = toLandingJob({ _id: 'y', title: 'Analyst', company: 'Affirm', location: 'Remote US', remote_scope: 'US, Canada', remote_regions: ['US', 'Canada'] })!
+    expect(us.usEligible).toBe(true)
+    expect(us.eligibility).toEqual(['US, Canada'])
+  })
+})

@@ -1,6 +1,8 @@
 'use strict';
 const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
+const { jobSignals, extractSalaryFromText, buildSummary, remoteLocation } = require('../utils/jobSignals');
+const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
 const { OpenAI } = require('openai');
@@ -62,6 +64,24 @@ function truncateDesc(text) {
   const cut = clean.slice(0, 500);
   const lastSentence = cut.search(/[.!?][^.!?]*$/);
   return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut;
+}
+
+// Fetchers attach the raw location fields (_loc) and full description (_text);
+// who-can-apply, time zone, pay and a role-first summary come from those
+// before anything is shortened.
+function withSignals(job) {
+  const { _loc = [], _text = '', ...rest } = job;
+  const fullText = stripJunkLeads(stripHtml(_text || ''));
+  const locs = _loc.map(l => stripHtml(String(l || ''))).filter(Boolean);
+  const signals = jobSignals({ title: rest.title, locationTexts: locs, fullText });
+  return {
+    ...rest,
+    location: remoteLocation(locs[0], signals.remote_scope),
+    ...signals,
+    salary: rest.salary && rest.salary !== 'Not Listed' ? rest.salary : (extractSalaryFromText(fullText) || 'Not Listed'),
+    description_short: buildSummary(fullText, rest.title) || rest.description_short,
+    desc_source: fullText || rest.description_short,
+  };
 }
 
 function normalizeLocation(loc) {
@@ -171,6 +191,8 @@ async function fetchRemotive() {
       company_url: j.company_url || null,
       salary: j.salary ? stripHtml(j.salary) : 'Not Listed',
       location: normalizeLocation(j.candidate_required_location),
+      _loc: [j.candidate_required_location],
+      _text: j.description,
       job_type: j.job_type || 'Full-time',
       date_posted: j.publication_date ? new Date(j.publication_date) : new Date(),
       description_short: desc,
@@ -216,6 +238,8 @@ async function fetchTheMuse({ category, level } = {}, pages = 3) {
           company_url: null,  // resolved later by resolveCompanyUrls
           salary: 'Not Listed',
           location: 'Remote',
+          _loc: (j.locations || []).map(l => l.name).filter(n => MUSE_REMOTE_RE.test(n || '')),
+          _text: rawDesc,
           job_type: 'Full-time',
           date_posted: j.publication_date ? new Date(j.publication_date) : new Date(),
           description_short: desc,
@@ -250,6 +274,8 @@ async function fetchWorkingNomads(category = null) {
       apply_url: null,
       salary: 'Not Listed',
       location: normalizeLocation(j.location),
+      _loc: [j.location],
+      _text: j.description,
       job_type: j.job_type || 'Full-time',
       date_posted: j.pub_date ? new Date(j.pub_date) : new Date(),
       description_short: desc,
@@ -313,6 +339,8 @@ async function fetchWeWorkRemotely({ slug, tag }) {
       company_url: null,
       salary: 'Not Listed',
       location: normalizeLocation(region),
+      _loc: [region],
+      _text: decodeRssEntities(extractRssTag(block, 'description')),
       job_type: extractRssTag(block, 'type') === 'Contract' ? 'Contract' : 'Full-time',
       date_posted: pubDate ? new Date(pubDate) : new Date(),
       description_short: desc,
@@ -329,7 +357,11 @@ async function fetchWeWorkRemotely({ slug, tag }) {
 // Each entry is { name, fetch }. Jobicy and RemoteOK were removed — both route
 // applicants through a login wall, which is a bad experience for our users.
 const SOURCES = [
-  { name: 'Remotive', fetch: () => fetchRemotive() },
+  // Remotive is off. Its free API now returns only 10 jobs, and its terms
+  // forbid "displaying our jobs in order to collect signups/email addresses",
+  // which is how the landing page uses jobs. Re-enable only through their
+  // paid API agreement.
+  // { name: 'Remotive', fetch: () => fetchRemotive() },
 
   // The Muse — covers roles that tech-company ATS boards rarely post.
   { name: 'TheMuse (PR/Comms)',  fetch: () => fetchTheMuse({ category: 'Media, PR, and Communications' }) },
@@ -381,19 +413,12 @@ async function importRemoteJobs() {
     jobs = await resolveCompanyUrls(jobs);
 
     let upserted = 0, updated = 0, skipped = 0, errors = 0;
-    for (const job of jobs) {
+    for (const raw of jobs) {
       try {
-        if (!job.title || !job.url || !job.description_short) { skipped++; continue; }
-        const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
-        if (isBlockedCompany(job.company, job.url)) continue
-        const result = await col.updateOne(
-          { url_normalized: urlNormalized },
-          {
-            $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date(), last_seen_at: new Date() },
-            $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
-          },
-          { upsert: true }
-        );
+        if (!raw.title || !raw.url || !raw.description_short) { skipped++; continue; }
+        if (isBlockedCompany(raw.company, raw.url)) { skipped++; continue; }
+        const job = withSignals(raw);
+        const result = await upsertJob(col, job, generateJobCode(normalizeUrl(job.url)));
         if (result.upsertedCount) upserted++;
         else updated++;
       } catch (err) {
@@ -419,4 +444,4 @@ if (require.main === module) {
     .catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { importRemoteJobs };
+module.exports = { importRemoteJobs, _sources: SOURCES, _withSignals: withSignals };

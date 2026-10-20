@@ -43,7 +43,9 @@ async function cleanJob(col, job) {
   }
 }
 
-// Called from the import cron after each run — cleans up to 200 newly added jobs
+// Called from the import cron after each run. Newest postings first, since
+// those are the ones the feeds show; a summary is re-queued whenever the
+// posting text changes (see utils/jobUpsert.js).
 async function cleanNewJobs() {
   if (!process.env.OPENAI_API_KEY) {
     console.warn('[CleanDesc] OPENAI_API_KEY not set — skipping');
@@ -52,7 +54,8 @@ async function cleanNewJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   const jobs = await col
     .find({ desc_cleaned: { $ne: true }, description_short: { $exists: true, $ne: '' } })
-    .limit(200)
+    .sort({ date_posted: -1 })
+    .limit(500)
     .toArray();
 
   if (jobs.length === 0) { console.log('[CleanDesc] All jobs already clean.'); return; }

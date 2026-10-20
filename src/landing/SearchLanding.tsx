@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, Check, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, Clock, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users } from 'lucide-react'
 import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import './searchLanding.css'
@@ -109,7 +109,7 @@ function toPanelJob(job: LandingJob, id: number) {
     title: job.title,
     company: job.company,
     description: job.summary,
-    location: job.location,
+    location: [job.location, job.timezone].filter(Boolean).join(' · '),
     salary: job.salaryText || 'Not Listed',
     url: r.url || job.applyUrl,
     apply_url: r.apply_url || r.applyUrl || null,
@@ -691,6 +691,7 @@ function JobTags({ job, onMatch }: { job: LandingJob; onMatch?: () => void }) {
     <div className="wl-tags">
       {isFresh(job.postedAt) && <span className="wl-tag wl-tag-new">New</span>}
       {job.eligibility.length ? job.eligibility.map((l) => <span key={l} className="wl-tag wl-tag-region">{l}</span>) : <span className="wl-tag wl-tag-region">Remote</span>}
+      {job.timezone && <span className="wl-tag wl-tag-tz"><Clock size={11} aria-hidden /> {job.timezone}</span>}
       {job.salaryText && <span className="wl-tag wl-tag-pay">{job.salaryText}</span>}
       {job.jobType && <span className="wl-tag">{job.jobType}</span>}
       {/* Guests: a locked match score, shown on hover (desktop) or always (touch). */}

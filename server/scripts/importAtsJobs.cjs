@@ -1,6 +1,8 @@
 'use strict';
 const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
+const { jobSignals, extractSalaryFromText, formatRange, buildSummary, remoteLocation } = require('../utils/jobSignals');
+const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -24,22 +26,6 @@ function stripHtml(html) {
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s{2,}/g, ' ').trim();
-}
-
-function truncateDesc(text) {
-  if (!text) return '';
-  const clean = stripHtml(text).trim();
-  if (clean.length <= 500) return clean;
-  const cut = clean.slice(0, 500);
-  const last = cut.search(/[.!?][^.!?]*$/);
-  return last > 100 ? cut.slice(0, last + 1) : cut;
-}
-
-function normalizeLocation(loc) {
-  if (!loc) return 'Remote';
-  const l = String(loc).trim();
-  if (!l || /remote|worldwide|anywhere|global/i.test(l)) return 'Remote';
-  return l;
 }
 
 function generateJobCode(str) {
@@ -285,79 +271,147 @@ async function resolveCompanyName(col, urlFragment, slug) {
 }
 
 // ── ATS fetchers ──────────────────────────────────────────────────────────────
+//
+// Each fetcher returns { jobs, boardSize }: the remote jobs to store, and how
+// many postings the board returned in total. boardSize > 0 proves the board
+// answered, so stored jobs missing from `jobs` (closed, or no longer remote)
+// can be pruned even when a company has no remote openings left.
+
+// Hybrid and on-site roles are not remote, even when a location also says
+// "remote" ("Hybrid - Remote eligible", "Remote or on-site in Austin").
+const NOT_REMOTE_RE = /\bhybrid\b|\bon-?site\b|\bin[- ]office\b|\boffice[- ]based\b/i;
+
+function isRemoteText(text) {
+  const t = String(text || '');
+  return REMOTE_RE.test(t) && !NOT_REMOTE_RE.test(t);
+}
+
+function inferJobType(title, fallback) {
+  const t = String(title || '');
+  if (/\bintern(ship)?\b|\bco-?op\b/i.test(t)) return 'Internship';
+  if (/\bcontract(or)?\b|\bfreelance\b|\b1099\b|\btemporary\b|\btemp\b/i.test(t)) return 'Contract';
+  if (/\bpart[- ]time\b/i.test(t)) return 'Part-time';
+  return fallback || 'Full-time';
+}
+
+// Adds who-can-apply, time zone, pay, job type and a role-first summary,
+// computed from every location field and the FULL posting text.
+function finalizeJob(job, { locationTexts = [], fullText = '', salary = null }) {
+  const locs = locationTexts.filter(Boolean);
+  const signals = jobSignals({ title: job.title, locationTexts: locs, fullText });
+  return {
+    ...job,
+    location: remoteLocation(locs.find(l => /remote/i.test(l)) || locs[0], signals.remote_scope),
+    ...signals,
+    salary: salary || extractSalaryFromText(fullText) || job.salary || 'Not Listed',
+    job_type: inferJobType(job.title, job.job_type),
+    description_short: buildSummary(fullText, job.title) || `${job.title} at ${job.company}.`,
+    desc_source: fullText,
+  };
+}
 
 async function fetchGreenhouse(slug, company) {
   const res = await get(`https://boards.greenhouse.io/v1/boards/${slug}/jobs?content=true`);
+  const all = res.data?.jobs || [];
   const now = Date.now();
-  return (res.data?.jobs || [])
-    .filter(j => REMOTE_RE.test(j.location?.name || '') || !j.location?.name)
+  const jobs = all
+    .map(j => ({ j, text: stripHtml(j.content || '') }))
+    .filter(({ j, text }) => {
+      const loc = j.location?.name || '';
+      // No location at all: only keep it if the posting itself says remote.
+      return loc ? isRemoteText(loc) : isRemoteText(text.slice(0, 3000));
+    })
     // Skip postings whose application deadline has passed.
-    .filter(j => !j.application_deadline || new Date(j.application_deadline).getTime() >= now)
-    .map(j => ({
+    .filter(({ j }) => !j.application_deadline || new Date(j.application_deadline).getTime() >= now)
+    .map(({ j, text }) => finalizeJob({
       title: stripHtml(j.title),
       company,
       url: j.absolute_url,
       apply_url: j.absolute_url,
-      location: normalizeLocation(j.location?.name),
       job_type: 'Full-time',
-      salary: 'Not Listed',
       // first_published is when the job went live. updated_at changes on any
       // edit, which made months-old postings look new and dodge the 90-day purge.
       date_posted: new Date(j.first_published || j.updated_at || Date.now()),
-      description_short: truncateDesc(j.content || ''),
       lang: 'en',
       source: 'Greenhouse',
       ats: 'greenhouse',
       ats_direct: true,
-      tags: [],
+      tags: (j.departments || []).map(d => d.name).filter(Boolean).slice(0, 3),
+    }, {
+      locationTexts: [j.location?.name, ...(j.offices || []).map(o => o.name)],
+      fullText: text,
     }));
+  return { jobs, boardSize: all.length };
 }
 
 async function fetchLever(slug, company) {
-  const res = await get(`https://api.lever.co/v0/postings/${slug}?mode=json&remote=true`);
-  const jobs = Array.isArray(res.data) ? res.data : [];
-  return jobs.map(j => ({
-    title: stripHtml(j.text),
-    company,
-    url: j.hostedUrl,
-    apply_url: j.hostedUrl,
-    location: normalizeLocation(j.categories?.location),
-    job_type: j.categories?.commitment || 'Full-time',
-    salary: 'Not Listed',
-    date_posted: j.createdAt ? new Date(j.createdAt) : new Date(),
-    description_short: truncateDesc(j.descriptionPlain || ''),
-    lang: 'en',
-    source: 'Lever',
-    ats: 'lever',
-    ats_direct: true,
-    tags: j.categories?.team ? [j.categories.team] : [],
-  }));
+  // Lever's postings API has no remote filter (a `remote=true` param is
+  // silently ignored), so every on-site and hybrid role used to be imported.
+  // workplaceType is the authoritative signal.
+  const res = await get(`https://api.lever.co/v0/postings/${slug}?mode=json`);
+  const all = Array.isArray(res.data) ? res.data : [];
+  const jobs = all
+    .filter(j => j.workplaceType === 'remote'
+      || ((!j.workplaceType || j.workplaceType === 'unspecified') && isRemoteText(j.categories?.location)))
+    .map(j => {
+      const sr = j.salaryRange;
+      const fullText = [
+        j.descriptionPlain,
+        ...(j.lists || []).map(l => `${l.text}: ${stripHtml(l.content)}`),
+        j.additionalPlain,
+        j.salaryDescriptionPlain,
+      ].filter(Boolean).join(' ').replace(/\s+/g, ' ');
+      return finalizeJob({
+        title: stripHtml(j.text),
+        company,
+        url: j.hostedUrl,
+        apply_url: j.applyUrl || j.hostedUrl,
+        job_type: j.categories?.commitment || 'Full-time',
+        date_posted: j.createdAt ? new Date(j.createdAt) : new Date(),
+        lang: 'en',
+        source: 'Lever',
+        ats: 'lever',
+        ats_direct: true,
+        tags: j.categories?.team ? [j.categories.team] : [],
+      }, {
+        locationTexts: [j.categories?.location, ...(j.categories?.allLocations || []), j.country],
+        fullText,
+        salary: sr ? formatRange(sr.min, sr.max, sr.currency, sr.interval) : null,
+      });
+    });
+  return { jobs, boardSize: all.length };
 }
 
 async function fetchAshby(slug, company) {
-  const res = await get(`https://api.ashbyhq.com/posting-api/job-board/${slug}`);
+  const res = await get(`https://api.ashbyhq.com/posting-api/job-board/${slug}?includeCompensation=true`);
   const org = res.data?.organization?.name || company;
-  // Ashby's response field is `jobs` (verified live 2026-07); the previous
-  // `jobPostings` key doesn't exist in their schema at all, so this fetcher
-  // silently returned zero jobs for every seeded Ashby company until now.
-  return (res.data?.jobs || [])
-    .filter(j => j.isRemote || REMOTE_RE.test(j.location || ''))
-    .map(j => ({
-      title: stripHtml(j.title),
-      company: org,
-      url: j.jobUrl || j.applyUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      apply_url: j.applyUrl || j.jobUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      location: j.isRemote ? 'Remote' : normalizeLocation(j.location),
-      job_type: j.employmentType || 'Full-time',
-      salary: 'Not Listed',
-      date_posted: j.publishedAt ? new Date(j.publishedAt) : new Date(),
-      description_short: truncateDesc(j.descriptionHtml || ''),
-      lang: 'en',
-      source: 'Ashby',
-      ats: 'ashby',
-      ats_direct: true,
-      tags: j.department ? [j.department] : [],
-    }));
+  // Ashby's response field is `jobs` (verified live 2026-07). Its isRemote
+  // flag is also true for hybrid roles, so workplaceType decides.
+  const all = res.data?.jobs || [];
+  const jobs = all
+    .filter(j => j.isListed !== false)
+    .filter(j => j.workplaceType ? j.workplaceType === 'Remote' : (j.isRemote && !NOT_REMOTE_RE.test(j.location || '')))
+    .map(j => {
+      const pay = j.compensation?.compensationTierSummary || j.compensation?.scrapeableCompensationSalarySummary;
+      return finalizeJob({
+        title: stripHtml(j.title),
+        company: org,
+        url: j.jobUrl || j.applyUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+        apply_url: j.applyUrl || j.jobUrl || `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+        job_type: j.employmentType === 'PartTime' ? 'Part-time' : j.employmentType === 'Contract' ? 'Contract' : j.employmentType === 'Intern' ? 'Internship' : 'Full-time',
+        date_posted: j.publishedAt ? new Date(j.publishedAt) : new Date(),
+        lang: 'en',
+        source: 'Ashby',
+        ats: 'ashby',
+        ats_direct: true,
+        tags: j.department ? [j.department] : [],
+      }, {
+        locationTexts: [j.location, ...(j.secondaryLocations || []).map(s => s.location), j.address?.postalAddress?.addressCountry],
+        fullText: j.descriptionPlain ? String(j.descriptionPlain).replace(/\s+/g, ' ') : stripHtml(j.descriptionHtml || ''),
+        salary: pay ? String(pay).split('•')[0].trim() : null,
+      });
+    });
+  return { jobs, boardSize: all.length };
 }
 
 // Workable's own `telecommuting` flag is the remote signal. Some companies
@@ -368,72 +422,80 @@ async function fetchAshby(slug, company) {
 async function fetchWorkable(slug, company) {
   const res = await get(`https://apply.workable.com/api/v1/widget/accounts/${slug}?details=true`);
   const org = res.data?.name || company;
-  return (res.data?.jobs || [])
+  const all = res.data?.jobs || [];
+  const jobs = all
     .filter(j => j.telecommuting)
     .map(j => {
       const loc = j.locations?.[0] || {};
-      const location = loc.city ? normalizeLocation([loc.city, loc.country].filter(Boolean).join(', ')) : 'Remote';
-      return {
+      const where = loc.city ? [loc.city, loc.country].filter(Boolean).join(', ') : ['Remote', loc.country].filter(Boolean).join(' - ');
+      return finalizeJob({
         title: stripHtml(j.title),
         company: org,
         url: j.url,
         apply_url: j.application_url || j.url,
-        location,
         job_type: j.employment_type || 'Full-time',
-        salary: 'Not Listed',
         date_posted: j.published_on ? new Date(j.published_on) : new Date(),
-        description_short: truncateDesc(j.description || ''),
         lang: 'en',
         source: 'Workable',
         ats: 'workable',
         ats_direct: true,
         tags: j.department ? [j.department] : [],
-      };
+      }, {
+        locationTexts: [where, ...(j.locations || []).slice(1).map(l => [l.city, l.country].filter(Boolean).join(', '))],
+        fullText: stripHtml(j.description || ''),
+      });
     });
+  return { jobs, boardSize: all.length };
 }
 
 async function fetchSmartRecruiters(slug, company) {
+  // The list endpoint has no description; the per-posting detail call is one
+  // request per job, so only location-based signals are used here.
   const res = await get(`https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=100`);
-  return (res.data?.content || [])
-    .filter(j => j.location?.remote || REMOTE_RE.test(j.location?.city || ''))
-    .map(j => ({
+  const all = res.data?.content || [];
+  const jobs = all
+    .filter(j => (j.location?.remote && !j.location?.hybrid) || isRemoteText(j.location?.city || ''))
+    .map(j => finalizeJob({
       title: stripHtml(j.name),
       company: j.company?.name || company,
       url: j.ref || `https://jobs.smartrecruiters.com/${slug}/${j.id}`,
       apply_url: j.ref || `https://jobs.smartrecruiters.com/${slug}/${j.id}`,
-      location: j.location?.remote ? 'Remote' : normalizeLocation([j.location?.city, j.location?.country].filter(Boolean).join(', ')),
-      job_type: 'Full-time',
-      salary: 'Not Listed',
+      job_type: j.typeOfEmployment?.label || 'Full-time',
       date_posted: j.releasedDate ? new Date(j.releasedDate) : new Date(),
-      description_short: truncateDesc(`${j.name} at ${j.company?.name || company}.`),
       lang: 'en',
       source: 'SmartRecruiters',
       ats: 'smartrecruiters',
       ats_direct: true,
       tags: j.department?.label ? [j.department.label] : [],
+    }, {
+      locationTexts: [['Remote', j.location?.country?.toUpperCase?.() === 'US' ? 'United States' : j.location?.country].filter(Boolean).join(' - '), [j.location?.city, j.location?.region].filter(Boolean).join(', ')],
+      fullText: `${j.name} at ${j.company?.name || company}.`,
     }));
+  return { jobs, boardSize: all.length };
 }
 
 async function fetchRecruitee(slug, company) {
   const res = await get(`https://${slug}.recruitee.com/api/offers/`);
-  return (res.data?.offers || [])
-    .filter(j => j.remote === true || REMOTE_RE.test([j.city, j.state_name].filter(Boolean).join(' ')))
-    .map(j => ({
+  const all = res.data?.offers || [];
+  const jobs = all
+    .filter(j => (j.remote === true && !j.hybrid) || isRemoteText([j.city, j.state_name].filter(Boolean).join(' ')))
+    .map(j => finalizeJob({
       title: stripHtml(j.title),
       company: j.company_name || company,
       url: j.careers_url,
       apply_url: j.careers_apply_url || j.careers_url,
-      location: j.remote ? 'Remote' : normalizeLocation([j.city, j.country_code].filter(Boolean).join(', ')),
       job_type: j.employment_type_code || 'Full-time',
-      salary: 'Not Listed',
       date_posted: j.published_at ? new Date(j.published_at) : new Date(),
-      description_short: truncateDesc(j.description || j.requirements || ''),
       lang: 'en',
       source: 'Recruitee',
       ats: 'recruitee',
       ats_direct: true,
       tags: j.department ? [j.department] : [],
+    }, {
+      locationTexts: [j.remote ? ['Remote', j.country].filter(Boolean).join(' - ') : [j.city, j.country].filter(Boolean).join(', '), j.location],
+      fullText: stripHtml(`${j.description || ''} ${j.requirements || ''}`),
     }));
+  return { jobs, boardSize: all.length };
 }
 
 async function fetchBreezy(slug, company) {
@@ -441,25 +503,28 @@ async function fetchBreezy(slug, company) {
     maxRedirects: 0,
     validateStatus: s => s === 200,
   });
-  const jobs = Array.isArray(res.data) ? res.data : [];
-  return jobs
-    .filter(j => j.location?.is_remote || REMOTE_RE.test(j.location?.name || ''))
-    .map(j => ({
+  const all = Array.isArray(res.data) ? res.data : [];
+  const jobs = all
+    .filter(j => j.location?.is_remote || isRemoteText(j.location?.name || ''))
+    .map(j => finalizeJob({
       title: stripHtml(j.name),
       company: j.company?.name || company,
       url: j.url,
       apply_url: j.url,
-      location: j.location?.is_remote ? 'Remote' : normalizeLocation(j.location?.name),
       job_type: j.type?.name || 'Full-time',
-      salary: j.salary ? stripHtml(j.salary) : 'Not Listed',
+      salary: j.salary ? stripHtml(j.salary) : null,
       date_posted: j.published_date ? new Date(j.published_date) : new Date(),
-      description_short: truncateDesc(j.description || ''),
       lang: 'en',
       source: 'BreezyHR',
       ats: 'breezy',
       ats_direct: true,
       tags: j.department ? [j.department] : [],
+    }, {
+      locationTexts: [j.location?.name, j.location?.country?.name, ...(j.locations || []).map(l => l.name)],
+      fullText: stripHtml(j.description || ''),
+      salary: j.salary ? stripHtml(j.salary) : null,
     }));
+  return { jobs, boardSize: all.length };
 }
 
 // Personio only exposes an XML export (no JSON API), and unlike the other
@@ -483,7 +548,7 @@ async function fetchPersonio(slug, company) {
   });
   const xml = String(res.data);
   const blocks = [...xml.matchAll(/<position>([\s\S]*?)<\/position>/g)].map(m => m[1]);
-  return blocks.flatMap(block => {
+  const jobs = blocks.flatMap(block => {
     const id = extractXmlTag(block, 'id');
     const office = decodeXmlEntities(extractXmlTag(block, 'office'));
     // A job's primary office can be "Hybrid - Paris" while its
@@ -494,26 +559,30 @@ async function fetchPersonio(slug, company) {
     const department = decodeXmlEntities(extractXmlTag(block, 'department'));
     const employmentType = extractXmlTag(block, 'employmentType');
     const createdAt = extractXmlTag(block, 'createdAt');
-    if (!title || !id || !(REMOTE_RE.test(office) || REMOTE_RE.test(additionalOffices))) return [];
+    const remoteOffice = [office, ...additionalOffices.split(/<\/?office>|,/)].map(s => stripHtml(s)).find(s => REMOTE_RE.test(s));
+    if (!title || !id || !remoteOffice) return [];
     const descParts = [...block.matchAll(/<value>([\s\S]*?)<\/value>/g)]
       .map(m => stripHtml(decodeXmlEntities(m[1])));
-    return [{
+    return [finalizeJob({
       title: stripHtml(title),
       company,
       url: `https://${slug}.jobs.personio.de/job/${id}`,
       apply_url: `https://${slug}.jobs.personio.de/job/${id}`,
-      location: 'Remote',
-      job_type: employmentType || 'Full-time',
-      salary: 'Not Listed',
+      job_type: employmentType === 'part-time' ? 'Part-time' : employmentType === 'intern' ? 'Internship' : employmentType === 'freelance' ? 'Contract' : 'Full-time',
       date_posted: createdAt ? new Date(createdAt) : new Date(),
-      description_short: truncateDesc(descParts.join(' ') || `${title} — ${department}`),
       lang: 'en',
       source: 'Personio',
       ats: 'personio',
       ats_direct: true,
       tags: department ? [department] : [],
-    }];
+    }, {
+      // Personio boards are mostly European companies; the office name
+      // ("Remote Germany") usually carries the country.
+      locationTexts: [remoteOffice, office],
+      fullText: descParts.join(' ') || `${title}, ${department}`,
+    })];
   });
+  return { jobs, boardSize: blocks.length };
 }
 
 const ATS_FETCHERS = {
@@ -555,28 +624,24 @@ async function upsertJobs(col, jobs) {
     try {
       if (!job.title || !job.url) return;
       if (isBlockedCompany(job.company, job.url)) return;
-      const urlNormalized = job.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
-      const r = await col.updateOne(
-        { url_normalized: urlNormalized },
-        {
-          $set: { ...job, url_normalized: urlNormalized, cover_letter: '', updatedAt: new Date() },
-          $setOnInsert: { job_code: generateJobCode(urlNormalized), createdAt: new Date() },
-        },
-        { upsert: true }
-      );
+      const r = await upsertJob(col, job, generateJobCode(normalizeUrl(job.url)));
       if (r.upsertedCount) added++; else updated++;
-    } catch { errors++; }
+    } catch (err) {
+      errors++;
+      if (errors <= 3) console.warn(`[importAtsJobs] upsert failed: ${err.message}`);
+    }
   }));
   return { added, updated, errors };
 }
 
 // A board that fetched cleanly is the source of truth for that company: any job
-// we stored from it that is no longer listed has been closed by the employer.
-// Only runs when the fetch returned jobs, so an empty or odd API response can
-// never wipe a company's listings.
-async function pruneClosedJobs(col, atsName, slug, liveJobs) {
-  if (!liveJobs.length) return [];
-  const live = liveJobs.map(j => j.url.replace(/^https?:\/\//, '').replace(/\/+$/, '').trim());
+// we stored from it that is no longer among its remote listings was closed by
+// the employer or is not remote (on-site and hybrid roles imported before the
+// Lever/Ashby filters were fixed). Only runs when the board returned postings,
+// so an empty or odd API response can never wipe a company's listings.
+async function pruneClosedJobs(col, atsName, slug, liveJobs, boardSize) {
+  if (!boardSize) return [];
+  const live = liveJobs.map(j => normalizeUrl(j.url));
   const filter = { ats: atsName, ats_slug: slug, url_normalized: { $nin: live } };
   const closed = await col.find(filter, { projection: { _id: 1, title: 1, company: 1 } }).toArray();
   if (closed.length) await col.deleteMany({ _id: { $in: closed.map(j => j._id) } });
@@ -613,10 +678,11 @@ async function importAtsJobs() {
           const seenAt = new Date();
           // ats_slug ties each job to its board for pruning; last_seen_at marks
           // it as still listed so feeds can leave out jobs no longer seen.
-          const jobs = (await fetch(slug, company)).map(j => ({ ...j, ats_slug: slug, last_seen_at: seenAt }));
-          if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote jobs`);
+          const { jobs: fetched, boardSize } = await fetch(slug, company);
+          const jobs = fetched.filter(j => j.url).map(j => ({ ...j, ats_slug: slug, last_seen_at: seenAt }));
+          if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote of ${boardSize} jobs`);
           try {
-            const closed = await pruneClosedJobs(col, atsName, slug, jobs.filter(j => j.url));
+            const closed = await pruneClosedJobs(col, atsName, slug, jobs, boardSize);
             if (closed.length) {
               removedJobs.push(...closed);
               console.log(`  ${atsName}/${slug}: removed ${closed.length} closed jobs`);
@@ -656,4 +722,4 @@ if (require.main === module) {
     .catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { importAtsJobs };
+module.exports = { importAtsJobs, _fetchers: ATS_FETCHERS };
