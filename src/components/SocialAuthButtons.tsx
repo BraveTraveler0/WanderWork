@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { API_BASE_URL } from '../api/config'
-import { trackSignupCompleted, trackSignupStarted } from '../utils/signupTracking'
+import { signupAttribution, signupAttributionQuery, trackSignupCompleted, trackSignupStarted } from '../utils/signupTracking'
 
 // Google and LinkedIn sign-up, shared by the sign-up page and the landing page.
 
@@ -11,7 +11,7 @@ export const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 // callback URL (and reports new sign-ups from its new=1 flag).
 export function startLinkedInAuth() {
   trackSignupStarted('linkedin')
-  window.location.href = `${API_BASE_URL}/oauth/linkedin`
+  window.location.href = `${API_BASE_URL}/oauth/linkedin?${signupAttributionQuery()}`
 }
 
 export function GoogleIcon({ size = 18 }: { size?: number }) {
@@ -51,7 +51,7 @@ function GoogleAuthButtonInner({ onSignup, onError, className, label = 'Continue
         const response = await fetch(`${API_BASE_URL}/oauth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken: tokenResponse.access_token }),
+          body: JSON.stringify({ accessToken: tokenResponse.access_token, attribution: signupAttribution() }),
         })
         const data = await response.json()
         if (!response.ok) throw new Error(data?.message || 'Google sign-up failed')

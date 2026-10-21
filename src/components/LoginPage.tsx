@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { API_BASE_URL } from '../api/config'
-import { trackSignupCompleted } from '../utils/signupTracking'
+import { signupAttribution, signupAttributionQuery, trackSignupCompleted } from '../utils/signupTracking'
 
 const BASE_URL = API_BASE_URL
 
@@ -28,6 +28,7 @@ function GoogleLoginButton({ onLogin, onError }: { onLogin: (user: any, token: s
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accessToken: tokenResponse.access_token,
+            attribution: signupAttribution(),
           }),
         })
         if (!res.ok) {
@@ -75,7 +76,7 @@ function GoogleLoginButton({ onLogin, onError }: { onLogin: (user: any, token: s
 // ── Social buttons section ────────────────────────────────────────────────────
 function SocialButtons({ onLogin, onError }: { onLogin: (user: any, token: string) => void; onError: (msg: string) => void }) {
   const handleLinkedIn = () => {
-    window.location.href = `${BASE_URL}/oauth/linkedin`
+    window.location.href = `${BASE_URL}/oauth/linkedin?${signupAttributionQuery()}`
   }
 
   return (
