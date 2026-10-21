@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Candidate = require('../models/JobSeeker/jobSeeker.Candidate');
 const { requireAuth } = require('../middleware/requireAuth');
 const { getPublicAppUrl } = require('../utils/publicUrls');
+const { reportConversion } = require('../utils/marketGenius');
 
 const APP_URL = getPublicAppUrl();
 
@@ -202,6 +203,7 @@ router.post('/webhook', async (req, res) => {
           user.stripeId = session.customer || user.stripeId;
           user.planExpiresAt = null;
           await user.save();
+          reportConversion('paid_plan_started', { email: user.email });
 
           // Send welcome email (non-blocking)
           try {

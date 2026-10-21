@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { parseSignupResume, uploadCandidateResume } from '../api/jobseeker'
 import { API_BASE_URL } from '../api/config'
 import TermsOfServicePage from './TermsOfServicePage'
-import { trackSignupCompleted, trackSignupStarted } from '../utils/signupTracking'
+import { signupAttribution, trackSignupCompleted, trackSignupStarted } from '../utils/signupTracking'
 import { GoogleAuthButton, LinkedInIcon, startLinkedInAuth } from './SocialAuthButtons'
 
 interface SignupPageProps {
@@ -310,6 +310,7 @@ export default function SignupPage({ onSignup, onSignIn, onBackToLanding, pendin
           ...form,
           displayName: `${form.firstName} ${form.lastName}`.trim(),
           skills: form.skills.split(',').map((item) => item.trim()).filter(Boolean),
+          attribution: signupAttribution(),
         }),
       })
       const data = await response.json()

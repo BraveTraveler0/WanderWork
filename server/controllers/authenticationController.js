@@ -4,6 +4,7 @@ const User = require('../models/User')
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate')
 const jwtUtils = require('../utils/jwtUtils')
 const { sendWelcomeEmail } = require('../utils/welcomeEmail')
+const { reportConversion } = require('../utils/marketGenius')
 const bcrypt = require('bcrypt')
 const sendEmail = require('../utils/mail.service')
 const sgMail = require('@sendgrid/mail');
@@ -257,6 +258,7 @@ const googlelogin = asyncHandler(async (req, res) => {
                 password: hashedPass,
                 verified: true,
             });
+            reportConversion('signup_completed', { email: googleEmail, attribution: req.body?.attribution });
         }
 
         if (user.active === false) {
@@ -312,6 +314,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     portfolioUrl,
     githubUrl,
     calendlyUrl,
+    attribution,
   } = req.body;
 
   const normalizedEmail = normalizeEmail(email);
@@ -397,6 +400,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     setImmediate(() => {
       sendWelcomeEmail({ email: normalizedEmail, firstName: safeFirstName }).catch(() => {});
     });
+    reportConversion('signup_completed', { email: normalizedEmail, attribution });
 
     // Generate a secure verification token and save it to the user
     const verificationToken = crypto.randomBytes(32).toString('hex');

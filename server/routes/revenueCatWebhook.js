@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Candidates = require('../models/JobSeeker/jobSeeker.Candidate');
+const { reportConversion } = require('../utils/marketGenius');
 
 // Product IDs must match exactly what's configured in App Store Connect /
 // Play Console / RevenueCat — see WanderworkMobile/README.md.
@@ -55,6 +56,8 @@ router.post('/webhook', express.json(), async (req, res) => {
         user.plan = SUBSCRIPTION_PLANS[productId];
         user.planExpiresAt = null;
         await user.save();
+        // Only the first purchase is a conversion; renewals and plan changes aren't new customers.
+        if (eventType === 'INITIAL_PURCHASE') reportConversion('paid_plan_started', { email });
       }
     }
 

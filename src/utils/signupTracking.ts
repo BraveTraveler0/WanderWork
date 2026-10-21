@@ -1,9 +1,11 @@
 // Sign-up tracking. Remembers where a visitor first came from (UTM tags or a
 // Facebook/Google ad click id, the first page they landed on), then on a real
-// sign-up tells Google Analytics (sign_up), the Meta pixel
-// (CompleteRegistration) and MarketGenius (signup_completed), so all three
-// can say which ad, post or page brought each new user. Every call is
-// fire-and-forget: tracking can never block or break sign-up.
+// sign-up tells Google Analytics (sign_up) and the Meta pixel
+// (CompleteRegistration), so both can say which ad, post or page brought each
+// new user. MarketGenius (Inanna) hears about the completed sign-up from our
+// server, which gets this first touch via signupAttribution() in the sign-up
+// request; that way ad blockers and the LinkedIn redirect can't hide it. Every
+// call is fire-and-forget: tracking can never block or break sign-up.
 
 const MG_TRACK_URL = 'https://marketinggenius-backend-server.onrender.com/api/track'
 const PRODUCT_ID = 'wanderwork'
@@ -50,7 +52,25 @@ function firstTouch(): FirstTouch | null {
   try { return JSON.parse(localStorage.getItem(FIRST_TOUCH_KEY) || 'null') } catch { return null }
 }
 
-function sendToMarketGenius(eventType: 'signup_clicked' | 'signup_completed'): void {
+// The first touch in the shape the server's sign-up endpoints expect, sent
+// along with the sign-up request so the server can credit the right source.
+export function signupAttribution(): { source: string; medium: string; landing: string; referrer: string; pageUrl: string } {
+  const t = firstTouch()
+  return {
+    source: t?.source || 'direct', medium: t?.medium || 'none',
+    landing: t?.landing || window.location.pathname, referrer: t?.referrer || document.referrer || '',
+    pageUrl: window.location.href.split('?')[0],
+  }
+}
+
+// LinkedIn sign-up is a full-page redirect, so the first touch rides along as
+// query params instead of a request body.
+export function signupAttributionQuery(): string {
+  const a = signupAttribution()
+  return new URLSearchParams({ utm_source: a.source, utm_medium: a.medium, landing: a.landing }).toString()
+}
+
+function sendToMarketGenius(eventType: 'signup_clicked'): void {
   try {
     const t = firstTouch()
     const body = JSON.stringify({
@@ -79,5 +99,4 @@ export function trackSignupCompleted(method: SignupMethod): void {
     window.gtag?.('event', 'sign_up', { method, ...(t ? { first_source: t.source, first_medium: t.medium, first_campaign: t.campaign } : {}) })
   } catch { /* ignore */ }
   try { window.fbq?.('track', 'CompleteRegistration', { status: true, content_name: method }) } catch { /* ignore */ }
-  sendToMarketGenius('signup_completed')
 }

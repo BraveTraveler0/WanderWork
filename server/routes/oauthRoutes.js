@@ -6,6 +6,7 @@ const jwtUtils = require('../utils/jwtUtils');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { sendWelcomeEmail } = require('../utils/welcomeEmail');
+const { reportConversion, readAttribution } = require('../utils/marketGenius');
 const { safePublicUrl, getPublicAppUrl, getPublicServerUrl } = require('../utils/publicUrls');
 
 const normalizeBaseUrl = (value, fallback = '') => String(value || fallback).trim().replace(/\/+$/, '');
@@ -93,6 +94,11 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
     if (req.session) {
       req.session.linkedinOAuthState = state;
       req.session.linkedinOAuthPlatform = req.query.platform === 'mobile' ? 'mobile' : undefined;
+      // The app passes its first-touch attribution on the way out so a new
+      // LinkedIn account can still be credited to the ad or post behind it.
+      req.session.signupAttribution = readAttribution({
+        source: req.query.utm_source, medium: req.query.utm_medium, landing: req.query.landing,
+      });
     }
 
     // URLSearchParams encodes spaces as +. LinkedIn's OAuth screen is more reliable
@@ -179,6 +185,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
           password: randomPass,
           verified: true,
         });
+        reportConversion('signup_completed', { email, attribution: req.session?.signupAttribution });
       }
 
       if (user.active === false) {
@@ -256,7 +263,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 
 // ── Google token verify (used by frontend @react-oauth/google) ───────────────
 router.post('/google', async (req, res) => {
-  const { credential, accessToken } = req.body || {};
+  const { credential, accessToken, attribution } = req.body || {};
 
   try {
     if (!credential && !accessToken) return res.status(400).json({ message: 'Google credential is required' });
@@ -278,6 +285,7 @@ router.post('/google', async (req, res) => {
         password: randomPass,
         verified: true,
       });
+      reportConversion('signup_completed', { email: googleEmail, attribution });
     }
 
     if (user.active === false) {
