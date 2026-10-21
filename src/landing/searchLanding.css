@@ -100,14 +100,23 @@
 .wl-proof svg { color: var(--wl-primary); flex-shrink: 0; }
 
 /* Nav bar one-click sign-up: full-screen desktop (1280px and up) only.
-   Smaller laptops keep the card beside the hero; phones and tablets keep the
-   compact card under the search box. Sign in and Sign up sit together. */
+   On every screen size the sign-up buttons also sit in the hero, under the
+   search box. Sign in and Sign up sit together. */
 .wl-nav-social { display: none; position: relative; align-items: center; gap: 8px; }
 .wl-nav-social .wl-social-btn { width: auto; min-height: 40px; padding: 8px 14px; font-size: 14px; gap: 8px; }
 .wl-nav-social .wl-social-google svg { width: 16px; height: 16px; }
 .wl-nav-error { position: absolute; top: 100%; right: 0; margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #b42318; white-space: nowrap; }
 .wl-nav-account { display: flex; align-items: center; gap: 6px; }
 .wl-nj-full, .wl-nj-short { display: none; }
+
+/* Hero sign-up: one-click buttons in the main hero column, under the search. */
+.wl-hero-join { margin-top: 22px; }
+.wl-hero-join-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.wl-hero-join-actions .wl-social-btn { width: auto; min-width: 230px; }
+.wl-hero-join-email { background: none; border: none; color: var(--wl-primary); font-weight: 700; font-size: 15px; padding: 10px 8px; text-decoration: underline; text-underline-offset: 3px; }
+.wl-hero-join-error { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #b42318; }
+.wl-hero-join-terms { margin: 10px 0 0; font-size: 12px; color: var(--wl-muted); }
+.wl-hero-join-terms a { color: var(--wl-primary); font-weight: 700; }
 
 /* Advanced filters */
 .wl-advanced { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-top: 14px; padding: 14px 16px; background: var(--wl-card); border: 1px solid var(--wl-line); border-radius: 12px; }
@@ -212,9 +221,6 @@
 .wl-cta p { margin: 0; color: #c4d3d5; font-size: 15px; }
 .wl-cta-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .wl-cta-actions .wl-social-btn { width: auto; }
-.wl-cta .wl-cta-terms { margin-top: 10px; font-size: 12px; }
-.wl-cta .wl-cta-terms a { color: #fff; font-weight: 700; }
-.wl-cta .wl-cta-error { margin-top: 8px; font-size: 13px; font-weight: 600; color: #ffb4a8; }
 .wl-cta .wl-btn-primary { background: #fff; color: var(--wl-ink); }
 .wl-cta .wl-btn-primary:hover { background: var(--wl-accent); }
 
@@ -284,6 +290,9 @@
 
 /* ---------- Phone ---------- */
 @media (max-width: 640px) {
+  .wl-hero-join { margin-top: 14px; }
+  .wl-hero-join-actions .wl-social-btn { width: 100%; min-width: 0; }
+  .wl-hero-join-email { width: 100%; }
   .wl-wrap { padding: 0 16px; }
   .wl-header-inner { height: 56px; gap: 8px; }
   .wl-nav { gap: 2px; }

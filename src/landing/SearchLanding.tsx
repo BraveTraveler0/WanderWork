@@ -465,6 +465,26 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 <li><Check size={14} aria-hidden /> Apply to jobs in seconds</li>
                 <li><Check size={14} aria-hidden /> No ghost jobs</li>
               </ul>
+
+              {!isAuthenticated && (
+                <div className="wl-hero-join">
+                  <div className="wl-hero-join-actions">
+                    <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('hero')}>
+                      <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
+                    </button>
+                    <GoogleAuthButton
+                      className="wl-social-btn wl-social-google"
+                      onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'hero', method: 'google' }); onAuthenticated(user, token) }}
+                      onError={setAuthError}
+                    />
+                    <button type="button" className="wl-hero-join-email" onClick={() => signUp('hero_email')}>Sign up with email</button>
+                  </div>
+                  {authError && <p className="wl-hero-join-error" role="alert">{authError}</p>}
+                  <p className="wl-hero-join-terms">
+                    By clicking Continue with LinkedIn or Continue with Google, you agree to the WanderWork <a href="/terms">Terms of Service</a>.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -637,20 +657,11 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 <div>
                   <h3>Your next remote job, without the endless search.</h3>
                   <p>Free to get started. No credit card, no commitment.</p>
-                  {authError && <p className="wl-cta-error" role="alert">{authError}</p>}
-                  <p className="wl-cta-terms">
-                    By clicking Continue with LinkedIn or Continue with Google, you agree to the WanderWork <a href="/terms">Terms of Service</a>.
-                  </p>
                 </div>
                 <div className="wl-cta-actions">
                   <button className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('footer_cta')}>
                     <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
                   </button>
-                  <GoogleAuthButton
-                    className="wl-social-btn wl-social-google"
-                    onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'footer_cta', method: 'google' }); onAuthenticated(user, token) }}
-                    onError={setAuthError}
-                  />
                   <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => signUp('footer_cta')}>
                     Get matched free <ArrowRight size={16} aria-hidden />
                   </button>
