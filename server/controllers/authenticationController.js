@@ -258,7 +258,7 @@ const googlelogin = asyncHandler(async (req, res) => {
                 password: hashedPass,
                 verified: true,
             });
-            reportConversion('signup_completed', { email: googleEmail, attribution: req.body?.attribution });
+            reportConversion('signup_completed', { email: googleEmail, attribution: req.body?.attribution, method: 'google' });
         }
 
         if (user.active === false) {
@@ -400,7 +400,7 @@ const createNewUser = asyncHandler(async (req, res) => {
     setImmediate(() => {
       sendWelcomeEmail({ email: normalizedEmail, firstName: safeFirstName }).catch(() => {});
     });
-    reportConversion('signup_completed', { email: normalizedEmail, attribution });
+    reportConversion('signup_completed', { email: normalizedEmail, attribution, method: 'email' });
 
     // Generate a secure verification token and save it to the user
     const verificationToken = crypto.randomBytes(32).toString('hex');

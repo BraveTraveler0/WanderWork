@@ -57,7 +57,7 @@ router.post('/webhook', express.json(), async (req, res) => {
         user.planExpiresAt = null;
         await user.save();
         // Only the first purchase is a conversion; renewals and plan changes aren't new customers.
-        if (eventType === 'INITIAL_PURCHASE') reportConversion('paid_plan_started', { email });
+        if (eventType === 'INITIAL_PURCHASE') reportConversion('paid_plan_started', { email, method: 'app_store' });
       }
     }
 

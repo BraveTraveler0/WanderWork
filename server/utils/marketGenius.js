@@ -31,17 +31,25 @@ function readAttribution(raw) {
     source: clean(a.source, 100) || 'direct',
     medium: clean(a.medium, 100) || 'none',
     landing_page_variant: clean(a.landing, 100) || 'default',
+    // utm_content on MarketGenius links is mg-<trackingId>, which lets Inanna
+    // credit the exact post behind a sign-up.
+    campaign: clean(a.campaign, 200) || undefined,
+    content: clean(a.content, 200) || undefined,
     page_url: clean(a.pageUrl, 500) || undefined,
     referrer: clean(a.referrer, 500) || undefined,
   };
 }
 
-function reportConversion(eventType, { email, attribution } = {}) {
+// MarketGenius ignores a repeat signup_completed for the same anonymized id,
+// so keep USER_ID_SALT stable or retries will count twice.
+function reportConversion(eventType, { email, attribution, method } = {}) {
   try {
     const body = {
       product_id: PRODUCT_ID,
       event_type: eventType,
       anonymized_user_id: anonymize(email),
+      signup_method: method,
+      origin: 'server',
       ...readAttribution(attribution),
     };
     fetch(`${MARKETGENIUS_URL}/api/track`, {

@@ -203,7 +203,7 @@ router.post('/webhook', async (req, res) => {
           user.stripeId = session.customer || user.stripeId;
           user.planExpiresAt = null;
           await user.save();
-          reportConversion('paid_plan_started', { email: user.email });
+          reportConversion('paid_plan_started', { email: user.email, method: 'stripe' });
 
           // Send welcome email (non-blocking)
           try {

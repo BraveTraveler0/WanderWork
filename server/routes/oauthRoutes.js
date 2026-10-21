@@ -98,6 +98,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
       // LinkedIn account can still be credited to the ad or post behind it.
       req.session.signupAttribution = readAttribution({
         source: req.query.utm_source, medium: req.query.utm_medium, landing: req.query.landing,
+        campaign: req.query.utm_campaign, content: req.query.utm_content,
       });
     }
 
@@ -185,7 +186,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
           password: randomPass,
           verified: true,
         });
-        reportConversion('signup_completed', { email, attribution: req.session?.signupAttribution });
+        reportConversion('signup_completed', { email, attribution: req.session?.signupAttribution, method: 'linkedin' });
       }
 
       if (user.active === false) {
@@ -285,7 +286,7 @@ router.post('/google', async (req, res) => {
         password: randomPass,
         verified: true,
       });
-      reportConversion('signup_completed', { email: googleEmail, attribution });
+      reportConversion('signup_completed', { email: googleEmail, attribution, method: 'google' });
     }
 
     if (user.active === false) {
