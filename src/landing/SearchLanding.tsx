@@ -390,7 +390,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
       <main>
         <section className="wl-hero" ref={heroRef}>
-          <div className={`wl-wrap${!isAuthenticated ? ' wl-hero-grid' : ''}`}>
+          <div className="wl-wrap">
             <div className="wl-hero-main">
               {liveCount && (
                 <button type="button" className="wl-live" onClick={showNewOnly}>
@@ -466,26 +466,6 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 <li><Check size={14} aria-hidden /> No ghost jobs</li>
               </ul>
             </div>
-
-            {!isAuthenticated && (
-              <aside className="wl-join" aria-labelledby="wl-join-title">
-                <h2 id="wl-join-title">Join free in one click</h2>
-                <p className="wl-join-sub">Get matched to jobs, tailor your resume and cover letter, and contact recruiters matched with you.</p>
-                <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('hero')}>
-                  <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
-                </button>
-                <GoogleAuthButton
-                  className="wl-social-btn wl-social-google"
-                  onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'hero', method: 'google' }); onAuthenticated(user, token) }}
-                  onError={setAuthError}
-                />
-                <button type="button" className="wl-join-email" onClick={() => signUp('hero_email')}>Sign up with email</button>
-                {authError && <p className="wl-join-error" role="alert">{authError}</p>}
-                <p className="wl-join-terms">
-                  By clicking Continue with LinkedIn or Continue with Google, you agree to the WanderWork <a href="/terms">Terms of Service</a>.
-                </p>
-              </aside>
-            )}
           </div>
         </section>
 
@@ -657,11 +637,20 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                 <div>
                   <h3>Your next remote job, without the endless search.</h3>
                   <p>Free to get started. No credit card, no commitment.</p>
+                  {authError && <p className="wl-cta-error" role="alert">{authError}</p>}
+                  <p className="wl-cta-terms">
+                    By clicking Continue with LinkedIn or Continue with Google, you agree to the WanderWork <a href="/terms">Terms of Service</a>.
+                  </p>
                 </div>
                 <div className="wl-cta-actions">
                   <button className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('footer_cta')}>
                     <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
                   </button>
+                  <GoogleAuthButton
+                    className="wl-social-btn wl-social-google"
+                    onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'footer_cta', method: 'google' }); onAuthenticated(user, token) }}
+                    onError={setAuthError}
+                  />
                   <button className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => signUp('footer_cta')}>
                     Get matched free <ArrowRight size={16} aria-hidden />
                   </button>
