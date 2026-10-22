@@ -12,6 +12,7 @@ export type LandingEvent =
   | 'job_view'
   | 'job_apply_click'
   | 'job_save_click'
+  | 'show_more_gate'
   | 'customize_click'
   | 'landing_signup_click'
   | 'recruiter_click'

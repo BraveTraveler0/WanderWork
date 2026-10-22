@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, Check, Clock, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Check, Clock, ExternalLink, FileText, Lock, Search, SlidersHorizontal, Sparkles, Target, Users, X } from 'lucide-react'
 import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import './searchLanding.css'
@@ -140,6 +140,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const [failed, setFailed] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [newJobs, setNewJobs] = useState<{ count: number; days: number } | null>(null)
+  const [siteTotal, setSiteTotal] = useState<number | null>(null)
   const [query, setQuery] = useState(initial.query)
   const [quick, setQuick] = useState<QuickFilter[]>(initial.quick)
   const [jobType, setJobType] = useState<JobTypeFilter>(initial.jobType)
@@ -152,8 +153,11 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const [scrolled, setScrolled] = useState(false)
   const [pastHero, setPastHero] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [pastJoin, setPastJoin] = useState(false)
+  const [gateOpen, setGateOpen] = useState(false)
   const isOverlay = useMediaQuery(OVERLAY_QUERY)
   const heroRef = useRef<HTMLElement>(null)
+  const heroJoinRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLElement>(null)
   const lastTrackedQuery = useRef('')
   const lastFocused = useRef<HTMLElement | null>(null)
@@ -182,6 +186,34 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
     io.observe(el)
     return () => io.disconnect()
   }, [])
+
+  // Full-screen desktop: the nav bar sign-up only appears once the hero
+  // sign-up buttons have scrolled up under the header, so there is one set at a time.
+  useEffect(() => {
+    const el = heroJoinRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      ([entry]) => setPastJoin(!entry.isIntersecting && entry.boundingClientRect.top < 64),
+      { rootMargin: '-64px 0px 0px 0px', threshold: 0 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [isAuthenticated])
+
+  // Guests get a sign-in prompt instead of more jobs.
+  useEffect(() => {
+    if (!gateOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setGateOpen(false) }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [gateOpen])
+
+  useEffect(() => { if (isAuthenticated) setGateOpen(false) }, [isAuthenticated])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -215,7 +247,10 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
     const controller = new AbortController()
     fetch(`${API_BASE_URL}/jobseeker/job-stats?days=${NEW_JOBS_DAYS}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => { if (s && Number.isFinite(s.newJobs) && s.newJobs > 0) setNewJobs({ count: s.newJobs, days: s.windowDays || NEW_JOBS_DAYS }) })
+      .then((s) => {
+        if (s && Number.isFinite(s.newJobs) && s.newJobs > 0) setNewJobs({ count: s.newJobs, days: s.windowDays || NEW_JOBS_DAYS })
+        if (s && Number.isFinite(s.totalJobs) && s.totalJobs > 0) setSiteTotal(s.totalJobs)
+      })
       .catch(() => {})
     return () => controller.abort()
   }, [loading])
@@ -229,6 +264,8 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
   const panelJobs = useMemo(() => jobs.map((j, i) => toPanelJob(j, i + 1)), [jobs])
   const panelJob = displayed ? panelJobs[(numericIds.get(displayed.id) ?? 1) - 1] : null
   const filtersActive = !!(query.trim() || quick.length || jobType || postedWithinDays || salaryOnly)
+  // The page only loads a recent slice; unfiltered, "left" counts every job on the site.
+  const remaining = Math.max(results.length, !filtersActive && siteTotal ? siteTotal : 0) - visible
 
   useEffect(() => { setVisible(PAGE_SIZE) }, [query, quick, jobType, postedWithinDays, salaryOnly, sort])
 
@@ -339,6 +376,16 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
     startLinkedInAuth()
   }
 
+  const showMore = () => {
+    if (isAuthenticated) {
+      if (results.length > visible) setVisible((v) => v + PAGE_SIZE)
+      else onOpenDashboard()
+      return
+    }
+    trackLandingEvent('show_more_gate', { remaining })
+    setGateOpen(true)
+  }
+
   const save = (job: LandingJob) => {
     trackLandingEvent('job_save_click', { job_id: job.id })
     signUp('save')
@@ -350,7 +397,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
 
   return (
     <div className={`wl${!isAuthenticated ? ' has-sticky-cta' : ''}`}>
-      <header className={`wl-header${scrolled ? ' is-scrolled' : ''}`}>
+      <header className={`wl-header${scrolled ? ' is-scrolled' : ''}${pastJoin ? ' is-past-join' : ''}`}>
         <div className="wl-wrap wl-header-inner">
           <a className="wl-logo" href="/landing" aria-label="WanderWork home">
             <span className="wl-logo-text">WANDER<span>/</span>WORK</span>
@@ -361,7 +408,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               <button className="wl-btn wl-btn-primary" onClick={onOpenDashboard}>Open dashboard</button>
             ) : (
               <>
-                {/* Full-screen desktop: one-click sign-up lives in the nav bar. */}
+                {/* Full-screen desktop: one-click sign-up joins the nav bar once the hero set scrolls away. */}
                 <div className="wl-nav-social">
                   <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('header')}>
                     <LinkedInIcon color="#ffffff" size={16} /> Continue with LinkedIn
@@ -467,7 +514,7 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
               </ul>
 
               {!isAuthenticated && (
-                <div className="wl-hero-join">
+                <div className="wl-hero-join" ref={heroJoinRef}>
                   <div className="wl-hero-join-actions">
                     <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('hero')}>
                       <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
@@ -566,10 +613,10 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
                   </Fragment>
                 ))}
 
-                {!loading && !failed && results.length > visible && (
+                {!loading && !failed && remaining > 0 && (
                   <div className="wl-more">
-                    <button className="wl-btn wl-btn-secondary" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
-                      Show more jobs ({results.length - visible} left)
+                    <button className="wl-btn wl-btn-secondary" onClick={showMore}>
+                      Show more jobs ({remaining.toLocaleString()} left)
                     </button>
                   </div>
                 )}
@@ -684,6 +731,30 @@ export default function SearchLanding({ isAuthenticated, onSignIn, onSignUp, onC
           </nav>
         </div>
       </footer>
+
+      {!isAuthenticated && gateOpen && (
+        <div className="wl-gate" onClick={() => setGateOpen(false)}>
+          <div className="wl-gate-card" role="dialog" aria-modal="true" aria-labelledby="wl-gate-title" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="wl-icon-btn wl-gate-close" onClick={() => setGateOpen(false)} aria-label="Close" autoFocus><X size={18} aria-hidden /></button>
+            <div className="wl-value-icon"><Lock size={20} aria-hidden /></div>
+            <h2 id="wl-gate-title">Sign in to see more jobs</h2>
+            <p>{remaining.toLocaleString()} more remote {filtersActive ? 'jobs match your search' : 'jobs are waiting'}. Create a free account or sign in to keep browsing.</p>
+            <div className="wl-gate-actions">
+              <button type="button" className="wl-social-btn wl-social-linkedin" onClick={() => linkedIn('show_more_gate')}>
+                <LinkedInIcon color="#ffffff" /> Continue with LinkedIn
+              </button>
+              <GoogleAuthButton
+                className="wl-social-btn wl-social-google"
+                onSignup={(user, token) => { trackLandingEvent('landing_signup_click', { from: 'show_more_gate', method: 'google' }); onAuthenticated(user, token) }}
+                onError={setAuthError}
+              />
+              <button type="button" className="wl-btn wl-btn-primary wl-btn-lg" onClick={() => signUp('show_more_gate')}>Sign up with email</button>
+            </div>
+            {authError && <p className="wl-hero-join-error" role="alert">{authError}</p>}
+            <p className="wl-gate-signin">Already have an account? <button type="button" onClick={onSignIn}>Sign in</button></p>
+          </div>
+        </div>
+      )}
 
       {!isAuthenticated && (
         <div className={`wl-sticky-cta${pastHero && !selected ? ' is-visible' : ''}`} aria-hidden={!pastHero || !!selected}>
