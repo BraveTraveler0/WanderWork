@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, ArrowRight, Users, ChevronDown } from 'lucide-react'
+import { Check, ArrowRight, Users, ChevronDown, MapPin } from 'lucide-react'
 import { submitCustomRequest, updateJobSeeker, getPairedRecruiters } from '../api/jobseeker.ts'
 import { createTokenCheckoutSession, redeemPromoCode } from '../api/stripe'
 import { isNewJob } from '../utils/jobUtils'
@@ -679,7 +679,10 @@ const StatsPanel = ({ jobId, selectedJob, data, jobs = [], newJobsCount: liveNew
                     )
                   })()}
                   <p className="mb-1">{formatPostedDate(selectedJob.postedAt ?? selectedJob.rawDate)}</p>
-                  <p>{asText(selectedJob.location, 'Remote')}</p>
+                  <p className="flex items-center justify-end gap-1">
+                    <MapPin size={14} style={{ color: '#306770' }} className="shrink-0" />
+                    {asText(selectedJob.location, 'Remote')}
+                  </p>
                 </div>
               </div>
 
