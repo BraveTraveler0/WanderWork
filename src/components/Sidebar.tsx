@@ -1,4 +1,4 @@
-import { ChevronDown, Eye, Pencil, X, Check, Upload, Plus, Minus } from 'lucide-react'
+import { ChevronDown, Eye, Pencil, X, Check, Upload, Plus, Minus, MapPin } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { updateCandidateSkills, updateJobSeeker, uploadCandidateResume } from '../api/jobseeker.ts'
 
@@ -413,6 +413,7 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
           {/* Inline single-field editing */}
           <FieldRow
             label="Location"
+            icon={<MapPin size={12} style={{ color: '#306770' }} />}
             value={profile.location}
             editValue={editForm.location}
             editing={editingField === 'location'}
@@ -613,8 +614,9 @@ const Sidebar = ({ data, onProfileImageChange, onCandidateUpdate }: { data?: any
   )
 }
 
-const FieldRow = ({ label, value, editValue, editing, onEdit, onChange, onSave, onCancel, wide, multiline, hasArrow }: {
+const FieldRow = ({ label, icon, value, editValue, editing, onEdit, onChange, onSave, onCancel, wide, multiline, hasArrow }: {
   label: string
+  icon?: React.ReactNode
   value: string
   editValue?: string
   editing: boolean
@@ -649,10 +651,10 @@ const FieldRow = ({ label, value, editValue, editing, onEdit, onChange, onSave, 
       </div>
     )
   }
-  return <InfoField label={label} value={value} wide={wide} multiline={multiline} hasArrow={hasArrow} onEdit={onEdit} />
+  return <InfoField label={label} icon={icon} value={value} wide={wide} multiline={multiline} hasArrow={hasArrow} onEdit={onEdit} />
 }
 
-const InfoField = ({ label, value, wide, hasArrow, onEdit }: { label: string, value: string, wide?: boolean, multiline?: boolean, hasArrow?: boolean, onEdit: () => void }) => {
+const InfoField = ({ label, icon, value, wide, hasArrow, onEdit }: { label: string, icon?: React.ReactNode, value: string, wide?: boolean, multiline?: boolean, hasArrow?: boolean, onEdit: () => void }) => {
   return (
     <div 
       className="group w-full lg:w-[210px] relative cursor-pointer lg:cursor-default transition-all" 
@@ -664,7 +666,7 @@ const InfoField = ({ label, value, wide, hasArrow, onEdit }: { label: string, va
         }
       }}
     >
-      <p className="text-[12px] mb-1" style={{ color: '#787878' }}>{label}</p>
+      <p className="text-[12px] mb-1 flex items-center gap-1" style={{ color: '#787878' }}>{label}{icon}</p>
       <div className="flex items-center justify-between">
         <p className={`text-[13px] truncate ${wide ? 'lg:w-[230px]' : ''}`} style={{ color: '#1A1A2E' }}>{value}</p>
         <div className="flex items-center gap-2">
