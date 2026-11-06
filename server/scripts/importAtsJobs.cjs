@@ -1,7 +1,8 @@
 'use strict';
 const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
-const { jobSignals, extractSalaryFromText, formatRange, buildSummary, remoteLocation, cleanTitle } = require('../utils/jobSignals');
+const { jobSignals, extractSalaryFromText, formatRange, buildSummary, remoteLocation, cleanTitle, detectLanguage } = require('../utils/jobSignals');
+const { inferMissingRegions } = require('../utils/regionInference');
 const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
@@ -47,19 +48,19 @@ const SEEDS = {
   // migrated to Workday, Ashby, or an in-house ATS. Only survivors kept below.
   greenhouse: [
     // Core tech / SaaS
-    'stripe', 'airbnb', 'twilio', 'figma', 'hubspot', 'lyft', 'pinterest',
+    'stripe', 'airbnb', 'twilio', 'figma', 'hubspotjobs', 'lyft', 'pinterest',
     'mongodb', 'elastic', 'datadog', 'brex', 'checkr', 'lattice', 'airtable',
     'gusto', 'chime', 'carta', 'remote', 'squarespace', 'intercom', 'pagerduty',
-    'okta', 'cloudflare', 'fastly', 'asana', 'coinbase', 'instacart', 'glassdoor',
-    'gitlab', 'dropbox', 'robinhood', 'faire', 'postman', 'mixpanel', 'amplitude',
+    'okta', 'cloudflare', 'fastly', 'asana', 'coinbase', 'instacart',
+    'gitlab', 'dropbox', 'robinhood', 'faire', 'mixpanel',
     'contentful', 'algolia', 'netlify', 'tailscale', 'klaviyo', 'affirm',
     'betterment', 'calm', 'duolingo', 'coursera', 'udemy', 'masterclass', 'greenhouse',
     // Fintech / payments
-    'adyen', 'marqeta', 'gocardless', 'tabapay',
+    'adyen', 'gocardless', 'tabapay', 'mercury',
     // Infrastructure / DevOps / security
     'orca', 'exabeam', 'honeycomb',
     // Data / AI / ML
-    'databricks', 'fivetran', 'hightouch', 'labelbox',
+    'databricks', 'fivetran', 'labelbox',
     // Product / design / marketing tools
     'pendo', 'customerio', 'braze', 'iterable', 'hootsuite', 'later',
     // E-commerce / logistics
@@ -67,17 +68,27 @@ const SEEDS = {
     // Healthcare / biotech
     'oscar', 'veracyte',
     // Telehealth
-    'talkspace', 'betterhelp', 'cerebral', 'amwell', 'twochairs',
+    'talkspace', 'betterhelp', 'amwell', 'twochairs',
     // Logistics/ops (moved off Lever)
     'flexport',
     // Education / creator economy
-    'outschool', 'thinkific', 'khanacademy', 'goguardian', 'udacity', 'nerdy',
+    'thinkific', 'khanacademy', 'goguardian', 'udacity',
     // Climate / sustainability
     'watershed', 'patch',
     // PR, comms & media
-    'cision', 'brandwatch', 'voxmedia', 'buzzfeed', 'axios',
+    'cision', 'brandwatch', 'voxmedia', 'axios',
     // Finance / accounting / fintech
-    'melio', 'sage', 'akoya', 'pulley',
+    'melio', 'pulley',
+    // Moved here from Lever/Ashby (verified live 2026-11)
+    'launchdarkly', 'vercel',
+    // UK / Europe / worldwide remote (verified live 2026-11: each board had
+    // remote roles open to the UK or Europe that pass the filters below).
+    // Europe was ~7% of the feed and most European seeds further down were dead.
+    'grafanalabs', 'mozilla', 'canonical', 'monzo', 'lokalise', 'typeform',
+    'tines', 'storyblok', 'veriff', 'dataiku', 'bitwarden', 'celonis',
+    'payoneer', 'mirakl', 'wikimedia', 'jfrog', 'commercetools', 'jetbrains',
+    'neo4j', 'dremio', 'gympass', 'contentstack', 'cockroachlabs', 'wolt',
+    'oura', 'seatgeek', 'cleo',
   ],
   // Lever's sitemap (jobs.lever.co/sitemap.xml) 404s as of 2026-07, so unlike
   // Greenhouse/Ashby there's no auto-discovery fallback — this list is the
@@ -85,8 +96,10 @@ const SEEDS = {
   // migrated off Lever entirely and 404'd; only slugs confirmed live below).
   lever: [
     'secureframe', 'toptal', 'instrument', 'greenlight', 'transcarent',
-    'netflix', 'ro', 'whoop', 'kraken', 'zoox', 'trinet',
+    'ro', 'kraken', 'zoox', 'trinet',
     'lyrahealth', 'includedhealth', 'loadsmart',
+    // UK / Europe remote (verified live 2026-11)
+    'spotify', 'whereby', 'jobandtalent', 'farfetch', 'deliverect', 'contentsquare',
   ],
   // Also revalidated live 2026-07: of 94 unique seeded companies, only 45
   // still resolve (Anthropic, PlanetScale, and Sourcegraph among the dead —
@@ -106,32 +119,38 @@ const SEEDS = {
     'preply', 'cambly', 'multiverse', 'babbel', 'brainly', 'brightwheel',
     // Telehealth on Ashby
     'headway', 'grow-therapy', 'sondermind',
+    // Moved here from Greenhouse/Lever (verified live 2026-11)
+    'amplitude', 'whoop', 'outschool',
+    // UK / Europe / worldwide remote (verified live 2026-11)
+    'elevenlabs', 'n8n', 'clickhouse', 'paddle', 'docplanner', 'coder',
+    'duck-duck-go', 'oyster', 'sanity', 'qonto', 'pleo', '1password',
+    'synthesia', 'zapier', 'vanta', 'snyk', 'improbable', 'gitbook', 'lemonade',
+    'mollie', 'cohere', 'sophos', 'camunda', 'poolside', 'runpod', 'percona',
+    'plaid', 'tigerdata', 'astronomer', 'socure', 'redis', 'webflow', 'close',
+    'helpscout', 'prefect',
   ],
-  smartrecruiters: [
-    'bosch', 'visa', 'linkedin', 'ericsson', 'koninklijke', 'sap',
-    'siemens', 'philips', 'klm', 'heineken', 'booking', 'takeaway',
-    'adyen', 'mollie', 'messagebird', 'sendcloud', 'picnic', 'coolblue',
-    'spotify', 'king', 'mojang', 'paradox', 'izettle', 'klarna',
-  ],
+  // Every former seed (Bosch, Visa, Spotify, Klarna...) returned zero postings
+  // live 2026-11; SmartRecruiters' API answers an empty list even for made-up
+  // names, so the old list was never really verified. Spotify, Adyen and
+  // Mollie are covered on Lever/Greenhouse/Ashby. DB discovery still adds any
+  // SmartRecruiters board found in stored job URLs.
+  smartrecruiters: [],
   // Workable has no sitemap and job URLs (apply.workable.com/j/<shortcode>)
   // don't embed the company slug, so unlike the other ATS providers this list
   // is the *only* discovery mechanism — there's no sitemap/DB fallback to grow
   // it automatically. Each slug below was verified live against Workable's
   // public widget API (fake slugs 404; these all returned real accounts).
-  workable: [
-    'typeform', 'deliveroo', 'babbel', 'wagestream', 'paddle', 'blablacar',
-    'truelayer', 'onfido', 'thoughtmachine', 'trivago', 'tide', 'marshmallow',
-    'cleo', 'curve', 'multiverse', 'hopin', 'bloomandwild', 'treatwell',
-    'photobox', 'moneybox', 'capdesk', 'zopa', 'bulb', 'farewill', 'personio',
-    'depop', 'n26', 'monzo', 'wise', 'starling', 'revolut', 'skyscanner',
-    'algolia', 'zego',
-  ],
+  // Checked live 2026-11: 33 of the 34 former seeds (Monzo, Wise, Revolut,
+  // Deliveroo, Typeform...) still have a Workable account but zero jobs, as
+  // they moved to other ATSs. Monzo, Typeform, Paddle and Cleo are now seeded
+  // above on their current boards.
+  workable: ['treatwell', 'huggingface'],
   // Recruitee/Breezy/Personio have no public sitemap either, so like Workable
   // these seeds were verified live against each platform's public API before
   // being added (fake/former slugs 404 or redirect to the platform homepage).
-  recruitee: ['channable', 'sendcloud', 'bunq', 'personio'],
+  recruitee: ['channable', 'bunq', 'personio'],
   breezy: ['vetsez', '20four7va', 'bettersource', 'urrly', 'drips', 'new-incentives'],
-  personio: ['personio', 'deskbird', 'pitch', 'wolt', 'clark'],
+  personio: ['personio', 'deskbird', 'clark'],
 };
 
 // ── Sitemap discovery ─────────────────────────────────────────────────────────
@@ -308,6 +327,9 @@ function finalizeJob(rawJob, { locationTexts = [], fullText = '', salary = null 
     job_type: inferJobType(job.title, job.job_type),
     description_short: buildSummary(fullText, job.title) || `${job.title} at ${job.company}.`,
     desc_source: fullText,
+    // Every fetcher used to hardcode 'en'. The feed is English-only, so
+    // non-English postings are dropped in importAtsJobs (and pruned if stored).
+    lang: detectLanguage(`${job.title} ${fullText}`),
   };
 }
 
@@ -619,8 +641,19 @@ const PER_CYCLE_CAP = {
 
 const CONCURRENCY = 12; // parallel company fetches per batch
 
-async function upsertJobs(col, jobs) {
+// Max AI region lookups per import cycle (shared across all boards). Jobs past
+// the budget are labeled on later cycles; answers are cached per posting.
+const REGION_AI_BUDGET = 400;
+
+async function upsertJobs(col, jobs, regionBudget) {
   let added = 0, updated = 0, errors = 0;
+  try {
+    const r = await inferMissingRegions(col, jobs, { maxCalls: regionBudget.remaining });
+    regionBudget.remaining = Math.max(0, regionBudget.remaining - r.inferred - r.failed);
+    for (const k of Object.keys(regionBudget.stats)) regionBudget.stats[k] += r[k] || 0;
+  } catch (err) {
+    console.warn(`[importAtsJobs] region inference failed: ${err.message}`);
+  }
   await Promise.all(jobs.map(async job => {
     try {
       if (!job.title || !job.url) return;
@@ -653,8 +686,9 @@ async function importAtsJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   const slugsByAts = await discoverAllSlugs(col);
 
-  let totalNew = 0, totalUpdated = 0, totalErrors = 0;
+  let totalNew = 0, totalUpdated = 0, totalErrors = 0, totalNonEnglish = 0;
   const removedJobs = [];
+  const regionBudget = { remaining: REGION_AI_BUDGET, stats: { candidates: 0, cached: 0, inferred: 0, labeled: 0, failed: 0, deferred: 0 } };
 
   for (const [atsName, slugSet] of Object.entries(slugsByAts)) {
     const seeds = new Set(SEEDS[atsName] || []);
@@ -680,7 +714,9 @@ async function importAtsJobs() {
           // ats_slug ties each job to its board for pruning; last_seen_at marks
           // it as still listed so feeds can leave out jobs no longer seen.
           const { jobs: fetched, boardSize } = await fetch(slug, company);
-          const jobs = fetched.filter(j => j.url).map(j => ({ ...j, ats_slug: slug, last_seen_at: seenAt }));
+          const english = fetched.filter(j => j.lang === 'en');
+          totalNonEnglish += fetched.length - english.length;
+          const jobs = english.filter(j => j.url).map(j => ({ ...j, ats_slug: slug, last_seen_at: seenAt }));
           if (jobs.length) console.log(`  ${atsName}/${slug}: ${jobs.length} remote of ${boardSize} jobs`);
           try {
             const closed = await pruneClosedJobs(col, atsName, slug, jobs, boardSize);
@@ -703,7 +739,7 @@ async function importAtsJobs() {
 
       const allJobs = batchResults.flat();
       if (allJobs.length) {
-        const { added, updated, errors } = await upsertJobs(col, allJobs);
+        const { added, updated, errors } = await upsertJobs(col, allJobs, regionBudget);
         totalNew += added; totalUpdated += updated; totalErrors += errors;
       }
 
@@ -712,7 +748,9 @@ async function importAtsJobs() {
     }
   }
 
-  console.log(`[importAtsJobs] Done. new=${totalNew} updated=${totalUpdated} removed=${removedJobs.length} errors=${totalErrors}`);
+  const rs = regionBudget.stats;
+  console.log(`[importAtsJobs] Regions via AI: ${rs.inferred} checked (${rs.labeled} labeled), ${rs.cached} cached, ${rs.deferred} deferred to next cycle, ${rs.failed} failed`);
+  console.log(`[importAtsJobs] Done. new=${totalNew} updated=${totalUpdated} removed=${removedJobs.length} skipped_non_english=${totalNonEnglish} errors=${totalErrors}`);
   return { totalNew, totalUpdated, totalErrors, removedJobs };
 }
 
@@ -723,4 +761,4 @@ if (require.main === module) {
     .catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { importAtsJobs, _fetchers: ATS_FETCHERS };
+module.exports = { importAtsJobs, _fetchers: ATS_FETCHERS, _seeds: SEEDS };

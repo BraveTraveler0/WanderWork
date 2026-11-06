@@ -38,13 +38,12 @@ async function runImport() {
     // Tag recruiter jobs and purge stale ones before pairing
     try { await tagRecruiterJobs(); } catch (e) { console.warn('[Import] Recruiter tag error:', e.message); }
 
-    // Capture jobs about to be purged so we can notify search engines of their removal
+    // purgeJobs returns what it removed so search engines can drop those pages.
+    // (The old pre-query filtered on `datePosted`, a field jobs don't have, so
+    // it never found anything to report.)
     try {
-      const expiredJobs = await col.find(
-        { datePosted: { $lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
-        { projection: { _id: 1, title: 1, company: 1 } }
-      ).toArray();
-      await purgeJobs();
+      const purge = await purgeJobs();
+      const expiredJobs = purge?.removed || [];
       if (expiredJobs.length) {
         notifyJobsRemoved(expiredJobs).catch(() => {});
         console.log(`[Import] Notified search engines of ${expiredJobs.length} removed jobs`);
