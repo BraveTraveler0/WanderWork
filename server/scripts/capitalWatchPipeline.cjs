@@ -4,13 +4,12 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const mongoose = require('mongoose');
-const OpenAI = require('openai');
 const { ApifyClient } = require('apify-client');
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
 const SOURCES = require('../config/capitalWatchSources');
 const { isEligibleLocation } = require('../config/capitalWatchGeo');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const { aiChat: openai } = require('../utils/aiChat');
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a funding opportunity extraction engine. You must ONLY use the provided input text as evidence. Do not invent, infer, or guess.
 

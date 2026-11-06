@@ -4,6 +4,7 @@ const { isBlockedCompany, blockedCompanyQuery } = require('../../config/blockedC
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { chatCompletion, hasAIProvider } = require('../../utils/aiChat.js');
 const { uploadToR2, isConfigured: r2Configured } = require('../../utils/r2.js');
 const dbUtils = require('../../utils/dbUtils.js');
 const Candidates = require('../../models/JobSeeker/jobSeeker.Candidate.js');
@@ -255,11 +256,9 @@ async function extractResumeTextFromFile(file) {
 
 async function parseResumeTextFields(extractedText, filename = '') {
     let aiParsed = null;
-    if (extractedText && process.env.OPENAI_API_KEY) {
+    if (extractedText && hasAIProvider()) {
         try {
-            const aiResponse = await axios.post(
-                'https://api.openai.com/v1/chat/completions',
-                {
+            const aiResponse = await chatCompletion({
                     model: 'gpt-4o-mini',
                     messages: [
                         {
@@ -283,16 +282,8 @@ async function parseResumeTextFields(extractedText, filename = '') {
                     ],
                     response_format: { type: 'json_object' },
                     max_tokens: 2000,
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    timeout: 30000,
-                }
-            );
-            aiParsed = JSON.parse(aiResponse.data.choices[0].message.content);
+                });
+            aiParsed = JSON.parse(aiResponse.choices[0].message.content);
         } catch (aiErr) {
             console.warn('AI resume parsing failed, falling back to regex:', aiErr.message);
         }
@@ -1692,11 +1683,9 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
     // ── Step 2: AI-powered structured parsing ─────────────────────────────────
     // Use OpenAI to reliably extract structured fields regardless of resume format
     let aiParsed = null;
-    if (extractedText && process.env.OPENAI_API_KEY) {
+    if (extractedText && hasAIProvider()) {
         try {
-            const aiResponse = await axios.post(
-                'https://api.openai.com/v1/chat/completions',
-                {
+            const aiResponse = await chatCompletion({
                     model: 'gpt-4o-mini',
                     messages: [
                         {
@@ -1720,16 +1709,8 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
                     ],
                     response_format: { type: 'json_object' },
                     max_tokens: 2000,
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    timeout: 30000,
-                }
-            );
-            aiParsed = JSON.parse(aiResponse.data.choices[0].message.content);
+                });
+            aiParsed = JSON.parse(aiResponse.choices[0].message.content);
         } catch (aiErr) {
             console.warn('AI resume parsing failed, falling back to regex:', aiErr.message);
         }
@@ -1839,7 +1820,7 @@ const updateCandidateResume = asyncHandler(async (req, res) => {
         console.warn('[updateCandidateResume] Profile fields could not be extracted.',
             `textExtracted=${!!extractedText}`,
             `aiParsed=${!!aiParsed}`,
-            `openaiKey=${!!process.env.OPENAI_API_KEY}`
+            `aiProvider=${hasAIProvider()}`
         );
     }
 
@@ -2266,26 +2247,21 @@ function buildPdfBuffer(content, documentType = 'resume') {
 }
 
 async function callOpenAI(systemPrompt, userPrompt, maxTokens = 1500) {
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) return null
+    if (!hasAIProvider()) return null
     try {
-        const response = await axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt },
-                ],
-                max_tokens: maxTokens,
-            },
-            { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
-        )
-        return response.data?.choices?.[0]?.message?.content?.trim() || null
+        const data = await chatCompletion({
+            model: 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+            ],
+            max_tokens: maxTokens,
+        })
+        return data?.choices?.[0]?.message?.content?.trim() || null
     } catch (e) {
         const apiError = e.response?.data?.error
         console.warn(
-            'OpenAI call failed:',
+            'AI call failed (OpenAI and backup):',
             e.response?.status || '',
             apiError?.code || apiError?.type || '',
             apiError?.message || e.message

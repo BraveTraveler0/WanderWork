@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler')
 const mongoose = require('mongoose')
 const axios = require('axios')
+const { chatCompletion, hasAIProvider } = require('../../utils/aiChat')
 const sgMail = require('@sendgrid/mail')
 const Recruiter = require('../../models/JobSeeker/jobSeeker.Recruiter')
 const RecruiterContact = require('../../models/JobSeeker/jobSeeker.RecruiterContact')
@@ -111,8 +112,7 @@ Never use fake personalization, overpraise, or generic lines like "I hope this e
 Use only the sender details provided. Do not mention any specific person, employer, tool, client, or background detail unless it appears in the current sender profile or resume context.`
 
 async function generateEmailDraft(recruiter, candidate) {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
+  if (!hasAIProvider()) return null
   const userName = [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'the candidate'
   const profile = buildCandidateEmailProfile(candidate)
   const userPrompt = `Write a short recruiter outreach email using these details.
@@ -144,19 +144,15 @@ Do not copy recruiter titles or headlines as the body of the email.
 End casually and professionally.`
 
   try {
-    const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
+    const data = await chatCompletion({
         model: 'gpt-4.1-mini',
         messages: [
           { role: 'system', content: DRAFT_SYSTEM_PROMPT },
           { role: 'user', content: userPrompt },
         ],
         max_tokens: 400,
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 20000 }
-    )
-    return response.data?.choices?.[0]?.message?.content?.trim() || null
+      }, { timeout: 20000 })
+    return data?.choices?.[0]?.message?.content?.trim() || null
   } catch (e) {
     console.warn('OpenAI draft generation failed:', e.message)
     return null
@@ -329,7 +325,7 @@ async function resolveRecruiterEmailBody(recruiter, candidate) {
   let emailBody = ''
   let source = ''
 
-  if (process.env.OPENAI_API_KEY) {
+  if (hasAIProvider()) {
     emailBody = usableEmailBody(await generateEmailDraft(recruiter, candidate))
     source = emailBody ? 'generated' : ''
   }

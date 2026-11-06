@@ -5,10 +5,10 @@ const { jobSignals, extractSalaryFromText, buildSummary, remoteLocation, cleanTi
 const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
 const axios = require('axios');
 const path = require('path');
-const { OpenAI } = require('openai');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const { aiChat, hasAIProvider } = require('../utils/aiChat');
+const openai = hasAIProvider() ? aiChat : null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

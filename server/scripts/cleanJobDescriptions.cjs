@@ -1,10 +1,9 @@
 'use strict';
 const mongoose = require('mongoose');
-const { OpenAI } = require('openai');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const { aiChat: openai, hasAIProvider } = require('../utils/aiChat');
 
 const GPT_TIMEOUT_MS = 12000  // abort a hung OpenAI call after 12 seconds
 
@@ -47,8 +46,8 @@ async function cleanJob(col, job) {
 // those are the ones the feeds show; a summary is re-queued whenever the
 // posting text changes (see utils/jobUpsert.js).
 async function cleanNewJobs() {
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('[CleanDesc] OPENAI_API_KEY not set — skipping');
+  if (!hasAIProvider()) {
+    console.warn('[CleanDesc] No AI provider key set, skipping');
     return;
   }
   const col = mongoose.connection.collection('jobseeker.jobs');
@@ -101,7 +100,7 @@ async function cleanAllJobs() {
 }
 
 if (require.main === module) {
-  if (!process.env.OPENAI_API_KEY) { console.error('OPENAI_API_KEY not set'); process.exit(1); }
+  if (!hasAIProvider()) { console.error('No AI provider key set (OPENAI_API_KEY or OPENROUTER_API_KEY)'); process.exit(1); }
   mongoose.connect(process.env.DATABASE_URI)
     .then(() => cleanAllJobs())
     .then(() => { console.log('Done'); mongoose.disconnect(); })
