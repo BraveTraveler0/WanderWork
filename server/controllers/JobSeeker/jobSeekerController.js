@@ -2283,7 +2283,13 @@ async function callOpenAI(systemPrompt, userPrompt, maxTokens = 1500) {
         )
         return response.data?.choices?.[0]?.message?.content?.trim() || null
     } catch (e) {
-        console.warn('OpenAI call failed:', e.message)
+        const apiError = e.response?.data?.error
+        console.warn(
+            'OpenAI call failed:',
+            e.response?.status || '',
+            apiError?.code || apiError?.type || '',
+            apiError?.message || e.message
+        )
         return null
     }
 }
