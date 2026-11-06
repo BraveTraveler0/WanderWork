@@ -11,8 +11,8 @@ const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { OpenAI } = require('openai');
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const { aiChat, hasAIProvider } = require('../utils/aiChat');
+const openai = hasAIProvider() ? aiChat : null;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 

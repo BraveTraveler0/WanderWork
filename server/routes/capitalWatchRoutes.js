@@ -1,5 +1,4 @@
 const express = require('express')
-const OpenAI = require('openai')
 const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { getCompanies, getCompanyProfile } = require('../config/capitalWatchCompanies')
@@ -7,7 +6,7 @@ const { applicationDraftEmail } = require('../utils/capitalWatchEmail')
 const { scoreGrant } = require('../utils/capitalWatchScoring')
 
 const router = express.Router()
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const { aiChat: openai } = require('../utils/aiChat')
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
 
 function requireCapitalWatchKey(req, res, next) {

@@ -19,8 +19,7 @@ const router = express.Router();
 
 async function aiCompanyDescription(companyName) {
   try {
-    const OpenAI = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const { aiChat: openai } = require('../utils/aiChat');
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: `Write a 2-3 sentence professional description of the company "${companyName}". Be factual and concise. Return only the description text, nothing else.` }],
@@ -131,12 +130,12 @@ async function upsertJobs(records) {
       const fallbackDescription = `${title} at ${company}. Full details are available through the job posting link.`;
       const descFull = stripHtml(descriptionRaw);
       const descriptionShort = (() => {
-        if (!descFull) return (process.env.OPENAI_API_KEY ? null : '') || fallbackDescription;
+        if (!descFull) return (require('../utils/aiChat').hasAIProvider() ? null : '') || fallbackDescription;
         if (descFull.length <= 500) return descFull;
         const cut = descFull.slice(0, 500);
         const lastSentence = cut.search(/[.!?][^.!?]*$/);
         return lastSentence > 100 ? cut.slice(0, lastSentence + 1) : cut;
-      })() || (process.env.OPENAI_API_KEY ? await aiCompanyDescription(company) : '') || fallbackDescription;
+      })() || (require('../utils/aiChat').hasAIProvider() ? await aiCompanyDescription(company) : '') || fallbackDescription;
       const dateRaw = firstText(r.datePosted, r.date_posted, r.postedAt, r.postedDate, r.rawDate);
       const parsedDate = dateRaw ? new Date(dateRaw) : new Date();
       const providedJobCode = firstText(r.jobCode, r.job_code, r.code);
