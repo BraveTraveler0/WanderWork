@@ -18,6 +18,8 @@
  *   - No URL at all
  *   - Stale > 90 days
  *   - Empty description (no description_short AND no description)
+ *   - ATS job no longer on its company's board for 7+ days (closed, or
+ *     changed to hybrid/on-site). Skipped if the importer itself is stalled.
  *
  * After hard removes, any job scoring <= LOW_SCORE_THRESHOLD is also removed.
  * If that's still fewer than MIN_PURGE, lowest-scoring jobs fill the gap up to MIN_PURGE.
@@ -34,6 +36,12 @@ const { isBlockedCompany } = require('../config/blockedCompanies');
 const DRY_RUN = process.argv.includes('--dry-run');
 const LOW_SCORE_THRESHOLD = 2; // score ≤ this → soft remove
 const MIN_PURGE = 0;           // never forced to remove beyond hard+low-score
+// ATS boards list every open job, so an ATS job missing from its board for
+// this long is closed (or no longer remote). Checked live 2026-11: of 432
+// jobs not seen in 14+ days at Stripe/Twilio/GitLab/Pinterest/Coinbase, 424
+// were closed and the other 8 had become on-site/hybrid.
+const ATS_UNSEEN_DAYS = 7;
+const ATS_SOURCES = ['Greenhouse', 'Lever', 'Ashby', 'Workable', 'SmartRecruiters', 'Recruitee', 'BreezyHR', 'Personio'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +144,17 @@ async function purgeJobs() {
   // Load all jobs (we need to score them all)
   const allJobs = await col.find({}).toArray();
 
+  // Freshest ATS sighting = when the importer last ran. If it hasn't run in
+  // 2 days, don't judge any job by last_seen_at (an outage would wipe the feed).
+  const isAtsJob = (job) => job.ats_direct === true || ATS_SOURCES.includes(job.source);
+  const latestAtsSeen = allJobs.reduce((max, job) => {
+    const t = isAtsJob(job) && job.last_seen_at ? new Date(job.last_seen_at).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+  const importerHealthy = latestAtsSeen > Date.now() - 2 * 86400000;
+  const unseenCutoff = latestAtsSeen - ATS_UNSEEN_DAYS * 86400000;
+  if (!importerHealthy) console.warn('[purge] ATS importer has not run in 2+ days; skipping the not-on-board rule.');
+
   // ── Phase 1: Hard removes ──────────────────────────────────────────────────
   const hardRemoveIds = [];
   const reasons = {};
@@ -177,6 +196,12 @@ async function purgeJobs() {
     }
     if (!desc) {
       recordHard(job._id, 'no_description'); continue;
+    }
+    if (importerHealthy && isAtsJob(job)) {
+      const seen = job.last_seen_at ? new Date(job.last_seen_at).getTime() : 0;
+      if (seen < unseenCutoff) {
+        recordHard(job._id, 'not_on_board_7d'); continue;
+      }
     }
     const dateRef = job.date_posted || job.createdAt;
     if (dateRef) {
@@ -238,9 +263,16 @@ async function purgeJobs() {
   console.log(`\n[purge] Total to remove: ${totalRemoved} (hard: ${hardRemoveIds.length} + low-score: ${softRemove.length})`);
   console.log(`[purge] DB after purge: ${total - totalRemoved} jobs`);
 
+  // Returned so the scheduler can tell search engines these pages are gone.
+  const byId = new Map(allJobs.map(j => [j._id.toString(), j]));
+  const removed = [...hardRemoveIds, ...softRemove.map(j => j._id)]
+    .map(id => byId.get(id.toString()))
+    .filter(Boolean)
+    .map(j => ({ _id: j._id, title: j.title, company: j.company }));
+
   if (DRY_RUN) {
     console.log('\n[purge] DRY RUN — no changes made. Re-run without --dry-run to execute.');
-    return;
+    return { removed: [], wouldRemove: removed.length };
   }
 
   // ── Execute deletes ────────────────────────────────────────────────────────
@@ -259,6 +291,7 @@ async function purgeJobs() {
 
   const finalCount = await col.countDocuments({});
   console.log(`\n[purge] Complete. Removed ${deleted} total. DB now has ${finalCount} jobs.`);
+  return { removed };
 }
 
 if (require.main === module) {

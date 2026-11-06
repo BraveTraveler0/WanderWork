@@ -131,3 +131,26 @@ describe('application-instruction preambles and coded titles', () => {
     expect(signals.cleanTitle('401(k) Plan Specialist')).toBe('401(k) Plan Specialist')
   })
 })
+
+describe('detectLanguage', () => {
+  it('keeps English postings', () => {
+    const en = 'We are looking for a Senior Engineer to join our team. You will work with product and design on the core platform, and you should have experience with distributed systems. This is a remote role open to candidates in the UK.'
+    expect(signals.detectLanguage(en)).toBe('en')
+  })
+  it('flags German and French postings', () => {
+    const de = 'Wir bei HubSpot laden alle ein, die mit uns wachsen wollen. Du arbeitest mit unseren Kunden in der DACH Region und bist für den Vertrieb verantwortlich. Wir bieten dir ein Team, das dich unterstützt, und eine Kultur, die auf Vertrauen setzt.'
+    const fr = 'Nous pensons que le monde a changé. Vous rejoindrez une équipe qui accompagne nos clients en France et vous serez responsable de la croissance du portefeuille. Nous offrons un environnement flexible et une culture de confiance pour les équipes.'
+    expect(signals.detectLanguage(de)).toBe('other')
+    expect(signals.detectLanguage(fr)).toBe('other')
+  })
+  it('does not judge very short text', () => {
+    expect(signals.detectLanguage('Senior Engineer')).toBe('en')
+  })
+})
+
+describe('European countries without their own key', () => {
+  it('labels them Europe', () => {
+    expect(jobSignals({ locationTexts: ['Remote, Austria'] }).remote_regions).toEqual(['Europe'])
+    expect(jobSignals({ locationTexts: ['Remote - Luxembourg'] }).remote_scope).toBe('Europe')
+  })
+})

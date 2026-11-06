@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { isBlockedCompany } = require('../config/blockedCompanies');
 const { jobSignals, extractSalaryFromText, buildSummary, remoteLocation, cleanTitle } = require('../utils/jobSignals');
 const { upsertJob, normalizeUrl } = require('../utils/jobUpsert');
+const { inferMissingRegions } = require('../utils/regionInference');
 const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -397,6 +398,8 @@ const SOURCES = [
 async function importRemoteJobs() {
   const col = mongoose.connection.collection('jobseeker.jobs');
   let totalUpserted = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0;
+  // AI region lookups per cycle across all sources (see utils/regionInference).
+  let regionBudget = 150;
 
   for (const src of SOURCES) {
     console.log(`[importRemoteJobs] Fetching ${src.name}...`);
@@ -414,11 +417,21 @@ async function importRemoteJobs() {
     jobs = await resolveCompanyUrls(jobs);
 
     let upserted = 0, updated = 0, skipped = 0, errors = 0;
+    const ready = [];
     for (const raw of jobs) {
+      if (!raw.title || !raw.url || !raw.description_short) { skipped++; continue; }
+      if (isBlockedCompany(raw.company, raw.url)) { skipped++; continue; }
+      try { ready.push(withSignals(raw)); } catch { errors++; }
+    }
+    try {
+      const r = await inferMissingRegions(col, ready, { maxCalls: regionBudget });
+      regionBudget = Math.max(0, regionBudget - r.inferred - r.failed);
+      if (r.inferred) console.log(`[importRemoteJobs] ${src.name}: AI checked regions for ${r.inferred} jobs (${r.labeled} labeled)`);
+    } catch (err) {
+      console.warn(`[importRemoteJobs] ${src.name}: region inference failed: ${err.message}`);
+    }
+    for (const job of ready) {
       try {
-        if (!raw.title || !raw.url || !raw.description_short) { skipped++; continue; }
-        if (isBlockedCompany(raw.company, raw.url)) { skipped++; continue; }
-        const job = withSignals(raw);
         const result = await upsertJob(col, job, generateJobCode(normalizeUrl(job.url)));
         if (result.upsertedCount) upserted++;
         else updated++;

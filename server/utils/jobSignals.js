@@ -17,7 +17,9 @@ const REGIONS = [
   { key: 'LATAM', label: 'LATAM', re: /\bLATAM\b|\bLatin America(?:n)?\b|\bSouth America\b/i },
   { key: 'Americas', label: 'Americas', re: /\bAmericas\b/i },
   { key: 'UK', label: 'UK', re: /\bUK\b|\bUnited Kingdom\b|\bGreat Britain\b|\bEngland\b|\bScotland\b|\bLondon\b/ },
-  { key: 'Europe', label: 'Europe', re: /\bEurope(?:an)?\b|\bEU\b|\bEEA\b/ },
+  // European countries without their own key below count as Europe, so
+  // "Remote, Austria" or "Remote - Luxembourg" is not left unlabeled.
+  { key: 'Europe', label: 'Europe', re: /\bEurope(?:an)?\b|\bEU\b|\bEEA\b|\b(?:Austria|Switzerland|Belgium|Luxembourg|Denmark|Norway|Finland|Iceland|Czechia|Czech Republic|Slovakia|Hungary|Greece|Estonia|Latvia|Lithuania|Croatia|Slovenia|Serbia|Bulgaria|Cyprus|Malta)\b/ },
   { key: 'EMEA', label: 'EMEA', re: /\bEMEA\b/ },
   { key: 'APAC', label: 'APAC', re: /\bAPAC\b|\bAsia[- ]Pacific\b/i },
   ...['Germany', 'France', 'Spain', 'Portugal', 'Poland', 'Netherlands', 'Ireland', 'Italy', 'Sweden', 'Romania', 'Ukraine', 'Israel', 'India', 'Philippines', 'Singapore', 'Japan', 'Australia', 'New Zealand', 'Mexico', 'Brazil', 'Argentina', 'Colombia', 'Chile', 'South Africa', 'Nigeria', 'Kenya']
@@ -209,6 +211,34 @@ function buildSummary(fullText, title = '', maxLen = 500) {
   return last > 120 ? cut.slice(0, last + 1) : `${cut.replace(/\s+\S*$/, '')}…`;
 }
 
+// English vs. not, from common function words in the first ~600 words. The
+// feed is English-only; European boards (HubSpot DACH, Alan, Personio...) mix
+// in German/French/Spanish/Dutch postings. Checked live 2026-11 on ~550
+// postings from 8 boards: caught every non-English one, no English flagged.
+const EN_WORDS = new Set('the and to of you with for our we in is are will be your this that on as an or at from have'.split(' '));
+const NON_EN_WORDS = new Set((
+  'der die das und wir sie für mit ist nicht ein eine auf bei zu den dem ihre unsere werden ' +
+  'le la les et des vous nous pour avec est une dans sur votre nos du au ' +
+  'el los las y para con una es nuestro nuestra del por como en ' +
+  'het een wij voor met je jouw zijn ons onze van ' +
+  'och att är vi för med som på av ' +
+  'il per che sono della nel lo gli ' +
+  'os não uma em com você nossa'
+).split(' '));
+
+function detectLanguage(text) {
+  const words = (decodeEntities(text).toLowerCase().match(/\p{L}+/gu) || []).slice(0, 600);
+  let en = 0, other = 0;
+  for (const w of words) {
+    if (EN_WORDS.has(w)) en++;
+    else if (NON_EN_WORDS.has(w)) other++;
+  }
+  if (en + other < 15) return 'en'; // too little text to judge
+  return other > en ? 'other' : 'en';
+}
+
+const REGION_KEYS = REGIONS.map((r) => r.key);
+
 // Everything an importer stores about where and when the job can be worked.
 function jobSignals({ title = '', locationTexts = [], fullText: rawText = '' }) {
   const fullText = decodeEntities(rawText);
@@ -252,5 +282,7 @@ module.exports = {
   displayLocation,
   remoteLocation,
   scopeLabel,
+  detectLanguage,
   COUNTRY_KEYS,
+  REGION_KEYS,
 };
