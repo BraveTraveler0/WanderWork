@@ -3,9 +3,10 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { aiChat: openai, hasAIProvider } = require('../utils/aiChat');
+// Bulk background work: Nemotron first, OpenAI only as a fallback.
+const { aiChatCheap: openai, hasAIProvider } = require('../utils/aiChat');
 
-const GPT_TIMEOUT_MS = 12000  // abort a hung OpenAI call after 12 seconds
+const GPT_TIMEOUT_MS = 30000  // abort a hung call after 30s (free Nemotron can queue briefly)
 
 async function callGPT(description) {
   const controller = new AbortController()
