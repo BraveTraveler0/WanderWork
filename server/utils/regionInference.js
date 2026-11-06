@@ -23,6 +23,7 @@ Return ONLY JSON: {"regions": [..], "worldwide": true|false, "evidence": "<exact
 - Use a region only when the posting states or clearly implies the restriction: "must be based in", "open to candidates in", work authorization requirements, pay ranges listed only for specific US states or Canadian provinces, US-only benefits such as 401(k), or a location field like "Remote - UK".
 - Prefer the most specific values the posting supports (e.g. "UK" rather than "Europe" when only the UK is named); list every region that is allowed.
 - Office locations, company headquarters, sales territories, markets the team covers, or where customers are do NOT count as restrictions. "Grow revenue across MENA and Europe" says nothing about where the employee lives.
+- A time zone or working hours alone ("based on Eastern Time", "overlap with CET") is NOT a location restriction.
 - When the location field names one country that is not in the list above (e.g. "Remote - UAE", "Remote, South Korea"), return {"regions": [], "worldwide": false}.
 - "worldwide" is true only when the posting explicitly says candidates can be anywhere in the world. "Remote" alone does NOT mean worldwide.
 - "evidence" must be a short quote (under 25 words) copied exactly from the posting or location field that supports your answer. If you cannot quote one, the answer is empty.
@@ -44,13 +45,35 @@ function applyRegions(job, regions, worldwide) {
 const norm = (t) => String(t || '').toLowerCase().replace(/&[a-z]+;/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const EXPLICIT_WORLDWIDE = /\b(?:worldwide|anywhere in the world|work from anywhere|from anywhere|any country|globally|global(?:ly)? remote|all countries)\b/i;
 
+// Only the parts of a posting that can say where someone may work: the
+// opening plus every sentence mentioning location, eligibility, time zones or
+// pay. Long postings shrink to about a third of their size, and the evidence
+// quote is still checked against the full text.
+const RELEVANT = /\b(?:based|located|locat\w*|resid\w*|live|living|authori[sz]\w*|eligib\w*|visa|sponsor\w*|remote|time ?zones?|[A-Z]{2,4} hours|country|countries|states?|provinces?|region|anywhere|worldwide|globally|hire|hiring|salary|pay|compensation|range|401\(k\)|benefits)\b/i;
+const OPENING_CHARS = 1500;
+const MAX_CHARS = 5000;
+
+function relevantText(text) {
+  const t = String(text || '');
+  if (t.length <= MAX_CHARS) return t;
+  const parts = [t.slice(0, OPENING_CHARS)];
+  let len = parts[0].length;
+  for (const sentence of t.slice(OPENING_CHARS).split(/(?<=[.!?])\s+/)) {
+    if (!RELEVANT.test(sentence)) continue;
+    if (len + sentence.length > MAX_CHARS) break;
+    parts.push(sentence);
+    len += sentence.length + 1;
+  }
+  return parts.join(' ');
+}
+
 async function askModel(job) {
   const userPrompt = [
     `Title: ${job.title || ''}`,
     `Company: ${job.company || ''}`,
     `Location field: ${job.location || ''}`,
     '',
-    String(job.desc_source).slice(0, 12000),
+    relevantText(job.desc_source),
   ].join('\n');
   const data = await chatCompletion({
     model: 'gpt-4o-mini',
@@ -58,7 +81,7 @@ async function askModel(job) {
     response_format: { type: 'json_object' },
     max_tokens: 120,
     temperature: 0,
-  }, { timeout: 20000 });
+  }, { timeout: 20000, prefer: 'cheap' });
   const parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}');
   const allowed = new Set(REGION_KEYS);
   let regions = [...new Set((Array.isArray(parsed.regions) ? parsed.regions : []).filter((r) => allowed.has(r)))];
@@ -68,7 +91,7 @@ async function askModel(job) {
   const quoted = quote.length >= 8 && source.includes(quote);
   if (!quoted) { regions = []; worldwide = false; }
   if (worldwide && !EXPLICIT_WORLDWIDE.test(parsed.evidence || '')) worldwide = false;
-  return { regions, worldwide };
+  return { regions, worldwide, evidence: quoted ? String(parsed.evidence).slice(0, 300) : '' };
 }
 
 // Mutates `jobs` in place, adding remote_regions/remote_scope (and the
@@ -110,7 +133,8 @@ async function inferMissingRegions(col, jobs, { maxCalls = 300 } = {}) {
   for (let i = 0; i < batch.length; i += CONCURRENCY) {
     await Promise.all(batch.slice(i, i + CONCURRENCY).map(async ({ job, hash }) => {
       try {
-        const { regions, worldwide } = await askModel(job);
+        const { regions, worldwide, evidence } = await askModel(job);
+        job.ai_region_evidence = evidence;
         job.ai_regions = regions;
         job.ai_worldwide = worldwide;
         job.ai_region_hash = hash;

@@ -11,8 +11,8 @@ const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { aiChat, hasAIProvider } = require('../utils/aiChat');
-const openai = hasAIProvider() ? aiChat : null;
+const { aiChatCheap, hasAIProvider } = require('../utils/aiChat');
+const openai = hasAIProvider() ? aiChatCheap : null;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 

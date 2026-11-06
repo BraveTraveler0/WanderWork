@@ -7,9 +7,18 @@ const { tagRecruiterJobs } = require('../scripts/tagRecruiterJobs.cjs');
 const { purgeJobs } = require('../scripts/purgeJobs.cjs');
 const { pairAllCandidates } = require('../services/jobPairingService');
 const { notifyJobsAdded, notifyJobsRemoved } = require('../utils/searchIndexing');
+const { acquireLock } = require('../utils/schedulerClaim');
 
 // Every 6 hours: midnight, 6am, noon, 6pm UTC
 const SCHEDULE = '0 0,6,12,18 * * *';
+
+// Both production services run this schedule, and each also ran it at
+// startup, so every cycle (and every deploy) imported, cleaned and AI-labeled
+// the same jobs twice. One lock per cycle: the first instance to grab it runs,
+// the other skips. It lasts 5h (cycles are 6h apart), so a deploy shortly
+// after a cycle doesn't trigger another full run either. A crashed run's lock
+// expires on its own.
+const CYCLE_LOCK_MS = 5 * 60 * 60 * 1000;
 
 let running = false;
 
@@ -17,6 +26,12 @@ async function runImport() {
   if (running) { console.log('[Import] Already in progress, skipping.'); return; }
   running = true;
   try {
+    const won = await acquireLock('remote_jobs_import', CYCLE_LOCK_MS).catch((err) => {
+      console.warn('[Import] Lock check failed, skipping this cycle:', err.message);
+      return false;
+    });
+    if (!won) { console.log('[Import] Another instance ran this cycle (or one ran in the last 5h); skipping.'); return; }
+
     const col = mongoose.connection.collection('jobseeker.jobs');
     const cycleStart = new Date();
 

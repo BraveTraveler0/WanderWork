@@ -9,7 +9,7 @@ const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
 const SOURCES = require('../config/capitalWatchSources');
 const { isEligibleLocation } = require('../config/capitalWatchGeo');
 
-const { aiChat: openai } = require('../utils/aiChat');
+const { aiChatCheap: openai } = require('../utils/aiChat');
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a funding opportunity extraction engine. You must ONLY use the provided input text as evidence. Do not invent, infer, or guess.
 

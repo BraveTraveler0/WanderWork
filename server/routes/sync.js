@@ -19,7 +19,7 @@ const router = express.Router();
 
 async function aiCompanyDescription(companyName) {
   try {
-    const { aiChat: openai } = require('../utils/aiChat');
+    const { aiChatCheap: openai } = require('../utils/aiChat');
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: `Write a 2-3 sentence professional description of the company "${companyName}". Be factual and concise. Return only the description text, nothing else.` }],
