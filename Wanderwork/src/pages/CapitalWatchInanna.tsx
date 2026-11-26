@@ -9,17 +9,18 @@ import { api, formatUsd, type Briefing, type InannaAction } from "./capitalWatch
 
 type Turn = { role: "user" | "assistant"; content: string; actions?: InannaAction[]; error?: boolean };
 
-const HISTORY_KEY = "capitalwatch.inanna.history";
+// One conversation per business, kept in this browser.
+const historyKey = (businessId: string) => `capitalwatch.inanna.${businessId}`;
 const STARTERS = [
   "Which 3 should we apply to this week, and why?",
   "What deadlines are coming up?",
   "What's still missing on the applications we started?",
-  "Which opportunities fit Aonverse best?",
+  "What should I add to my profile to get better matches?",
 ];
 
-function loadHistory(): Turn[] {
+function loadHistory(businessId: string): Turn[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(historyKey(businessId));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.slice(-30) : [];
   } catch {
@@ -27,8 +28,8 @@ function loadHistory(): Turn[] {
   }
 }
 
-function saveHistory(turns: Turn[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(turns.slice(-30))); } catch { /* storage blocked */ }
+function saveHistory(businessId: string, turns: Turn[]) {
+  try { localStorage.setItem(historyKey(businessId), JSON.stringify(turns.slice(-30))); } catch { /* storage blocked */ }
 }
 
 // Canvas orb: flowing ribbons and particles masked to a soft sphere. Same engine as
@@ -181,17 +182,28 @@ const ACTION_TEXT: Record<InannaAction["type"], string> = {
 };
 
 type Props = {
+  businessId: string;
+  businessName: string;
   onBriefing?: (briefing: Briefing) => void;
-  onApprove: (grantId: string) => void;
+  onApprove: (grantId: string, title: string) => void;
   onDecide: (grantId: string, status: "rejected" | "archived") => Promise<void>;
   onOpenOutbox: () => void;
   refreshKey: number;
 };
 
-export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
+export default function CapitalWatchInanna({ businessId, businessName, onBriefing, onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"chat" | "today">("chat");
-  const [turns, setTurns] = useState<Turn[]>(loadHistory);
+  const [turns, setTurns] = useState<Turn[]>(() => loadHistory(businessId));
+  // Switching business switches the conversation.
+  const loadedFor = useRef(businessId);
+  useEffect(() => {
+    if (loadedFor.current === businessId) return;
+    loadedFor.current = businessId;
+    abortRef.current?.abort();
+    setTurns(loadHistory(businessId));
+    setDoneActions({});
+  }, [businessId]);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const [briefing, setBriefing] = useState<Briefing | null>(null);
@@ -203,12 +215,12 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
   const onBriefingRef = useRef(onBriefing);
   onBriefingRef.current = onBriefing;
   const loadBriefing = useCallback(() => {
-    api("/inanna/briefing")
+    api(`/inanna/briefing?businessId=${businessId}`)
       .then((b: Briefing) => { setBriefing(b); onBriefingRef.current?.(b); })
       .catch((err) => console.error("[Inanna] briefing failed:", err));
-  }, []);
+  }, [businessId]);
   useEffect(() => { loadBriefing(); }, [loadBriefing, refreshKey]);
-  useEffect(() => { saveHistory(turns); }, [turns]);
+  useEffect(() => { if (loadedFor.current === businessId) saveHistory(businessId, turns); }, [turns, businessId]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [turns, asking, open, tab]);
@@ -232,7 +244,7 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
     abortRef.current = controller;
     try {
       const messages = next.filter((t) => !t.error).map(({ role, content }) => ({ role, content }));
-      const data = await api("/inanna/ask", { method: "POST", body: JSON.stringify({ messages }), signal: controller.signal });
+      const data = await api("/inanna/ask", { method: "POST", body: JSON.stringify({ businessId, messages }), signal: controller.signal });
       setTurns((prev) => [...prev, { role: "assistant", content: data.reply, actions: data.actions }]);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -252,15 +264,14 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
         return;
       }
       if (action.type === "approve") {
-        // Opens the normal "Apply as which company?" step, so a person confirms.
-        onApprove(action.grantId);
+        // Opens the normal "Draft an application?" step, so a person confirms.
+        onApprove(action.grantId, action.grantTitle);
         return;
       }
-      if (action.type === "reject" && !window.confirm(`Reject "${action.grantTitle}"?`)) return;
       if (action.type === "reject" || action.type === "archive") {
         setDoneActions((d) => ({ ...d, [key]: "Working…" }));
         await onDecide(action.grantId, action.type === "reject" ? "rejected" : "archived");
-        setDoneActions((d) => ({ ...d, [key]: action.type === "reject" ? "Rejected" : "Archived" }));
+        setDoneActions((d) => ({ ...d, [key]: action.type === "reject" ? "Dismissed" : "Saved" }));
         loadBriefing();
         return;
       }
@@ -268,7 +279,7 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
         setDoneActions((d) => ({ ...d, [key]: "Saving…" }));
         await api("/outbox", {
           method: "POST",
-          body: JSON.stringify({ grantId: action.grantId, companyId: action.companyId, to: action.to, subject: action.subject, body: action.body, source: "inanna" }),
+          body: JSON.stringify({ businessId, grantId: action.grantId, to: action.to, subject: action.subject, body: action.body, source: "inanna" }),
         });
         setDoneActions((d) => ({ ...d, [key]: "In Outbox for review" }));
         window.dispatchEvent(new Event("capitalwatch:outbox-changed"));
@@ -294,7 +305,7 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
             <div className="flex items-center gap-2">
               <Sparkles size={14} />
               <span className="font-bold">Inanna</span>
-              <span className="text-xs text-gray-400">funding assistant</span>
+              <span className="text-xs text-gray-400 truncate max-w-[160px]">for {businessName}</span>
             </div>
             <div className="flex items-center gap-3">
               {turns.length > 0 && (
@@ -326,7 +337,7 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
             {tab === "chat" && turns.length === 0 && !asking && (
               <div className="space-y-2">
                 <p className="text-gray-500 mb-3">
-                  I read every opportunity on this dashboard, your deadlines, and the company profiles. Ask me what to pursue, or to draft an email. Emails wait in the Outbox until you send them.
+                  I know {businessName}'s profile, its matches and its deadlines. Ask me what to pursue, or to write an email. Emails wait in the Outbox until you send them.
                 </p>
                 {STARTERS.map((s) => (
                   <button key={s} onClick={() => ask(s)}
@@ -402,18 +413,18 @@ export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, on
                           {d.days === 0 ? "today" : `${d.days}d`}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400">{d.status === "approved" ? "Applying" : "Not decided"}{d.amountUsd ? ` · ${formatUsd(d.amountUsd)}` : ""}</div>
+                      <div className="text-xs text-gray-400">{d.status === "approved" ? "Applied" : d.status === "archived" ? "Saved" : "New match"}{d.amountUsd ? ` · ${formatUsd(d.amountUsd)}` : ""}</div>
                     </button>
                   ))}
                 </section>
 
                 <section>
-                  <h3 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Best matches waiting</h3>
+                  <h3 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Your best matches</h3>
                   {briefing.topMatches.map((m) => (
                     <button key={m.id} onClick={() => ask(`Why is "${m.title}" a good fit, and which company should apply?`)}
                       className="w-full text-left border border-gray-200 px-3 py-2 mb-2 hover:border-black">
                       <div className="truncate">{m.title}</div>
-                      <div className="text-xs text-gray-400">{[formatUsd(m.amountUsd), m.fundingType, `deadline ${m.deadline}`].filter(Boolean).join(" · ")}</div>
+                      <div className="text-xs text-gray-400">{[formatUsd(m.amountUsd), m.reasons?.[0], `deadline ${m.deadline}`].filter(Boolean).join(" · ")}</div>
                     </button>
                   ))}
                 </section>

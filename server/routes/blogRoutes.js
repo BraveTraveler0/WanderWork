@@ -4,6 +4,7 @@ const mongoose = require('mongoose')
 const rateLimit = require('express-rate-limit')
 const BlogPost = require('../models/Blog/blog.Post')
 const NewsletterSubscriber = require('../models/Blog/blog.NewsletterSubscriber')
+const { subscribe } = require('../utils/newsletter')
 const { ensureStarterPosts } = require('../utils/blogStarterPosts')
 const { BLOG_URL, postUrl } = require('../utils/blogPageHtml')
 const { indexNowNotify } = require('../utils/searchIndexing')
@@ -131,40 +132,14 @@ const newsletterLimiter = rateLimit({
   message: { message: 'Too many attempts. Please try again later.' },
 })
 
-// Best effort: the subscriber is already saved in our database, so a SendGrid
-// failure (for example an API key without Marketing access) is only logged.
-async function addToSendGridContacts(email) {
-  if (!process.env.SENDGRID_API_KEY) return false
-  const listId = process.env.SENDGRID_NEWSLETTER_LIST_ID
-  const response = await fetch('https://api.sendgrid.com/v3/marketing/contacts', {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(listId ? { list_ids: [listId] } : {}), contacts: [{ email }] }),
-  })
-  if (!response.ok) throw new Error(`SendGrid responded ${response.status}`)
-  return true
-}
-
 router.post('/newsletter', newsletterLimiter, async (req, res) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: 'Please enter a valid email address.' })
     }
-    const subscriber = await NewsletterSubscriber.findOneAndUpdate(
-      { email },
-      { $setOnInsert: { email, source: 'blog' } },
-      { upsert: true, new: true },
-    )
-    if (!subscriber.sendgridSynced) {
-      try {
-        if (await addToSendGridContacts(email)) {
-          await NewsletterSubscriber.updateOne({ _id: subscriber._id }, { sendgridSynced: true })
-        }
-      } catch (err) {
-        console.error('[Newsletter] SendGrid contact sync failed:', err.message)
-      }
-    }
+    // Saved to our list; the SendGrid sync is best effort and only logged on failure.
+    await subscribe(email, 'blog')
     res.json({ message: 'You are subscribed.' })
   } catch (err) {
     res.status(500).json({ message: err.message })

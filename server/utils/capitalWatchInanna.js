@@ -1,21 +1,25 @@
 'use strict'
 
-// Inanna for Capital Watch: the same idea as Inanna in MarketGenius (an assistant
-// that reads the real dashboard data, answers in context, and suggests actions),
-// scoped to funding opportunities. It reads grants, deadlines, and company
-// profiles; it never changes anything itself. Actions it suggests come back as
-// buttons the team clicks, which go through the normal /grants/:id route.
+// Inanna for Capital Watch: the assistant from MarketGenius, scoped to one business.
+// It reads that business's profile, its ranked matches and its decisions, answers in
+// context, and suggests actions. It never changes anything itself: each action comes
+// back as a button the member clicks, which goes through the normal routes.
 
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
+const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
 const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
-const { COMPANIES } = require('../config/capitalWatchCompanies')
-const { scoreGrant } = require('./capitalWatchScoring')
 const { aiChat } = require('./aiChat')
+const { GRANT_FIELDS, getOpenGrants, matchesFor, businessProfileText } = require('./capitalWatchData')
+const { checkFit } = require('./capitalWatchMatching')
 
-const TOP_PENDING = 40
-const SEARCH_EXTRA = 10
+const TOP_MATCHES = 35
+const SEARCH_EXTRA = 8
 const MAX_HISTORY = 12
 const ACTION_TYPES = new Set(['open', 'approve', 'archive', 'reject', 'draft_email'])
+
+// House style: no em dashes in anything a person reads or sends.
+const EM_DASH_RE = new RegExp(`\\s*${String.fromCharCode(0x2014)}\\s*`, 'g')
+const noEmDash = (s) => String(s || '').replace(EM_DASH_RE, ', ')
 
 // Same date reading as the daily deadline email, so "due in 5 days" agrees with it.
 function daysUntil(dueDate) {
@@ -40,163 +44,164 @@ function deadlineLabel(grant) {
   return `${grant.dueDate} (${days} day${days === 1 ? '' : 's'} left)`
 }
 
-// One compact line per grant: enough for the model to reason and cite the id.
-function grantLine(grant) {
+const STATUS_WORD = { approved: 'applied', archived: 'saved for later', rejected: 'dismissed', drafting: 'drafting' }
+
+// One compact line per opportunity: enough for the model to reason and cite the id.
+function grantLine(g, decision) {
   const parts = [
-    `id=${grant._id}`,
-    `"${clip(grant.title, 120)}"`,
-    grant.agency && `agency: ${clip(grant.agency, 60)}`,
-    `type: ${grant.fundingType || 'other'}`,
-    `amount: ${grant.amountUsd ? `$${grant.amountUsd.toLocaleString('en-US')}` : 'not stated'}`,
-    `deadline: ${deadlineLabel(grant)}`,
-    grant.location && `location: ${clip(grant.location, 40)}`,
-    grant.targetDemographics?.length && `eligible groups: ${grant.targetDemographics.join(', ')}`,
-    `status: ${grant.status}${grant.company ? ` (applied as ${grant.company})` : ''}`,
-    `fit score: ${scoreGrant(grant)}`,
-    grant.summary && `summary: ${clip(grant.summary, 220)}`,
-    grant.requirements && `requirements: ${clip(grant.requirements, 220)}`,
+    `id=${g._id}`,
+    `"${clip(g.title, 120)}"`,
+    g.agency && `agency: ${clip(g.agency, 60)}`,
+    `type: ${g.category || g.fundingType || 'other'}`,
+    `amount: ${g.amountUsd ? `$${g.amountUsd.toLocaleString('en-US')}` : 'not stated'}`,
+    `deadline: ${deadlineLabel(g)}`,
+    g.location && `location: ${clip(g.location, 40)}`,
+    g.targetDemographics?.length && `only for founders who are: ${g.targetDemographics.join(', ')}`,
+    g.applicantTypes?.length && `applicants: ${g.applicantTypes.join(', ')}`,
+    decision && `status: ${STATUS_WORD[decision.status] || decision.status}`,
+    g.fit === false && `NOT A FIT: ${g.unfitReason}`,
+    typeof g.score === 'number' && `fit score: ${g.score}`,
+    g.summary && `summary: ${clip(g.summary, 200)}`,
+    g.requirements && `requirements: ${clip(g.requirements, 200)}`,
   ]
-  const missing = (grant.requirementsChecklist || []).filter((r) => r.status === 'needs_input')
+  const missing = (decision?.requirementsChecklist || []).filter((r) => r.status === 'needs_input')
   if (missing.length) parts.push(`still needs from founder: ${missing.map((r) => clip(r.requirement, 60)).join('; ')}`)
   return `- ${parts.filter(Boolean).join(' | ')}`
 }
 
-// House style: no em dashes in anything the team reads or sends.
-const EM_DASH_RE = new RegExp(`\\s*${String.fromCharCode(0x2014)}\\s*`, 'g')
-const noEmDash = (s) => s.replace(EM_DASH_RE, ', ')
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const STOP = new Set(['what', 'which', 'when', 'where', 'grant', 'grants', 'this', 'that', 'with', 'should', 'apply', 'about', 'have', 'there', 'their', 'more', 'than', 'from', 'into', 'week', 'today', 'need', 'does', 'they', 'them', 'would', 'could', 'funding', 'business'])
 
-const escapeRegex =(s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-// Grants outside the top list that the question names (e.g. "the SBIR one").
-async function searchForQuestion(question, excludeIds) {
-  const words = String(question || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []
-  const stop = new Set(['what', 'which', 'when', 'where', 'grant', 'grants', 'this', 'that', 'with', 'should', 'apply', 'about', 'have', 'there', 'their', 'more', 'than', 'from', 'into', 'week', 'today', 'need', 'does', 'they', 'them', 'would', 'could'])
-  const terms = [...new Set(words.filter((w) => !stop.has(w)))].slice(0, 6)
+// Opportunities the question names that aren't in the top list (e.g. "the SBIR one").
+async function searchForQuestion(question, excludeIds, business) {
+  const terms = [...new Set((String(question || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter((w) => !STOP.has(w)))].slice(0, 6)
   if (!terms.length) return []
   const re = new RegExp(terms.map(escapeRegex).join('|'), 'i')
-  return Grant.find({
-    _id: { $nin: excludeIds },
-    $or: [{ title: re }, { agency: re }, { summary: re }],
-  }).limit(SEARCH_EXTRA).lean()
+  const exclude = new Set(excludeIds.map(String))
+  const grants = await getOpenGrants()
+  return grants
+    .filter((g) => !exclude.has(String(g._id)) && (re.test(g.title || '') || re.test(g.agency || '') || re.test(g.summary || '')))
+    .slice(0, SEARCH_EXTRA)
+    .map((g) => {
+      const fit = checkFit(g, business)
+      return { ...g, fit: fit.fits, unfitReason: fit.reason }
+    })
 }
 
-async function loadContext(question) {
-  const [pending, approved, archived] = await Promise.all([
-    Grant.find({ status: 'pending' }).lean(),
-    Grant.find({ status: 'approved' }).sort({ updatedAt: -1 }).limit(15).lean(),
-    Grant.find({ status: 'archived' }).sort({ updatedAt: -1 }).limit(10).lean(),
+async function loadContext(business, question) {
+  const [matches, decisions] = await Promise.all([
+    matchesFor(business),
+    Decision.find({ business: business._id, status: { $in: ['approved', 'archived'] } }).sort({ updatedAt: -1 }).limit(25).select('grant status requirementsChecklist').lean(),
   ])
-  pending.sort((a, b) => scoreGrant(b) - scoreGrant(a))
-  const topPending = pending.slice(0, TOP_PENDING)
-  const shownIds = [...topPending, ...approved, ...archived].map((g) => g._id)
-  const extra = await searchForQuestion(question, shownIds)
-  return { pendingCount: pending.length, topPending, approved, archived, extra }
+  const decidedGrants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) } }).select(GRANT_FIELDS).lean()
+  const byId = new Map(decidedGrants.map((g) => [String(g._id), g]))
+  const decided = decisions.map((d) => ({ grant: byId.get(String(d.grant)), decision: d })).filter((x) => x.grant)
+  const top = matches.slice(0, TOP_MATCHES)
+  const extra = await searchForQuestion(question, [...top, ...decided.map((x) => x.grant)].map((g) => g._id), business)
+  return { matchCount: matches.length, top, decided, extra }
 }
 
-// Cheap, no-AI summary for the "Today" tab and the badge on the orb.
-async function buildBriefing() {
-  const [grants, outboxDrafts] = await Promise.all([
-    Grant.find({ status: { $in: ['pending', 'approved'] } }).lean(),
-    OutboundEmail.countDocuments({ status: 'draft' }),
+// Cheap, no-AI summary for the "Today" tab and the orb's badge.
+async function buildBriefing(business) {
+  const [matches, decisions, outboxDrafts] = await Promise.all([
+    matchesFor(business),
+    Decision.find({ business: business._id, status: { $in: ['approved', 'archived'] } }).select('grant status requirementsChecklist').lean(),
+    OutboundEmail.countDocuments({ business: business._id, status: 'draft' }),
   ])
-  const dueSoon = grants
-    .map((g) => ({ g, days: g.rolling ? null : daysUntil(g.dueDate) }))
-    .filter(({ days }) => days !== null && days >= 0 && days <= 14)
+  const decidedGrants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) }, status: { $ne: 'expired' } }).select('title amountUsd dueDate rolling link').lean()
+  const byId = new Map(decidedGrants.map((g) => [String(g._id), g]))
+
+  const dueSoon = [
+    ...decisions.map((d) => ({ g: byId.get(String(d.grant)), status: d.status })),
+    ...matches.slice(0, 60).map((g) => ({ g, status: 'match' })),
+  ]
+    .filter((x) => x.g && !x.g.rolling)
+    .map((x) => ({ ...x, days: daysUntil(x.g.dueDate) }))
+    .filter((x) => x.days !== null && x.days >= 0 && x.days <= 14)
     .sort((a, b) => a.days - b.days)
-    .map(({ g, days }) => ({ id: String(g._id), title: g.title, status: g.status, days, amountUsd: g.amountUsd || null, link: g.link }))
+    .slice(0, 10)
+    .map(({ g, status, days }) => ({ id: String(g._id), title: g.title, status, days, amountUsd: g.amountUsd || null, link: g.link }))
 
-  const topMatches = grants
-    .filter((g) => g.status === 'pending')
-    .sort((a, b) => scoreGrant(b) - scoreGrant(a))
-    .slice(0, 5)
-    .map((g) => ({ id: String(g._id), title: g.title, amountUsd: g.amountUsd || null, fundingType: g.fundingType, deadline: deadlineLabel(g), link: g.link }))
-
-  const needsInput = grants
-    .filter((g) => g.status === 'approved')
-    .map((g) => ({ g, missing: (g.requirementsChecklist || []).filter((r) => r.status === 'needs_input') }))
-    .filter(({ missing }) => missing.length)
+  const needsInput = decisions
+    .filter((d) => d.status === 'approved')
+    .map((d) => ({ g: byId.get(String(d.grant)), missing: (d.requirementsChecklist || []).filter((r) => r.status === 'needs_input') }))
+    .filter((x) => x.g && x.missing.length)
     .slice(0, 8)
-    .map(({ g, missing }) => ({ id: String(g._id), title: g.title, company: g.company || null, missing: missing.map((r) => r.requirement) }))
+    .map(({ g, missing }) => ({ id: String(g._id), title: g.title, missing: missing.map((r) => r.requirement) }))
 
   return {
-    pendingCount: grants.filter((g) => g.status === 'pending').length,
+    matchCount: matches.length,
     urgentCount: dueSoon.filter((d) => d.days <= 7).length,
     outboxDrafts,
     dueSoon,
-    topMatches,
+    topMatches: matches.slice(0, 5).map((g) => ({ id: String(g._id), title: g.title, amountUsd: g.amountUsd || null, category: g.category, deadline: deadlineLabel(g), reasons: g.reasons, link: g.link })),
     needsInput,
   }
 }
 
-function systemPrompt(ctx) {
+function systemPrompt(business, ctx) {
   const today = new Date().toISOString().slice(0, 10)
-  const companies = COMPANIES.map((c) => `### ${c.name} (companyId: ${c.id})\n${c.profile}`).join('\n\n')
-  const section = (title, list) => `${title}\n${list.length ? list.map(grantLine).join('\n') : '- none'}`
+  const section = (title, rows) => `${title}\n${rows.length ? rows.join('\n') : '- none'}`
 
-  return `You are Inanna, the funding assistant inside Capital Watch, a dashboard where a small founding team reviews grants, loans, prizes, fellowships, and investor opportunities found by a weekly web scrape. Today is ${today}.
+  return `You are Inanna, the funding assistant inside Capital Watch, a tool that finds grants, loans, investors, competitions, accelerators and fellowships, and ranks them for a business. Today is ${today}. You are helping the business below.
 
-How the dashboard works: each opportunity is pending until the team approves it for one company (which drafts an application package and emails it to the team), rejects it, or archives it for later. "Fit score" is the dashboard's own ranking (demographic fit, location, amount, effort); higher is better.
+How it works: each opportunity is a "match" until the business applies (which drafts an application package), saves it for later, or dismisses it. "Fit score" is the tool's own ranking against the profile; higher is better. Opportunities marked NOT A FIT fail a hard rule from the profile.
 
-Your job: help the team decide what to pursue and get applications done. Be direct and specific. Compare opportunities, explain fit and eligibility, flag deadlines, say what is still missing for applications in progress, and draft short pieces of text when asked.
+Your job: help this business decide what to pursue and get applications done. Be direct and specific. Compare opportunities, explain fit and eligibility, flag deadlines, say what is still missing on applications in progress, and draft short pieces of text when asked. If the profile is missing something that would change the answer (location, founder backgrounds, stage), say what to add to the profile.
 
 Rules:
-- Use only the data below and the company profiles. Never invent an opportunity, amount, deadline, or requirement. If something is not in the data, say so, and suggest opening the source link to check.
+- Use only the data below. Never invent an opportunity, amount, deadline, requirement, or fact about the business. If something is not in the data, say so, and suggest opening the source link to check.
 - Refer to opportunities by their title, never by id.
-- Eligibility matters: check stated eligible groups, location, and requirements against the company profiles before recommending.
-- The fit score is a rough keyword ranking, not a verdict. Before recommending anything, read its summary and confirm one of the companies could actually be the applicant and use the money for its own work. Do not recommend opportunities meant for a different kind of organization (for example a shelter's capital campaign, a city's own program, or a specific nonprofit's fundraiser), even with a high score.
-- The scrape sometimes picks up news articles about awards already given (for example "Foundation awards $200,000 to..."), not open calls anyone can apply to. If an entry reads like that, say it is probably not open and suggest archiving or rejecting it instead of recommending it.
-- Keep answers short: a few sentences or a short list. Use plain text with simple "- " bullets; no markdown bold, no tables, no headings.
-- Never promise to do something later. If you are asked to draft something, include the draft in this same reply.
+- The fit score is a rough ranking, not a verdict. Before recommending anything, read its summary and confirm this business could actually be the applicant and use the money for its own work. Do not recommend opportunities meant for a different kind of organization.
+- The scrape sometimes picks up news about awards already given rather than open calls. If an entry reads like that, say it is probably not open and suggest dismissing it.
+- Keep answers short: a few sentences or a short list. Plain text with simple "- " bullets; no markdown bold, no tables, no headings.
+- Never promise to do something later. If asked to draft something, include the draft in this same reply.
 - Do not use em dashes.
 
-Actions: you may suggest up to 3 one-click actions the team can confirm. Types:
+Actions: you may suggest up to 3 one-click actions the member can confirm. Types:
 - "open": open the opportunity's source page.
-- "approve": approve it for a company (needs companyId); this drafts and emails an application.
+- "approve": apply to it (drafts an application package for this business).
 - "archive": save it for later.
-- "reject": remove it from the pending list.
-- "draft_email": write an email to someone outside the team (a program contact, investor, or partner) about this opportunity. Include "to" (use the opportunity's contact email when one is listed, otherwise omit it), "subject", "body", and companyId for the company sending it. Drafts go to the Outbox, where a person reviews, edits, and sends them; you never send anything. Write the full email in "body", signed by the founder named in the company profile.
-Only suggest an action when it clearly follows from the conversation, and only for ids listed below. Suggest approve/archive/reject only for pending opportunities. When asked to write an email, put the email only in a draft_email action, and in "reply" say in one sentence what you drafted; do not repeat the email text in "reply". Never put placeholders like [Contact Name] or [Contact Email] in a draft: omit "to" when no contact is listed and use a neutral greeting such as "Hello,".
+- "reject": dismiss it.
+- "draft_email": write an email to someone outside the business (a program contact, investor, or partner) about this opportunity. Include "to" (the opportunity's contact email when listed, otherwise omit it), "subject", and "body", signed by a founder named in the profile when one is given. Drafts go to the Outbox for the member to review and send.
+Only suggest an action when it clearly follows from the conversation, and only for ids listed below. Suggest approve/archive/reject only for matches (no status yet). When asked to write an email, put it only in a draft_email action, and in "reply" say in one sentence what you drafted. Never put placeholders like [Name] in a draft.
 
 Reply with ONLY valid JSON in this shape:
-{"reply": "string", "actions": [{"type": "open|approve|archive|reject|draft_email", "grantId": "string", "companyId": "string or omitted", "label": "short button text", "to": "draft_email only", "subject": "draft_email only", "body": "draft_email only"}]}
+{"reply": "string", "actions": [{"type": "open|approve|archive|reject|draft_email", "grantId": "string", "label": "short button text", "to": "draft_email only", "subject": "draft_email only", "body": "draft_email only"}]}
 
-## Companies
-${companies}
+## Business profile
+${businessProfileText(business)}
 
-## Pending opportunities (${ctx.pendingCount} total; top ${ctx.topPending.length} by fit score shown)
-${section('', ctx.topPending).trim()}
+${section(`## Top matches (${ctx.matchCount} total; best ${ctx.top.length} shown)`, ctx.top.map((g) => grantLine(g)))}
 
-${section('## Applied (approved) opportunities', ctx.approved)}
+${section('## Applied and saved', ctx.decided.map((x) => grantLine(x.grant, x.decision)))}
 
-${section('## Archived for later', ctx.archived)}
-
-${ctx.extra.length ? section('## Other opportunities matching the question', ctx.extra) : ''}`.trim()
+${ctx.extra.length ? section('## Other opportunities matching the question', ctx.extra.map((g) => grantLine(g))) : ''}`.trim()
 }
 
-// Keeps only actions that point at a real grant in a state where the action makes sense.
-function cleanActions(rawActions, grantsById) {
+const VALID_EMAIL_RE = /^[^\s@<>[\]]+@[^\s@<>[\]]+\.[^\s@<>[\]]+$/
+
+// Keeps only actions that point at a real opportunity in a state where they make sense.
+function cleanActions(rawActions, grantsById, decidedIds) {
   if (!Array.isArray(rawActions)) return []
-  const companyIds = new Set(COMPANIES.map((c) => c.id))
   const out = []
   for (const a of rawActions) {
     if (!a || !ACTION_TYPES.has(a.type)) continue
     const grant = grantsById.get(String(a.grantId))
     if (!grant) continue
-    if (['approve', 'archive', 'reject'].includes(a.type) && grant.status !== 'pending') continue
+    if (['approve', 'archive', 'reject'].includes(a.type) && decidedIds.has(String(grant._id))) continue
     if (a.type === 'draft_email' && !(String(a.subject || '').trim() && String(a.body || '').trim())) continue
-    if (a.type === 'approve' && !companyIds.has(a.companyId)) continue
     if (a.type === 'open' && !grant.link) continue
     out.push({
       type: a.type,
       grantId: String(grant._id),
       grantTitle: grant.title,
       link: grant.link || null,
-      ...(a.type === 'approve' || (a.type === 'draft_email' && companyIds.has(a.companyId)) ? { companyId: a.companyId } : {}),
       ...(a.type === 'draft_email' ? {
-        // Only a real address; a placeholder like "[Contact Email]" becomes blank for the reviewer to fill.
-        to: [a.to, grant.contactEmail].map((v) => String(v || '').trim()).find((v) => /^[^\s@<>[\]]+@[^\s@<>[\]]+\.[^\s@<>[\]]+$/.test(v)) || '',
-        subject: clip(a.subject, 200),
-        body: noEmDash(String(a.body)).slice(0, 8000),
+        // Only a real address; a placeholder becomes blank for the member to fill.
+        to: [a.to, grant.contactEmail].map((v) => String(v || '').trim()).find((v) => VALID_EMAIL_RE.test(v)) || '',
+        subject: clip(noEmDash(a.subject), 200),
+        body: noEmDash(a.body).slice(0, 8000),
       } : {}),
       label: clip(a.label || '', 40) || null,
     })
@@ -218,13 +223,12 @@ function withoutRepeatedDrafts(reply, actions) {
     }
   }
   if (cut === reply.length) return reply
-  // Drop a lead-in line like "Here's a draft for the intro email:".
   const kept = reply.slice(0, cut).replace(/\n[^\n]*:\s*$/, '').replace(/[^\n]*:\s*$/, '').trimEnd()
   return `${kept}\n\nI drafted the email below. Save it to the Outbox to review and send it.`.trim()
 }
 
 // messages: [{ role: 'user' | 'assistant', content: string }], newest last.
-async function askInanna(messages) {
+async function askInanna(business, messages) {
   const history = (Array.isArray(messages) ? messages : [])
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-MAX_HISTORY)
@@ -232,13 +236,13 @@ async function askInanna(messages) {
   const question = [...history].reverse().find((m) => m.role === 'user')?.content
   if (!question) throw Object.assign(new Error('Ask a question first.'), { status: 400 })
 
-  const ctx = await loadContext(question)
+  const ctx = await loadContext(business, question)
   const response = await aiChat.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     temperature: 0.3,
     max_tokens: 1600,
-    messages: [{ role: 'system', content: systemPrompt(ctx) }, ...history],
+    messages: [{ role: 'system', content: systemPrompt(business, ctx) }, ...history],
   }, { timeout: 45000 })
 
   let parsed
@@ -248,11 +252,11 @@ async function askInanna(messages) {
     parsed = { reply: String(response.choices?.[0]?.message?.content || '').trim(), actions: [] }
   }
 
-  const grantsById = new Map(
-    [...ctx.topPending, ...ctx.approved, ...ctx.archived, ...ctx.extra].map((g) => [String(g._id), g]),
-  )
-  const actions = cleanActions(parsed.actions, grantsById)
-  const reply = withoutRepeatedDrafts(noEmDash(String(parsed.reply || '')), actions).trim()
+  const all = [...ctx.top, ...ctx.decided.map((x) => x.grant), ...ctx.extra]
+  const grantsById = new Map(all.map((g) => [String(g._id), g]))
+  const decidedIds = new Set(ctx.decided.map((x) => String(x.grant._id)))
+  const actions = cleanActions(parsed.actions, grantsById, decidedIds)
+  const reply = withoutRepeatedDrafts(noEmDash(parsed.reply), actions).trim()
   return {
     reply: reply || "I couldn't put an answer together for that. Try asking it another way.",
     actions,

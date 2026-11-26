@@ -8,7 +8,7 @@ const { ApifyClient } = require('apify-client');
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
 const SeenPage = require('../models/CapitalWatch/capitalWatch.SeenPage');
 const SOURCES = require('../config/capitalWatchSources');
-const { isEligibleLocation } = require('../config/capitalWatchGeo');
+const { DEMOGRAPHIC_IDS, INDUSTRY_IDS, STAGE_IDS, ENTITY_TYPE_IDS } = require('../config/capitalWatchOptions');
 
 const { aiChatCheap: openai } = require('../utils/aiChat');
 
@@ -57,7 +57,17 @@ requirements: explicit eligibility criteria or submission requirements/standards
 
 contact_email: an email address written in the text for questions or applications about THIS opportunity (not a newsletter, privacy, or general support address). If none, null.
 
-target_demographics: array of founder/owner eligibility groups EXPLICITLY stated in the text, using only these values: "women", "veteran", "military", "black", "african_american", "latino", "hispanic", "asian", "minority", "lgbtq", "disabled", "rural", "youth". If the text states no specific founder demographic restriction (open to all founders), return an empty array [].
+target_demographics: array of founder/owner groups the opportunity is EXCLUSIVELY for, as explicitly stated, using only these values: "women", "veteran", "black", "latino", "asian", "native", "minority", "lgbtq", "disabled", "immigrant", "youth", "rural", "low_income". If it is open to all founders (even if it says it "encourages" some groups), return [].
+
+applicant_types: who may apply, only if explicitly stated, using only: "for_profit", "nonprofit", "sole_proprietor", "individual". If not stated, [].
+
+eligible_countries: countries applicants must be in, only if explicitly stated (full English names, e.g. "United States"). "Worldwide" if explicitly open globally. If not stated, [].
+
+industries: up to 3 industries the opportunity explicitly targets, using only: ${INDUSTRY_IDS.join(', ')}. If it is open to any industry, [].
+
+stages: business stages explicitly required, using only: ${STAGE_IDS.join(', ')}. If not stated, [].
+
+is_investment: true only if this is equity investment (angel, venture, seed fund) rather than a grant, loan, prize or program.
 
 Do not use em dashes in any text field.
 
@@ -76,15 +86,23 @@ Return EXACTLY this JSON shape and nothing else:
 "why": null,
 "requirements": null,
 "contact_email": null,
-"target_demographics": []
+"target_demographics": [],
+"applicant_types": [],
+"eligible_countries": [],
+"industries": [],
+"stages": [],
+"is_investment": false
 }`;
 
-// This team is military/veteran and African American. Skip opportunities whose stated
-// eligibility is exclusively for demographics the team doesn't qualify under. Keep
-// anything open to all founders, or that explicitly includes veteran/military/black/
-// african_american/minority among its eligible groups.
-const QUALIFYING_TAGS = ['veteran', 'military', 'black', 'african_american', 'minority'];
-const DEMOGRAPHIC_TAGS = new Set(['women', 'veteran', 'military', 'black', 'african_american', 'latino', 'hispanic', 'asian', 'minority', 'lgbtq', 'disabled', 'rural', 'youth']);
+// Everything is kept: opportunities are shared by every business on Capital Watch,
+// and whether one fits a particular business is decided at match time
+// (utils/capitalWatchMatching.js). Older synonyms are folded into the current ids.
+const DEMOGRAPHIC_ALIASES = { african_american: 'black', hispanic: 'latino', military: 'veteran', indigenous: 'native' };
+const DEMOGRAPHIC_TAGS = new Set([...DEMOGRAPHIC_IDS, 'minority']);
+const pickAllowed = (value, allowed, max = 6) => [...new Set((Array.isArray(value) ? value : [])
+  .map((v) => String(v).trim().toLowerCase()).filter((v) => allowed.includes(v)))].slice(0, max);
+const countryList = (value) => [...new Set((Array.isArray(value) ? value : [])
+  .map((v) => String(v).trim()).filter((v) => v.length >= 2 && v.length <= 60))].slice(0, 30);
 
 // Mirrors the Mongoose enum in capitalWatch.Grant.js. Anything the model returns
 // outside this list falls back to 'other' instead of failing validation.
@@ -103,7 +121,6 @@ const MAX_WAIT_MS = 45 * 60 * 1000;
 const EM_DASH_RE = new RegExp(`\\s*${String.fromCharCode(0x2014)}\\s*`, 'g');
 
 const normalizeFundingType = (t) => (ALLOWED_FUNDING_TYPES.includes(t) ? t : 'other');
-const isEligibleForTeam = (tags) => !tags.length || tags.some((tag) => QUALIFYING_TAGS.includes(tag));
 const cleanText = (v) => (typeof v === 'string' && v.trim() ? v.replace(EM_DASH_RE, ', ').trim() : undefined);
 
 // Tracking parameters are dropped, but real query parameters (e.g. ?id=123) are kept,
@@ -283,10 +300,8 @@ async function processDatasetItems(rawItems) {
       const parsed = await extractOpportunity(item);
       if (!parsed) { await remember(key, 'not_opportunity'); continue; }
 
-      const tags = (Array.isArray(parsed.target_demographics) ? parsed.target_demographics : [])
-        .map((t) => String(t).toLowerCase()).filter((t) => DEMOGRAPHIC_TAGS.has(t));
-      if (!isEligibleForTeam(tags)) { result.skippedIneligible++; await remember(key, 'ineligible'); continue; }
-      if (!isEligibleLocation(parsed)) { result.skippedLocation++; await remember(key, 'out_of_region'); continue; }
+      const tags = [...new Set((Array.isArray(parsed.target_demographics) ? parsed.target_demographics : [])
+        .map((t) => String(t).toLowerCase()).map((t) => DEMOGRAPHIC_ALIASES[t] || t).filter((t) => DEMOGRAPHIC_TAGS.has(t)))];
 
       const dueDate = parseDueDate(parsed.due_date);
       const rolling = parsed.rolling === true;
@@ -311,6 +326,11 @@ async function processDatasetItems(rawItems) {
         why: cleanText(parsed.why),
         requirements: cleanText(parsed.requirements),
         targetDemographics: tags,
+        applicantTypes: pickAllowed(parsed.applicant_types, ENTITY_TYPE_IDS),
+        eligibleCountries: countryList(parsed.eligible_countries),
+        industries: pickAllowed(parsed.industries, INDUSTRY_IDS, 3),
+        stages: pickAllowed(parsed.stages, STAGE_IDS),
+        isInvestment: parsed.is_investment === true,
         contactEmail,
         hotLead: Boolean(contactEmail),
         status: 'pending',
