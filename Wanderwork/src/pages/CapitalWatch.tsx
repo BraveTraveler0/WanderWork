@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Trash2, Plus, Triangle, Check, X, Loader2, Archive } from "lucide-react";
-
-const API_BASE =
-  import.meta.env.VITE_CAPITALWATCH_API_BASE_URL || "http://localhost:8000";
-const CAPITAL_WATCH_KEY = import.meta.env.VITE_CAPITAL_WATCH_KEY || "";
+import { Trash2, Plus, Triangle, Check, X, Loader2, Archive, Mail } from "lucide-react";
+import { api } from "./capitalWatchApi";
+import CapitalWatchInanna from "./CapitalWatchInanna";
+import CapitalWatchOutbox from "./CapitalWatchOutbox";
 
 type Company = { id: string; name: string };
 
@@ -21,19 +20,6 @@ type Grant = {
 };
 
 type Stats = { grants: number; angels: number; venture: number; loans: number };
-
-async function api(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/capitalwatch${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "x-capitalwatch-key": CAPITAL_WATCH_KEY,
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-  return res.json();
-}
 
 function formatAmount(amountUsd?: number) {
   if (!amountUsd) return "—";
@@ -82,7 +68,22 @@ export default function CapitalWatch() {
   const [hoveredStat, setHoveredStat] = useState<string | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // "outbox" shows the email review queue in place of the opportunity list.
+  const [view, setView] = useState<"opportunities" | "outbox">("opportunities");
+  const [outboxCount, setOutboxCount] = useState(0);
+  // Bumped after any change so Inanna's briefing and badge stay current.
+  const [refreshKey, setRefreshKey] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const loadOutboxCount = useCallback(() => {
+    api("/outbox?status=draft").then((d) => setOutboxCount(d.length)).catch(() => {});
+  }, []);
+  useEffect(() => { loadOutboxCount(); }, [loadOutboxCount, refreshKey]);
+  useEffect(() => {
+    const refresh = () => setRefreshKey((k) => k + 1);
+    window.addEventListener("capitalwatch:outbox-changed", refresh);
+    return () => window.removeEventListener("capitalwatch:outbox-changed", refresh);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,10 +122,12 @@ export default function CapitalWatch() {
       });
       setGrants((prev) => prev.filter((g) => g._id !== id));
       if (status === "approved") {
-        setSuccessMessage("Application drafted and emailed.");
-        setTimeout(() => setSuccessMessage(null), 2500);
+        setSuccessMessage("Application drafted and emailed. Any outreach email is in the Outbox for review.");
+        setTimeout(() => setSuccessMessage(null), 3500);
       }
       setPopupGrantId(null);
+      setRefreshKey((k) => k + 1);
+      api(`/stats`).then(setStats).catch(() => {});
     } catch (err) {
       console.error("[CapitalWatch] decision failed:", err);
       alert("Could not update grant: " + (err as Error).message);
@@ -200,21 +203,33 @@ export default function CapitalWatch() {
           </div>
           <div className="flex items-center gap-4 self-end">
             <button
-              onClick={() => setStatusFilter((s) => (s === "approved" ? "pending" : "approved"))}
+              onClick={() => setView((v) => (v === "outbox" ? "opportunities" : "outbox"))}
+              className={`relative transition-colors ${view === "outbox" ? "text-black" : "text-gray-400 hover:text-black"}`}
+              title={view === "outbox" ? "Back to opportunities" : "Outbox: emails waiting for review"}
+            >
+              <Mail size={16} strokeWidth={1.5} />
+              {outboxCount > 0 && (
+                <span className="absolute -top-2 -right-2.5 min-w-[15px] h-[15px] px-0.5 rounded-full bg-[#FACC15] text-black text-[9px] font-bold flex items-center justify-center">
+                  {outboxCount > 9 ? "9+" : outboxCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setView("opportunities"); setStatusFilter((s) => (s === "approved" ? "pending" : "approved")); }}
               className={`transition-colors ${statusFilter === "approved" ? "text-black" : "text-gray-400 hover:text-black"}`}
               title={statusFilter === "approved" ? "Back to pending" : "View applied"}
             >
               <Check size={16} strokeWidth={2} />
             </button>
             <button
-              onClick={() => setStatusFilter((s) => (s === "archived" ? "pending" : "archived"))}
+              onClick={() => { setView("opportunities"); setStatusFilter((s) => (s === "archived" ? "pending" : "archived")); }}
               className={`transition-colors ${statusFilter === "archived" ? "text-black" : "text-gray-400 hover:text-black"}`}
               title={statusFilter === "archived" ? "Back to pending" : "View archived"}
             >
               <Archive size={16} strokeWidth={1.5} />
             </button>
             <button
-              onClick={() => setStatusFilter((s) => (s === "rejected" ? "pending" : "rejected"))}
+              onClick={() => { setView("opportunities"); setStatusFilter((s) => (s === "rejected" ? "pending" : "rejected")); }}
               className={`transition-colors ${statusFilter === "rejected" ? "text-black" : "text-gray-400 hover:text-black"}`}
               title={statusFilter === "rejected" ? "Back to pending" : "View deleted"}
             >
@@ -226,6 +241,9 @@ export default function CapitalWatch() {
 
       <hr className="border-gray-200" />
 
+      {view === "outbox" ? (
+        <CapitalWatchOutbox onChange={() => setRefreshKey((k) => k + 1)} />
+      ) : (
       <div className="px-4 sm:px-8">
         <div className="hidden sm:grid grid-cols-[2fr_1.5fr_1fr_1fr_3fr] gap-4 py-4 text-gray-400 text-sm uppercase tracking-wide">
           <div>Grant Name</div>
@@ -316,6 +334,7 @@ export default function CapitalWatch() {
           </div>
         ))}
       </div>
+      )}
 
       {popupGrantId && (
         <div
@@ -361,8 +380,15 @@ export default function CapitalWatch() {
         </div>
       )}
 
+      <CapitalWatchInanna
+        refreshKey={refreshKey}
+        onApprove={(id) => setPopupGrantId(id)}
+        onDecide={(id, status) => decide(id, status)}
+        onOpenOutbox={() => setView("outbox")}
+      />
+
       {successMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-black text-white px-4 py-3 shadow-lg">
+        <div className="fixed bottom-24 right-6 z-50 flex items-center gap-2 bg-black text-white px-4 py-3 shadow-lg">
           <Check size={16} strokeWidth={2} />
           <span className="text-sm">{successMessage}</span>
         </div>
