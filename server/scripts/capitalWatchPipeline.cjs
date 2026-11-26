@@ -1,11 +1,12 @@
 // Scrapes funding-opportunity pages via the "capitalwatch" Apify actor task, extracts
-// structured grant data with OpenAI, and saves new opportunities to MongoDB.
+// structured grant data with AI, and saves new opportunities to MongoDB.
 // Run standalone: node server/scripts/capitalWatchPipeline.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const mongoose = require('mongoose');
 const { ApifyClient } = require('apify-client');
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant');
+const SeenPage = require('../models/CapitalWatch/capitalWatch.SeenPage');
 const SOURCES = require('../config/capitalWatchSources');
 const { isEligibleLocation } = require('../config/capitalWatchGeo');
 
@@ -29,9 +30,9 @@ Dates must be explicitly stated and converted to YYYY-MM-DD. If uncertain, set d
 
 rolling is true ONLY if the text explicitly says rolling, ongoing, or no deadline.
 
-link must equal the input url ONLY if a real funding opportunity exists. Otherwise null.
+is_opportunity is true ONLY if the page describes one specific funding opportunity that applicants can apply to now or in the future (a grant, loan, prize, fellowship, investment program, accelerator, etc.). It is false for news about awards already given, lists or directories of many programs, general company pages, and closed programs.
 
-If no clear funding opportunity exists, title MUST be null and link MUST be null.
+If is_opportunity is false, title MUST be null.
 
 Allowed funding_type values only:
 grant, loan, prize, contract, fellowship, stipend, scholarship, other
@@ -44,7 +45,7 @@ agency: exact organization name from the text
 
 funding_type: based only on explicit wording
 
-amount.value_usd: number only. If unclear or multiple ambiguous amounts, null
+amount.value_usd: a plain number in US dollars (no symbols, commas, or text). If unclear, not in USD, or multiple ambiguous amounts, null
 
 location: explicit geographic eligibility only
 
@@ -54,11 +55,16 @@ why: 1 to 2 sentences explaining relevance based only on stated purpose or audie
 
 requirements: explicit eligibility criteria or submission requirements/standards stated in the text (e.g. required documents, format, who may apply, how to submit). If not explicitly stated, null.
 
+contact_email: an email address written in the text for questions or applications about THIS opportunity (not a newsletter, privacy, or general support address). If none, null.
+
 target_demographics: array of founder/owner eligibility groups EXPLICITLY stated in the text, using only these values: "women", "veteran", "military", "black", "african_american", "latino", "hispanic", "asian", "minority", "lgbtq", "disabled", "rural", "youth". If the text states no specific founder demographic restriction (open to all founders), return an empty array [].
+
+Do not use em dashes in any text field.
 
 Return EXACTLY this JSON shape and nothing else:
 
 {
+"is_opportunity": false,
 "title": null,
 "agency": null,
 "funding_type": null,
@@ -66,89 +72,94 @@ Return EXACTLY this JSON shape and nothing else:
 "due_date": null,
 "rolling": false,
 "location": null,
-"link": null,
 "summary": null,
 "why": null,
 "requirements": null,
+"contact_email": null,
 "target_demographics": []
 }`;
 
 // This team is military/veteran and African American. Skip opportunities whose stated
-// eligibility is exclusively for demographics the team doesn't qualify under — keep
+// eligibility is exclusively for demographics the team doesn't qualify under. Keep
 // anything open to all founders, or that explicitly includes veteran/military/black/
 // african_american/minority among its eligible groups.
 const QUALIFYING_TAGS = ['veteran', 'military', 'black', 'african_american', 'minority'];
+const DEMOGRAPHIC_TAGS = new Set(['women', 'veteran', 'military', 'black', 'african_american', 'latino', 'hispanic', 'asian', 'minority', 'lgbtq', 'disabled', 'rural', 'youth']);
 
-// Mirrors the Mongoose enum in capitalWatch.Grant.js — anything the model returns
-// outside this list (it occasionally drifts from the prompt's allowed values)
-// falls back to 'other' instead of throwing a validation error and dropping the item.
+// Mirrors the Mongoose enum in capitalWatch.Grant.js. Anything the model returns
+// outside this list falls back to 'other' instead of failing validation.
 const ALLOWED_FUNDING_TYPES = ['grant', 'loan', 'prize', 'contract', 'fellowship', 'stipend', 'scholarship', 'other'];
 
-function normalizeFundingType(fundingType) {
-  return ALLOWED_FUNDING_TYPES.includes(fundingType) ? fundingType : 'other';
-}
+// Pages without any of these words can't be a funding opportunity, so they're skipped
+// without an AI call.
+const FUNDING_KEYWORDS_RE = /\b(grants?|funding|funded|fund|loans?|awards?|prizes?|fellowships?|scholarships?|stipends?|accelerator|incubator|investors?|investment|invest|seed|pitch|competition|challenge|apply|application|applications|rfp|solicitation|sbir|sttr)\b/i;
 
-function isEligibleForTeam(targetDemographics) {
-  if (!Array.isArray(targetDemographics) || targetDemographics.length === 0) return true;
-  return targetDemographics.some((tag) => QUALIFYING_TAGS.includes(tag));
-}
+// Scraped pages are rarely longer than this (median ~2k chars); the cap only guards
+// the AI bill against an occasional huge page.
+const MAX_TEXT_CHARS = 20000;
+const ROTATION_BATCH_SIZE = 16;
+// Apify's own run timeout is 30 minutes; stop waiting a little after that.
+const MAX_WAIT_MS = 45 * 60 * 1000;
+const EM_DASH_RE = new RegExp(`\\s*${String.fromCharCode(0x2014)}\\s*`, 'g');
 
-// gpt-4o-mini has a 128k-token context window; cap text well below that (~15k tokens)
-// so a single huge scraped page can't blow the budget alongside the system prompt.
-const MAX_TEXT_CHARS = 60000;
+const normalizeFundingType = (t) => (ALLOWED_FUNDING_TYPES.includes(t) ? t : 'other');
+const isEligibleForTeam = (tags) => !tags.length || tags.some((tag) => QUALIFYING_TAGS.includes(tag));
+const cleanText = (v) => (typeof v === 'string' && v.trim() ? v.replace(EM_DASH_RE, ', ').trim() : undefined);
 
-// Normalized forms used for duplicate detection — catches the same opportunity
-// reappearing under a slightly different URL (trailing slash, www, query string)
-// or being re-extracted with an identical title from a different page.
+// Tracking parameters are dropped, but real query parameters (e.g. ?id=123) are kept,
+// since two different opportunities can share a path.
 function normalizeUrl(url) {
   try {
     const u = new URL(url);
-    return (u.hostname.replace(/^www\./, '') + u.pathname.replace(/\/$/, '')).toLowerCase();
+    for (const k of [...u.searchParams.keys()]) {
+      if (/^(utm_|fbclid|gclid|mc_|ref$|source$)/i.test(k)) u.searchParams.delete(k);
+    }
+    u.searchParams.sort();
+    const query = u.searchParams.toString();
+    return (u.hostname.replace(/^www\./, '') + u.pathname.replace(/\/$/, '') + (query ? `?${query}` : '')).toLowerCase();
   } catch {
     return String(url || '').trim().toLowerCase();
   }
 }
 
-function normalizeTitle(title) {
-  return String(title || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// Same title from the same organization = same opportunity. Title alone isn't enough:
+// many agencies run a "Small Business Grant".
+const fingerprint = (title, agency) =>
+  `${String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${String(agency || '').trim().toLowerCase().replace(/\s+/g, ' ')}`;
+
+function parseAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
+  const n = Number(String(value ?? '').replace(/[$,\s]/g, ''));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 }
 
-async function loadExistingFingerprints() {
-  const existing = await Grant.find({}, { link: 1, title: 1 }).lean();
-  return {
-    links: new Set(existing.map((g) => normalizeUrl(g.link))),
-    titles: new Set(existing.map((g) => normalizeTitle(g.title))),
-  };
+function parseDueDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return isNaN(new Date(`${value}T00:00:00Z`).getTime()) ? undefined : value;
 }
 
-// Rotates through capitalWatchSources.js in fixed-size batches instead of crawling
-// every source every run, tracked in Mongo so it persists across deploys/restarts.
-const ROTATION_BATCH_SIZE = 16;
+const todayKey = () => new Date().toISOString().slice(0, 10);
 
-async function getRotationBatch() {
-  const col = mongoose.connection.collection('capitalwatch.state');
-  const state = await col.findOne({ _id: 'rotation' });
-  const startIndex = state?.batchIndex || 0;
-  const batch = [];
-  for (let i = 0; i < ROTATION_BATCH_SIZE; i++) {
-    batch.push(SOURCES[(startIndex + i) % SOURCES.length]);
-  }
-  const nextIndex = (startIndex + ROTATION_BATCH_SIZE) % SOURCES.length;
-  await col.updateOne(
-    { _id: 'rotation' },
-    { $set: { batchIndex: nextIndex, lastRunAt: new Date() } },
-    { upsert: true }
-  );
-  return batch;
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const IGNORED_EMAIL_RE = /^(no-?reply|donotreply|privacy|unsubscribe|webmaster|abuse|postmaster|newsletter|press|media|careers|jobs)@/i;
+
+// The model's answer is only trusted if that address really appears on the page.
+// Otherwise fall back to the one address on the page, if there is exactly one usable one.
+function pickContactEmail(modelEmail, text) {
+  const found = [...new Set((text.match(EMAIL_RE) || []).map((e) => e.toLowerCase()))]
+    .filter((e) => !IGNORED_EMAIL_RE.test(e) && !/\.(png|jpe?g|gif|svg|webp)$/i.test(e));
+  const claimed = String(modelEmail || '').trim().toLowerCase();
+  if (claimed && found.includes(claimed)) return claimed;
+  return found.length === 1 ? found[0] : undefined;
 }
 
 function normalizeItem(item) {
+  let host = '';
+  try { host = new URL(item.url).hostname.replace(/^www\./, ''); } catch { /* bad url */ }
   return {
     url: item.url || '',
     text: (item.text || '').slice(0, MAX_TEXT_CHARS),
-    title: item.title || '',
-    agency: item.source || '',
-    email: item.email || (item.emails && item.emails[0]) || '',
+    host,
   };
 }
 
@@ -156,6 +167,7 @@ async function extractOpportunity(item) {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
+    max_tokens: 900,
     messages: [
       { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
       {
@@ -166,131 +178,166 @@ async function extractOpportunity(item) {
     temperature: 0.2,
   });
 
-  const text = response.choices[0].message.content.trim();
-  const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-  const parsed = JSON.parse(json);
-
-  if (!parsed.title || !parsed.link) return null;
+  const parsed = JSON.parse(response.choices[0].message.content);
+  if (!parsed || parsed.is_opportunity === false || !parsed.title) return null;
   return parsed;
 }
 
-// Poll with plain GETs instead of the SDK's long-poll (waitForFinish=999999), which
-// has been prone to "socket hang up" over long-running crawls on this connection.
+// The run being processed is saved, so if the server restarts mid-run (a deploy
+// during the 30-minute crawl) the next attempt picks up the paid-for results instead
+// of starting and paying for a new crawl.
+const stateCol = () => mongoose.connection.collection('capitalwatch.state');
+
+async function getRotationBatch() {
+  const state = await stateCol().findOne({ _id: 'rotation' });
+  const startIndex = state?.batchIndex || 0;
+  const batch = [];
+  for (let i = 0; i < ROTATION_BATCH_SIZE; i++) batch.push(SOURCES[(startIndex + i) % SOURCES.length]);
+  await stateCol().updateOne(
+    { _id: 'rotation' },
+    { $set: { batchIndex: (startIndex + ROTATION_BATCH_SIZE) % SOURCES.length, lastRunAt: new Date() } },
+    { upsert: true },
+  );
+  return batch;
+}
+
+// Poll with plain GETs instead of the SDK's long-poll, which has been prone to
+// "socket hang up" over long-running crawls on this connection.
 async function waitForRun(client, runId) {
+  const started = Date.now();
   for (;;) {
     const run = await client.run(runId).get();
     if (run.status !== 'RUNNING' && run.status !== 'READY') return run;
+    if (Date.now() - started > MAX_WAIT_MS) throw new Error(`Apify run ${runId} still ${run.status} after 45 minutes`);
     await new Promise((r) => setTimeout(r, 15000));
   }
 }
 
 async function fetchDatasetItems(existingRunId) {
   const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
+  const saved = await stateCol().findOne({ _id: 'rotation' });
+  const resumeId = existingRunId || saved?.activeRunId;
 
   let run;
-  if (existingRunId) {
-    console.log(`[CapitalWatch] Resuming existing run ${existingRunId}...`);
-    run = await waitForRun(client, existingRunId);
+  if (resumeId) {
+    console.log(`[CapitalWatch] Resuming run ${resumeId}...`);
+    run = await waitForRun(client, resumeId);
   } else {
     const taskId = process.env.APIFY_CAPITALWATCH_TASK_ID;
-
     const batch = await getRotationBatch();
     console.log(`[CapitalWatch] Rotating to this run's ${batch.length} source(s): ${batch.join(', ')}`);
-    const task = await client.task(taskId).get();
-    task.input.startUrls = batch.map((url) => ({ url }));
-    await client.task(taskId).update({ input: task.input });
-
+    // Passed as this run's input (Apify merges it over the task's saved input) instead
+    // of rewriting the saved task, so two runs can't overwrite each other's start URLs.
     console.log('[CapitalWatch] Starting Apify actor task...');
-    // start(input, options) -- timeout/memory belong in the second (options) argument,
-    // not the first (input override). Passing them as a single object silently merged
-    // them into the run's input instead of actually capping its timeout/memory.
-    const started = await client.task(taskId).start(undefined, { timeout: 1800, memory: 4096 });
+    const started = await client.task(taskId).start({ startUrls: batch.map((url) => ({ url })) }, { timeout: 1800, memory: 4096 });
+    await stateCol().updateOne({ _id: 'rotation' }, { $set: { activeRunId: started.id } }, { upsert: true });
     run = await waitForRun(client, started.id);
   }
 
   // TIMED-OUT runs still finalize their dataset with whatever was scraped before the
-  // cutoff — worth keeping since we already paid for that compute, rather than
-  // discarding it. Only truly failed/aborted runs have nothing usable.
+  // cutoff; that compute is already paid for. Only failed/aborted runs have nothing usable.
   if (run.status !== 'SUCCEEDED' && run.status !== 'TIMED-OUT') {
+    await stateCol().updateOne({ _id: 'rotation' }, { $unset: { activeRunId: 1 } });
     throw new Error(`Apify run ended with status ${run.status}`);
   }
-  if (run.status === 'TIMED-OUT') {
-    console.log('[CapitalWatch] Run hit the timeout — using partial results scraped before the cutoff.');
-  }
+  if (run.status === 'TIMED-OUT') console.log('[CapitalWatch] Run hit the timeout; using partial results scraped before the cutoff.');
 
+  // Only the fields the pipeline reads: skipping the HTML, Markdown and metadata copies
+  // cuts the download to about a quarter.
   console.log('[CapitalWatch] Fetching dataset items...');
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  return items;
+  const items = [];
+  const dataset = client.dataset(run.defaultDatasetId);
+  for (let offset = 0; ; offset += 250) {
+    const page = await dataset.listItems({ offset, limit: 250, fields: ['url', 'text'] });
+    items.push(...page.items);
+    if (page.items.length < 250) break;
+  }
+  return { items, runId: run.id };
 }
 
 async function processDatasetItems(rawItems) {
-  const result = { scraped: rawItems.length, inserted: 0, skippedDuplicates: 0, skippedIneligible: 0, skippedLocation: 0, errors: 0, newGrants: [] };
+  const result = { scraped: rawItems.length, inserted: 0, skippedSeen: 0, skippedNoKeywords: 0, skippedDuplicates: 0, skippedIneligible: 0, skippedLocation: 0, skippedPastDue: 0, aiCalls: 0, errors: 0, newGrants: [] };
   console.log(`[CapitalWatch] Scraped ${rawItems.length} pages`);
 
-  const seen = await loadExistingFingerprints();
+  const existing = await Grant.find({}, { link: 1, title: 1, agency: 1 }).lean();
+  const links = new Set(existing.map((g) => normalizeUrl(g.link)));
+  const prints = new Set(existing.map((g) => fingerprint(g.title, g.agency)));
 
-  for (const raw of rawItems) {
-    const item = normalizeItem(raw);
-    if (!item.url) continue;
+  const items = rawItems.map(normalizeItem).filter((i) => i.url);
+  const keys = [...new Set(items.map((i) => normalizeUrl(i.url)))];
+  const seen = new Set((await SeenPage.find({ _id: { $in: keys } }, { _id: 1 }).lean()).map((s) => s._id));
+  const handled = new Set();
+  const remember = (key, outcome) => SeenPage.updateOne({ _id: key }, { $set: { outcome, checkedAt: new Date() } }, { upsert: true }).catch(() => {});
+
+  for (const item of items) {
+    const key = normalizeUrl(item.url);
+    if (handled.has(key)) continue;
+    handled.add(key);
 
     try {
-      if (seen.links.has(normalizeUrl(item.url))) { result.skippedDuplicates++; continue; }
+      if (links.has(key)) { result.skippedDuplicates++; continue; }
+      if (seen.has(key)) { result.skippedSeen++; continue; }
+      if (!FUNDING_KEYWORDS_RE.test(item.text)) { result.skippedNoKeywords++; await remember(key, 'no_keywords'); continue; }
 
+      result.aiCalls++;
       const parsed = await extractOpportunity(item);
-      if (!parsed) continue;
+      if (!parsed) { await remember(key, 'not_opportunity'); continue; }
 
-      if (!isEligibleForTeam(parsed.target_demographics)) {
-        result.skippedIneligible++;
-        continue;
-      }
+      const tags = (Array.isArray(parsed.target_demographics) ? parsed.target_demographics : [])
+        .map((t) => String(t).toLowerCase()).filter((t) => DEMOGRAPHIC_TAGS.has(t));
+      if (!isEligibleForTeam(tags)) { result.skippedIneligible++; await remember(key, 'ineligible'); continue; }
+      if (!isEligibleLocation(parsed)) { result.skippedLocation++; await remember(key, 'out_of_region'); continue; }
 
-      if (!isEligibleLocation(parsed)) {
-        result.skippedLocation++;
-        continue;
-      }
+      const dueDate = parseDueDate(parsed.due_date);
+      const rolling = parsed.rolling === true;
+      if (dueDate && !rolling && dueDate < todayKey()) { result.skippedPastDue++; await remember(key, 'past_due'); continue; }
 
-      const linkNorm = normalizeUrl(parsed.link);
-      const titleNorm = normalizeTitle(parsed.title);
-      if (seen.links.has(linkNorm) || seen.titles.has(titleNorm)) {
-        result.skippedDuplicates++;
-        continue;
-      }
+      const agency = cleanText(parsed.agency) || item.host || undefined;
+      const print = fingerprint(parsed.title, agency);
+      if (prints.has(print)) { result.skippedDuplicates++; await remember(key, 'duplicate'); continue; }
 
+      const contactEmail = pickContactEmail(parsed.contact_email, item.text);
       const grant = await Grant.create({
-        title: parsed.title,
-        agency: parsed.agency || item.agency || undefined,
+        title: cleanText(parsed.title),
+        agency,
         fundingType: normalizeFundingType(parsed.funding_type),
-        amountUsd: parsed.amount?.value_usd ?? undefined,
-        dueDate: parsed.due_date || undefined,
-        rolling: !!parsed.rolling,
-        location: parsed.location || undefined,
-        link: parsed.link,
-        summary: parsed.summary || undefined,
-        why: parsed.why || undefined,
-        requirements: parsed.requirements || undefined,
-        targetDemographics: Array.isArray(parsed.target_demographics) ? parsed.target_demographics : [],
-        contactEmail: item.email || undefined,
-        hotLead: !!item.email,
+        amountUsd: parseAmount(parsed.amount?.value_usd),
+        dueDate,
+        rolling,
+        location: cleanText(parsed.location),
+        // The page the text came from, never a link the model wrote.
+        link: item.url,
+        summary: cleanText(parsed.summary),
+        why: cleanText(parsed.why),
+        requirements: cleanText(parsed.requirements),
+        targetDemographics: tags,
+        contactEmail,
+        hotLead: Boolean(contactEmail),
         status: 'pending',
       });
 
-      seen.links.add(linkNorm);
-      seen.titles.add(titleNorm);
+      links.add(key);
+      prints.add(print);
+      await remember(key, 'inserted');
       result.inserted++;
       result.newGrants.push(grant);
     } catch (err) {
+      // Not remembered, so a page that failed (AI outage, bad JSON) is retried next time.
       console.error('[CapitalWatch] Item error:', err.message);
       result.errors++;
     }
   }
 
-  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, Duplicates skipped: ${result.skippedDuplicates}, Ineligible skipped: ${result.skippedIneligible}, Out-of-region skipped: ${result.skippedLocation}, Errors: ${result.errors}`);
+  console.log(`[CapitalWatch] Done. Inserted: ${result.inserted}, AI calls: ${result.aiCalls}, Already checked: ${result.skippedSeen}, No funding words: ${result.skippedNoKeywords}, Duplicates: ${result.skippedDuplicates}, Ineligible: ${result.skippedIneligible}, Out of region: ${result.skippedLocation}, Past due: ${result.skippedPastDue}, Errors: ${result.errors}`);
   return result;
 }
 
 async function runCapitalWatchPipeline(existingRunId) {
-  const rawItems = await fetchDatasetItems(existingRunId);
-  return processDatasetItems(rawItems);
+  const { items, runId } = await fetchDatasetItems(existingRunId);
+  const result = await processDatasetItems(items);
+  // Processed: the next import starts a fresh crawl.
+  await stateCol().updateOne({ _id: 'rotation', activeRunId: runId }, { $unset: { activeRunId: 1 } });
+  return result;
 }
 
 async function main() {
@@ -307,4 +354,4 @@ if (require.main === module) {
   main().catch(err => { console.error(err); process.exit(1); });
 }
 
-module.exports = { runCapitalWatchPipeline };
+module.exports = { runCapitalWatchPipeline, processDatasetItems, normalizeUrl, parseAmount, parseDueDate, pickContactEmail };

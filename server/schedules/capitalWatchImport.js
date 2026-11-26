@@ -9,7 +9,7 @@ const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 
-const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
+const { RECIPIENTS, hasSendGrid } = require('../config/capitalWatchTeam')
 
 // Wednesday 12am EST = 05:00 UTC
 const SCHEDULE = '0 5 * * 3'
@@ -42,13 +42,12 @@ async function runImport() {
     const result = await runCapitalWatchPipeline()
 
     if (result.inserted > 0) {
-      const apiKey = process.env.SENDGRID_API_KEY
-      if (!apiKey || apiKey === 'SG.placeholder') {
+      if (!hasSendGrid()) {
         console.log('[CapitalWatch] No SendGrid key set, skipping digest email.')
         return
       }
-      sgMail.setApiKey(apiKey)
-      const pending = await Grant.find({ status: 'pending' }).lean()
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+      const pending = await Grant.find({ status: 'pending' }).select('-applicationNarrative -outreachEmail -requirementsChecklist').lean()
       const top = rankGrants(pending, 10)
       const dashboardUrl = getCapitalWatchUrl()
       const msg = { ...topMatchesDigestEmail(top, dashboardUrl), to: RECIPIENTS }

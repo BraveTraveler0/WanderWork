@@ -6,8 +6,7 @@ const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { deadlineAlertEmail } = require('../utils/capitalWatchEmail')
 const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
-
-const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
+const { RECIPIENTS, hasSendGrid } = require('../config/capitalWatchTeam')
 
 // Daily 8am EST = 13:00 UTC
 const SCHEDULE = '0 13 * * *'
@@ -21,20 +20,30 @@ const TIERS = [
   { key: '14d', maxDays: 14 },
 ]
 
+const todayUtc = (now = new Date()) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+
 function daysUntil(dueDate) {
   const due = new Date(`${dueDate}T00:00:00Z`)
   if (isNaN(due.getTime())) return null
-  const now = new Date()
-  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  return Math.round((due - todayUtc) / 86400000)
+  return Math.round((due - todayUtc()) / 86400000)
 }
 
 let running = false
 
 function deadlineCheckDayKey(now = new Date()) {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString()
-    .slice(0, 10)
+  return todayUtc(now).toISOString().slice(0, 10)
+}
+
+// Pending opportunities whose deadline has passed can't be applied to any more, so
+// they leave the review list. Applied (approved) ones are left alone.
+async function expirePastDue() {
+  const today = deadlineCheckDayKey()
+  const result = await Grant.updateMany(
+    { status: 'pending', rolling: { $ne: true }, dueDate: { $regex: /^\d{4}-\d{2}-\d{2}$/, $lt: today } },
+    { $set: { status: 'expired' } },
+  )
+  if (result.modifiedCount) console.log(`[CapitalWatch] Expired ${result.modifiedCount} pending opportunit${result.modifiedCount === 1 ? 'y' : 'ies'} past their deadline.`)
+  return result.modifiedCount
 }
 
 async function checkDeadlines() {
@@ -53,13 +62,16 @@ async function checkDeadlines() {
     return
   }
   try {
+    await expirePastDue()
+
     const grants = await Grant.find({
       status: { $in: ['pending', 'approved'] },
       rolling: { $ne: true },
       dueDate: { $exists: true, $nin: [null, ''] },
-    })
+    }).select('title agency dueDate status link deadlineAlertsSent').lean()
 
     const dueByTier = { '3d': [], '7d': [], '14d': [] }
+    const updates = []
 
     for (const grant of grants) {
       const days = daysUntil(grant.dueDate)
@@ -73,23 +85,19 @@ async function checkDeadlines() {
       // Mark coarser tiers as sent too -- no point alerting "2 weeks left" right after
       // "3 days left" already went out for the same grant.
       TIERS.filter((t) => t.maxDays >= tier.maxDays).forEach((t) => sent.add(t.key))
-      grant.deadlineAlertsSent = [...sent]
-      await grant.save()
+      updates.push({ updateOne: { filter: { _id: grant._id }, update: { $set: { deadlineAlertsSent: [...sent] } } } })
     }
 
-    const totalDue = TIERS.reduce((n, t) => n + dueByTier[t.key].length, 0)
-    if (totalDue === 0) return
-
-    const apiKey = process.env.SENDGRID_API_KEY
-    if (!apiKey || apiKey === 'SG.placeholder') {
+    if (!updates.length) return
+    if (!hasSendGrid()) {
       console.log('[CapitalWatch] No SendGrid key set, skipping deadline alert email.')
       return
     }
-    sgMail.setApiKey(apiKey)
-    const dashboardUrl = getCapitalWatchUrl()
-    const msg = { ...deadlineAlertEmail(dueByTier, dashboardUrl), to: RECIPIENTS }
-    await sgMail.send(msg)
-    console.log(`[CapitalWatch] Deadline alert sent for ${totalDue} grant(s).`)
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+    await sgMail.send({ ...deadlineAlertEmail(dueByTier, getCapitalWatchUrl()), to: RECIPIENTS })
+    // Recorded only after the email went out, so a failed send is retried tomorrow.
+    await Grant.bulkWrite(updates)
+    console.log(`[CapitalWatch] Deadline alert sent for ${updates.length} grant(s).`)
   } catch (err) {
     console.error('[CapitalWatch] Deadline check error:', err.message)
     // Let tomorrow's run (or a manual retry) try again rather than permanently
@@ -105,4 +113,4 @@ function initCapitalWatchDeadlines() {
   cron.schedule(SCHEDULE, checkDeadlines)
 }
 
-module.exports = { initCapitalWatchDeadlines, checkDeadlines }
+module.exports = { initCapitalWatchDeadlines, checkDeadlines, expirePastDue }

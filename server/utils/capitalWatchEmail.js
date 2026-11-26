@@ -7,6 +7,13 @@ const YELLOW = '#FACC15'
 const LINE = '#e5e7eb'
 const SUBTLE = '#9ca3af'
 
+// Scraped links go into href attributes: only http(s), and escaped so a stray quote
+// in a URL can't break out of the attribute.
+function safeHref(url) {
+  const u = String(url || '').trim()
+  return /^https?:\/\//i.test(u) ? escapeHtml(u) : '#'
+}
+
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -65,7 +72,7 @@ function metaLine(g) {
 }
 
 function grantLink(g) {
-  return `${shapeDiamond('#000', 7)}<a href="${g.link}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>`
+  return `${shapeDiamond('#000', 7)}<a href="${safeHref(g.link)}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>`
 }
 
 function weeklyDigestEmail(newGrants, dashboardUrl) {
@@ -117,7 +124,7 @@ function matchCard(g, i) {
         <td align="right">${amountChip(g.amountUsd)}</td>
       </tr></table>
       <div style="margin-top:10px;">
-        <a href="${g.link}" style="font-family:${MONO};font-size:18px;font-weight:700;line-height:1.35;color:#000;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>
+        <a href="${safeHref(g.link)}" style="font-family:${MONO};font-size:18px;font-weight:700;line-height:1.35;color:#000;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a>
       </div>
       <div style="font-size:12.5px;color:#6b7280;margin-top:6px;">${escapeHtml(g.agency || '')}${g.agency && g.fundingType ? ' &middot; ' : ''}${escapeHtml(g.fundingType || '')}</div>
       ${reasons.length ? `<div style="font-size:12px;color:#6b7280;margin-top:10px;padding-top:10px;border-top:1px solid ${LINE};">${reasons.map(escapeHtml).join(' &middot; ')}</div>` : ''}
@@ -172,11 +179,11 @@ function applicationDraftEmail(grant, companyName) {
       <div><span style="color:#6b7280;">Type:</span> ${escapeHtml(grant.fundingType || 'grant')}</div>
       <div><span style="color:#6b7280;">Amount:</span> ${grant.amountUsd ? '$' + grant.amountUsd : 'N/A'}</div>
       <div><span style="color:#6b7280;">Deadline:</span> ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}</div>
-      <div><span style="color:#6b7280;">Link:</span> <a href="${grant.link}" style="color:#000;border-bottom:2px solid ${YELLOW};text-decoration:none;">${escapeHtml(grant.link || 'N/A')}</a></div>
+      <div><span style="color:#6b7280;">Link:</span> <a href="${safeHref(grant.link)}" style="color:#000;border-bottom:2px solid ${YELLOW};text-decoration:none;">${escapeHtml(grant.link || 'N/A')}</a></div>
       <div><span style="color:#6b7280;">Requirements (as stated):</span> ${escapeHtml(grant.requirements || 'Not stated')}</div>
     </div>
 
-    ${sectionTitle(needsInput.length ? `${needsInput.length} Item${needsInput.length === 1 ? '' : 's'} Need Your Input` : 'Everything Drafted — Ready to Review')}
+    ${sectionTitle(needsInput.length ? `${needsInput.length} Item${needsInput.length === 1 ? '' : 's'} Need Your Input` : 'Everything Drafted, Ready to Review')}
     <div style="background:#fffbeb;border-left:3px solid ${YELLOW};padding:14px 16px;">
       ${checklistRows || '<div style="color:#6b7280;font-size:13px;">No requirements checklist generated.</div>'}
     </div>
@@ -201,7 +208,7 @@ function applicationDraftEmail(grant, companyName) {
 
   return {
     from: FROM_EMAIL,
-    subject: `Application Draft (${companyName}): ${grant.agency || grant.title}${needsInput.length ? ` — ${needsInput.length} item(s) need input` : ''}`,
+    subject: `Application Draft (${companyName}): ${grant.agency || grant.title}${needsInput.length ? `: ${needsInput.length} item${needsInput.length === 1 ? '' : 's'} need input` : ''}`,
     html,
   }
 }
@@ -221,7 +228,7 @@ function deadlineAlertEmail(dueByTier, dashboardUrl) {
     .map((s) => {
       const rows = dueByTier[s.key].map((g, i) => `
         <div style="padding:12px 0;${i < dueByTier[s.key].length - 1 ? `border-bottom:1px solid ${LINE};` : ''}">
-          <div>${shapeDiamond('#000', 6)}<a href="${g.link}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a></div>
+          <div>${shapeDiamond('#000', 6)}<a href="${safeHref(g.link)}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a></div>
           <div style="font-size:12px;color:#6b7280;margin-top:4px;padding-left:14px;">${escapeHtml(g.agency || '')} &middot; Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied/in progress' : 'Still pending review'}</div>
         </div>`).join('')
       return `

@@ -259,4 +259,4 @@ async function askInanna(messages) {
   }
 }
 
-module.exports = { askInanna, buildBriefing, daysUntil, cleanActions, withoutRepeatedDrafts }
+module.exports = { askInanna, buildBriefing, daysUntil, cleanActions, withoutRepeatedDrafts, noEmDash }

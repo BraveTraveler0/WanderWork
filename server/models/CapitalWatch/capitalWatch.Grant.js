@@ -27,9 +27,11 @@ const capitalWatchGrantSchema = new mongoose.Schema({
 
   // 'archived' = looks good for later, not a fit right now -- pulled out of the main
   // pending list into its own view instead of being approved or rejected.
+  // 'expired' = the deadline passed while it was still pending (set by the daily
+  // deadline job), so it stops cluttering the review list.
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected', 'archived'],
+    enum: ['pending', 'approved', 'rejected', 'archived', 'expired'],
     default: 'pending',
     index: true,
   },

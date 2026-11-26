@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash2, Plus, Triangle, Check, X, Loader2, Archive, Mail } from "lucide-react";
-import { api } from "./capitalWatchApi";
+import { api, getKey, setKey } from "./capitalWatchApi";
 import CapitalWatchInanna from "./CapitalWatchInanna";
 import CapitalWatchOutbox from "./CapitalWatchOutbox";
 
@@ -16,18 +16,40 @@ type Grant = {
   summary?: string;
   requirements?: string;
   targetDemographics?: string[];
-  status: "pending" | "approved" | "rejected" | "archived";
+  status: "pending" | "approved" | "rejected" | "archived" | "expired";
+  dueDate?: string;
+  rolling?: boolean;
+  contactEmail?: string;
 };
+
+// Days left, same UTC day counting as the server's deadline alerts.
+function daysLeft(dueDate?: string) {
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null;
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((Date.parse(`${dueDate}T00:00:00Z`) - today) / 86400000);
+}
+
+function DeadlineLabel({ grant }: { grant: Grant }) {
+  if (grant.rolling) return <div className="text-xs text-gray-400 mt-1">Rolling</div>;
+  const days = daysLeft(grant.dueDate);
+  if (days === null) return null;
+  const tone = days < 0 ? "text-gray-400 line-through" : days <= 3 ? "text-red-600 font-bold" : days <= 14 ? "text-black font-bold" : "text-gray-500";
+  const text = days < 0 ? `Closed ${grant.dueDate}` : days === 0 ? "Due today" : `Due ${grant.dueDate} (${days}d)`;
+  return <div className={`text-xs mt-1 ${tone}`}>{text}</div>;
+}
 
 type Stats = { grants: number; angels: number; venture: number; loans: number };
 
+const EMPTY = "n/a";
+
 function formatAmount(amountUsd?: number) {
-  if (!amountUsd) return "—";
+  if (!amountUsd) return EMPTY;
   return `$${amountUsd.toLocaleString()}`;
 }
 
 function websiteLabel(link?: string) {
-  if (!link) return "—";
+  if (!link) return EMPTY;
   try {
     return new URL(link).hostname.replace(/^www\./, "");
   } catch {
@@ -56,7 +78,99 @@ function CornerMark({ className = "" }: { className?: string }) {
   return <Plus size={14} strokeWidth={1.5} className={className} />;
 }
 
+function Header({ onOutbox, outboxCount, outboxActive }: { onOutbox?: () => void; outboxCount?: number; outboxActive?: boolean }) {
+  return (
+    <div className="relative bg-[#FACC15] px-4 sm:px-8 py-6 overflow-hidden flex items-center justify-between gap-4">
+      <a href="/" className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2 w-fit transition-opacity hover:opacity-70">
+        <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
+        Capital Watch /
+      </a>
+      {onOutbox ? (
+        <button
+          onClick={onOutbox}
+          className={`relative flex items-center gap-2 border border-black px-3 py-1.5 text-sm transition-colors ${outboxActive ? "bg-black text-white" : "hover:bg-black hover:text-white"}`}
+          title={outboxActive ? "Back to opportunities" : "Emails waiting for review"}
+        >
+          <Mail size={15} strokeWidth={1.5} />
+          Outbox
+          {!!outboxCount && (
+            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${outboxActive ? "bg-[#FACC15] text-black" : "bg-black text-white"}`}>
+              {outboxCount > 9 ? "9+" : outboxCount}
+            </span>
+          )}
+        </button>
+      ) : (
+        <CornerMark className="opacity-50" />
+      )}
+    </div>
+  );
+}
+
+// Asks for the team's access key once per browser. The key is checked against the
+// server before it's saved, so a typo shows an error instead of an empty dashboard.
+function KeyGate({ onUnlock }: { onUnlock: () => void }) {
+  const [value, setValue] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const key = value.trim();
+    if (!key) return;
+    setChecking(true);
+    setError(null);
+    try {
+      await api("/companies", {}, key);
+      setKey(key);
+      onUnlock();
+    } catch (err) {
+      setError((err as Error).message === "Unauthorized" ? "That key didn't work." : (err as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-white font-mono">
+      <Header />
+      <form onSubmit={submit} className="max-w-sm mx-auto px-4 py-16">
+        <label htmlFor="cw-key" className="block text-lg mb-2">Team access key</label>
+        <p className="text-sm text-gray-500 mb-4">Enter it once on this device. It stays in this browser only.</p>
+        <input id="cw-key" type="password" value={value} onChange={(e) => setValue(e.target.value)} autoFocus autoComplete="current-password"
+          className="w-full border border-gray-300 px-4 py-2 outline-none focus:border-black" />
+        {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+        <button type="submit" disabled={checking || !value.trim()}
+          className="mt-4 w-full bg-black text-white px-6 py-2 flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50">
+          {checking && <Loader2 size={14} className="animate-spin" />} Open dashboard
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// This file is kept identical in the Wander repo (Wanderwork/) and the AonCreative repo,
+// which serves it live at aoncreative.io/capitalwatch. Change both together.
 export default function CapitalWatch() {
+  const [unlocked, setUnlocked] = useState(() => Boolean(getKey()));
+  // Internal tool on a public site: keep it out of search results.
+  useEffect(() => {
+    const tag = document.createElement("meta");
+    tag.name = "robots";
+    tag.content = "noindex, nofollow";
+    document.head.appendChild(tag);
+    const prevTitle = document.title;
+    document.title = "Capital Watch";
+    return () => { tag.remove(); document.title = prevTitle; };
+  }, []);
+  useEffect(() => {
+    const lock = () => setUnlocked(false);
+    window.addEventListener("capitalwatch:locked", lock);
+    return () => window.removeEventListener("capitalwatch:locked", lock);
+  }, []);
+  return unlocked ? <Dashboard /> : <KeyGate onUnlock={() => setUnlocked(true)} />;
+}
+
+function Dashboard() {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [stats, setStats] = useState<Stats>({ grants: 0, angels: 0, venture: 0, loans: 0 });
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -74,11 +188,15 @@ export default function CapitalWatch() {
   // Bumped after any change so Inanna's briefing and badge stay current.
   const [refreshKey, setRefreshKey] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
+  // Typing waits for a short pause before searching, instead of one request per key.
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+  // Ignores a slow response that arrives after a newer one.
+  const loadSeq = useRef(0);
 
-  const loadOutboxCount = useCallback(() => {
-    api("/outbox?status=draft").then((d) => setOutboxCount(d.length)).catch(() => {});
-  }, []);
-  useEffect(() => { loadOutboxCount(); }, [loadOutboxCount, refreshKey]);
   useEffect(() => {
     const refresh = () => setRefreshKey((k) => k + 1);
     window.addEventListener("capitalwatch:outbox-changed", refresh);
@@ -86,34 +204,37 @@ export default function CapitalWatch() {
   }, []);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({ status: statusFilter });
-      if (search.trim()) params.set("q", search.trim());
+      if (query) params.set("q", query);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
-      const [grantsData, statsData] = await Promise.all([
-        api(`/grants?${params.toString()}`),
-        api(`/stats`),
-      ]);
-      setGrants(grantsData);
-      setStats(statsData);
+      const data = await api(`/grants?${params.toString()}`);
+      if (seq === loadSeq.current) setGrants(data);
     } catch (err) {
       console.error("[CapitalWatch] load failed:", err);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [search, statusFilter, categoryFilter]);
+  }, [query, statusFilter, categoryFilter]);
+
+  // Counts only change when data changes, not when a filter is clicked.
+  const loadStats = useCallback(() => {
+    api(`/stats`).then(setStats).catch((err) => console.error("[CapitalWatch] stats failed:", err));
+  }, []);
 
   useEffect(() => {
     api("/companies").then(setCompanies).catch(console.error);
-  }, []);
+    loadStats();
+  }, [loadStats]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   async function decide(id: string, status: "approved" | "rejected" | "archived", companyId?: string) {
-    if (decidingId) return; // a request is already in flight — ignore repeat clicks
+    if (decidingId) return; // a request is already in flight, ignore repeat clicks
     setDecidingId(id);
     try {
       await api(`/grants/${id}`, {
@@ -122,12 +243,12 @@ export default function CapitalWatch() {
       });
       setGrants((prev) => prev.filter((g) => g._id !== id));
       if (status === "approved") {
-        setSuccessMessage("Application drafted and emailed. Any outreach email is in the Outbox for review.");
-        setTimeout(() => setSuccessMessage(null), 3500);
+        setSuccessMessage("Application drafted and emailed to the team. The outreach email is in the Outbox for review.");
+        setTimeout(() => setSuccessMessage(null), 4000);
       }
       setPopupGrantId(null);
       setRefreshKey((k) => k + 1);
-      api(`/stats`).then(setStats).catch(() => {});
+      loadStats();
     } catch (err) {
       console.error("[CapitalWatch] decision failed:", err);
       alert("Could not update grant: " + (err as Error).message);
@@ -138,13 +259,11 @@ export default function CapitalWatch() {
 
   return (
     <div className="min-h-screen bg-white font-mono">
-      <div className="relative bg-[#FACC15] px-4 sm:px-8 py-6 overflow-hidden">
-        <a href="https://wanderwork.io" className="text-2xl sm:text-3xl tracking-tight flex items-center gap-2 w-fit transition-opacity hover:opacity-70">
-          <Triangle size={16} strokeWidth={1.5} className="opacity-60" />
-          Capital Watch /
-        </a>
-        <CornerMark className="absolute top-4 right-6 opacity-50" />
-      </div>
+      <Header
+        onOutbox={() => setView((v) => (v === "outbox" ? "opportunities" : "outbox"))}
+        outboxCount={outboxCount}
+        outboxActive={view === "outbox"}
+      />
 
       <div className="relative flex flex-col lg:flex-row items-stretch lg:items-end justify-between px-4 sm:px-8 py-6 sm:py-8 gap-6 sm:gap-8 overflow-hidden">
         <GeometricBackdrop />
@@ -187,33 +306,25 @@ export default function CapitalWatch() {
         )}
 
         <div ref={searchRef} className="relative z-10 flex flex-col items-stretch lg:items-end gap-2 w-full lg:w-auto">
-          <div className="flex w-full lg:w-auto">
+          <form
+            className="flex w-full lg:w-auto"
+            onSubmit={(e) => { e.preventDefault(); setView("opportunities"); if (search.trim() === query) load(); else setQuery(search.trim()); }}
+          >
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
+              aria-label="Search opportunities"
               className="border border-gray-300 px-4 py-2 flex-1 lg:w-64 outline-none transition-colors focus:border-black"
             />
             <button
-              onClick={load}
+              type="submit"
               className="bg-black text-white px-6 py-2 transition-colors hover:bg-gray-800"
             >
               Go
             </button>
-          </div>
+          </form>
           <div className="flex items-center gap-4 self-end">
-            <button
-              onClick={() => setView((v) => (v === "outbox" ? "opportunities" : "outbox"))}
-              className={`relative transition-colors ${view === "outbox" ? "text-black" : "text-gray-400 hover:text-black"}`}
-              title={view === "outbox" ? "Back to opportunities" : "Outbox: emails waiting for review"}
-            >
-              <Mail size={16} strokeWidth={1.5} />
-              {outboxCount > 0 && (
-                <span className="absolute -top-2 -right-2.5 min-w-[15px] h-[15px] px-0.5 rounded-full bg-[#FACC15] text-black text-[9px] font-bold flex items-center justify-center">
-                  {outboxCount > 9 ? "9+" : outboxCount}
-                </span>
-              )}
-            </button>
             <button
               onClick={() => { setView("opportunities"); setStatusFilter((s) => (s === "approved" ? "pending" : "approved")); }}
               className={`transition-colors ${statusFilter === "approved" ? "text-black" : "text-gray-400 hover:text-black"}`}
@@ -283,10 +394,11 @@ export default function CapitalWatch() {
               <div>
                 <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Amount</span>
                 {formatAmount(grant.amountUsd)}
+                <DeadlineLabel grant={grant} />
               </div>
               <div>
                 <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Type</span>
-                {grant.fundingType || "—"}
+                {grant.fundingType || EMPTY}
                 {!!grant.targetDemographics?.length && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {grant.targetDemographics.map((tag) => (
@@ -302,7 +414,7 @@ export default function CapitalWatch() {
               </div>
               <div className="text-sm text-gray-500">
                 <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Description</span>
-                {grant.summary || "—"}
+                {grant.summary || EMPTY}
               </div>
             </div>
 
@@ -382,6 +494,7 @@ export default function CapitalWatch() {
 
       <CapitalWatchInanna
         refreshKey={refreshKey}
+        onBriefing={(b) => setOutboxCount(b.outboxDrafts)}
         onApprove={(id) => setPopupGrantId(id)}
         onDecide={(id, status) => decide(id, status)}
         onOpenOutbox={() => setView("outbox")}

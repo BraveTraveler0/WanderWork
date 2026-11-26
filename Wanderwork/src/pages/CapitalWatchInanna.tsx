@@ -143,6 +143,8 @@ function OrbCanvas({ level = 0.2, size = 48 }: { level?: number; size?: number }
       context.globalCompositeOperation = "lighter";
       context.drawImage(offscreen, 0, 0, canvas.width, canvas.height, 0, 0, width, height);
       context.globalCompositeOperation = "source-over";
+      // Reduced motion: one still frame, then stop drawing entirely.
+      if (reduceMotion) cancelAnimationFrame(frame);
     };
     frame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frame);
@@ -179,13 +181,14 @@ const ACTION_TEXT: Record<InannaAction["type"], string> = {
 };
 
 type Props = {
+  onBriefing?: (briefing: Briefing) => void;
   onApprove: (grantId: string) => void;
   onDecide: (grantId: string, status: "rejected" | "archived") => Promise<void>;
   onOpenOutbox: () => void;
   refreshKey: number;
 };
 
-export default function CapitalWatchInanna({ onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
+export default function CapitalWatchInanna({ onBriefing, onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"chat" | "today">("chat");
   const [turns, setTurns] = useState<Turn[]>(loadHistory);
@@ -196,8 +199,13 @@ export default function CapitalWatchInanna({ onApprove, onDecide, onOpenOutbox, 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // The page's Outbox badge reads from this too, so there's one request, not two.
+  const onBriefingRef = useRef(onBriefing);
+  onBriefingRef.current = onBriefing;
   const loadBriefing = useCallback(() => {
-    api("/inanna/briefing").then(setBriefing).catch((err) => console.error("[Inanna] briefing failed:", err));
+    api("/inanna/briefing")
+      .then((b: Briefing) => { setBriefing(b); onBriefingRef.current?.(b); })
+      .catch((err) => console.error("[Inanna] briefing failed:", err));
   }, []);
   useEffect(() => { loadBriefing(); }, [loadBriefing, refreshKey]);
   useEffect(() => { saveHistory(turns); }, [turns]);
