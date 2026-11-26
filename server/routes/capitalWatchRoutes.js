@@ -2,7 +2,8 @@ const express = require('express')
 const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { getCompanies, getCompanyProfile } = require('../config/capitalWatchCompanies')
-const { applicationDraftEmail } = require('../utils/capitalWatchEmail')
+const { applicationDraftEmail, FROM_EMAIL } = require('../utils/capitalWatchEmail')
+const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
 const { scoreGrant } = require('../utils/capitalWatchScoring')
 
 const router = express.Router()
@@ -102,6 +103,7 @@ CRITICAL — requirements handling:
 
 Return ONLY valid JSON with this exact shape, no markdown, no extra text:
 {
+  "outreach_subject": "string (subject line for outreach_email)",
   "outreach_email": "string",
   "application_narrative": "string",
   "requirements_checklist": [ { "requirement": "string", "status": "drafted" | "needs_input" | "not_applicable", "detail": "string" } ]
@@ -135,6 +137,123 @@ Stated submission requirements/standards (break these into the checklist and fol
   return JSON.parse(response.choices[0].message.content)
 }
 
+// ─── Inanna (assistant orb on the dashboard) ─────────────────────────────────
+
+const { askInanna, buildBriefing } = require('../utils/capitalWatchInanna')
+
+router.get('/inanna/briefing', async (req, res) => {
+  try {
+    res.json(await buildBriefing())
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+router.post('/inanna/ask', async (req, res) => {
+  try {
+    res.json(await askInanna(req.body?.messages))
+  } catch (err) {
+    console.error('[CapitalWatch] Inanna ask failed:', err.message)
+    res.status(err.status || 500).json({ message: err.status ? err.message : 'Inanna could not answer right now. Try again in a moment.' })
+  }
+})
+
+// ─── Outbox: outgoing emails wait here for a person to review and send ──────
+
+const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/
+const OUTBOX_FIELDS = ['to', 'subject', 'body']
+
+router.get('/outbox', async (req, res) => {
+  try {
+    const status = ['draft', 'sent', 'discarded'].includes(req.query.status) ? req.query.status : 'draft'
+    res.json(await OutboundEmail.find({ status }).sort({ updatedAt: -1 }).limit(100).lean())
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// Saves a new draft (from an Inanna suggestion or written by hand). Never sends.
+router.post('/outbox', async (req, res) => {
+  try {
+    const { grantId, companyId, to, subject, body, source } = req.body || {}
+    const grant = grantId ? await Grant.findById(grantId).lean().catch(() => null) : null
+    const email = await OutboundEmail.create({
+      grant: grant?._id,
+      grantTitle: grant?.title,
+      company: getCompanyProfile(companyId)?.id || grant?.company,
+      to: String(to || grant?.contactEmail || '').trim(),
+      subject: String(subject || '').trim(),
+      body: String(body || ''),
+      source: source === 'inanna' ? 'inanna' : 'manual',
+    })
+    res.status(201).json(email)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+router.patch('/outbox/:id', async (req, res) => {
+  try {
+    const email = await OutboundEmail.findById(req.params.id)
+    if (!email) return res.status(404).json({ message: 'Draft not found' })
+    if (email.status !== 'draft') return res.status(409).json({ message: `This email is already ${email.status}.` })
+    if (req.body?.status === 'discarded') email.status = 'discarded'
+    for (const f of OUTBOX_FIELDS) if (typeof req.body?.[f] === 'string') email[f] = req.body[f]
+    await email.save()
+    res.json(email)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+// The only place an outside email is sent: a person clicked Send on a reviewed draft.
+// The team gets a blind copy, and replies go to the founder, not the no-reply sender.
+router.post('/outbox/:id/send', async (req, res) => {
+  try {
+    const apiKey = process.env.SENDGRID_API_KEY
+    if (!apiKey || apiKey === 'SG.placeholder') return res.status(503).json({ message: 'Email sending is not configured on this server.' })
+
+    // Claim the draft atomically so a double click cannot send it twice.
+    const email = await OutboundEmail.findOneAndUpdate(
+      { _id: req.params.id, status: 'draft' },
+      { $set: { status: 'sent', sentAt: new Date() }, $unset: { sendError: 1 } },
+      { new: true },
+    )
+    if (!email) return res.status(409).json({ message: 'This draft was already sent or discarded.' })
+
+    const to = email.to.trim()
+    const problem = !EMAIL_RE.test(to) ? 'Add a valid recipient address before sending.'
+      : !email.subject.trim() ? 'Add a subject before sending.'
+      : !email.body.trim() ? 'The email body is empty.'
+      : null
+    if (problem) {
+      await OutboundEmail.updateOne({ _id: email._id }, { $set: { status: 'draft' }, $unset: { sentAt: 1 } })
+      return res.status(400).json({ message: problem })
+    }
+
+    sgMail.setApiKey(apiKey)
+    const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    try {
+      await sgMail.send({
+        from: FROM_EMAIL,
+        to,
+        bcc: RECIPIENTS.filter((r) => r.toLowerCase() !== to.toLowerCase()),
+        replyTo: RECIPIENTS[0],
+        subject: email.subject.trim(),
+        text: email.body,
+        html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escape(email.body)}</div>`,
+      })
+    } catch (err) {
+      const message = err.response?.body?.errors?.[0]?.message || err.message
+      await OutboundEmail.updateOne({ _id: email._id }, { $set: { status: 'draft', sendError: message }, $unset: { sentAt: 1 } })
+      return res.status(502).json({ message: `Send failed: ${message}` })
+    }
+    res.json(email)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 router.patch('/grants/:id', async (req, res) => {
   try {
     const { status, companyId } = req.body
@@ -162,6 +281,20 @@ router.patch('/grants/:id', async (req, res) => {
     grant.applicationNarrative = draft.application_narrative || ''
     grant.requirementsChecklist = Array.isArray(draft.requirements_checklist) ? draft.requirements_checklist : []
     await grant.save()
+
+    // When the opportunity has a contact address, the outreach email waits in the
+    // Outbox for someone to review and send. It is never sent from here.
+    if (grant.contactEmail && grant.outreachEmail) {
+      await OutboundEmail.create({
+        grant: grant._id,
+        grantTitle: grant.title,
+        company: company.id,
+        to: grant.contactEmail,
+        subject: String(draft.outreach_subject || '').trim() || `${company.name}: ${grant.title}`,
+        body: grant.outreachEmail,
+        source: 'approval',
+      }).catch((err) => console.error('[CapitalWatch] Outbox draft failed:', err.message))
+    }
 
     const apiKey = process.env.SENDGRID_API_KEY
     if (apiKey && apiKey !== 'SG.placeholder') {

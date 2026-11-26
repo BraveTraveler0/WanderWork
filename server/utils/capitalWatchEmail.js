@@ -244,4 +244,4 @@ function deadlineAlertEmail(dueByTier, dashboardUrl) {
   }
 }
 
-module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail }
+module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail, FROM_EMAIL }
