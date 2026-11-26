@@ -4,7 +4,7 @@ const cron = require('node-cron')
 const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { deadlineAlertEmail } = require('../utils/capitalWatchEmail')
-const { getPublicAppUrl } = require('../utils/publicUrls')
+const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 
 const RECIPIENTS = ['darrienccarter@gmail.com', 'Mercedes.anthony20@gmail.com', 'dsdavisjr3@gmail.com']
@@ -86,7 +86,7 @@ async function checkDeadlines() {
       return
     }
     sgMail.setApiKey(apiKey)
-    const dashboardUrl = `${getPublicAppUrl()}/?capitalwatch=true`
+    const dashboardUrl = getCapitalWatchUrl()
     const msg = { ...deadlineAlertEmail(dueByTier, dashboardUrl), to: RECIPIENTS }
     await sgMail.send(msg)
     console.log(`[CapitalWatch] Deadline alert sent for ${totalDue} grant(s).`)

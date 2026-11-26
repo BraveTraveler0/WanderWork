@@ -5,7 +5,7 @@ const sgMail = require('@sendgrid/mail')
 const { runCapitalWatchPipeline } = require('../scripts/capitalWatchPipeline.cjs')
 const { topMatchesDigestEmail } = require('../utils/capitalWatchEmail')
 const { rankGrants } = require('../utils/capitalWatchScoring')
-const { getPublicAppUrl } = require('../utils/publicUrls')
+const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 
@@ -50,7 +50,7 @@ async function runImport() {
       sgMail.setApiKey(apiKey)
       const pending = await Grant.find({ status: 'pending' }).lean()
       const top = rankGrants(pending, 10)
-      const dashboardUrl = `${getPublicAppUrl()}/?capitalwatch=true`
+      const dashboardUrl = getCapitalWatchUrl()
       const msg = { ...topMatchesDigestEmail(top, dashboardUrl), to: RECIPIENTS }
       await sgMail.send(msg)
       console.log('[CapitalWatch] Top-matches digest sent to', RECIPIENTS.join(', '))
