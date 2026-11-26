@@ -46,14 +46,18 @@ function header() {
     </div>`
 }
 
-function footer(dashboardUrl, label) {
+function footer(dashboardUrl, label, unsubscribeUrl) {
   const cta = dashboardUrl
-    ? `<div style="padding:24px 0 4px;"><a href="${dashboardUrl}" style="display:inline-block;background:${YELLOW};border:1px solid #000;color:#000;padding:11px 20px;text-decoration:none;font-weight:700;font-family:${MONO};font-size:13px;">${label || 'Review on the dashboard'} &rarr;</a></div>`
+    ? `<div style="padding:24px 0 4px;"><a href="${safeHref(dashboardUrl)}" style="display:inline-block;background:${YELLOW};border:1px solid #000;color:#000;padding:11px 20px;text-decoration:none;font-weight:700;font-family:${MONO};font-size:13px;">${label || 'Review on the dashboard'} &rarr;</a></div>`
+    : ''
+  const unsub = unsubscribeUrl
+    ? `<div style="margin-top:8px;text-transform:none;letter-spacing:0;">You get this because you have a Capital Watch account. <a href="${safeHref(unsubscribeUrl)}" style="color:${SUBTLE};">Stop these emails</a></div>`
     : ''
   return `
     ${cta}
     <div style="margin-top:22px;padding-top:14px;border-top:1px solid ${LINE};font-family:${MONO};font-size:11px;color:${SUBTLE};text-transform:uppercase;letter-spacing:0.4px;">
-      ${shapeTriangle('#d1d5db', 7)}<span style="margin-left:6px;">Capital Watch &middot; Wanderwork</span>
+      ${shapeTriangle('#d1d5db', 7)}<span style="margin-left:6px;">Capital Watch</span>
+      ${unsub}
     </div>`
 }
 
@@ -116,7 +120,8 @@ function amountChip(amountUsd) {
 }
 
 function matchCard(g, i) {
-  const reasons = matchReasons(g)
+  // Per-business reasons from the matcher when present; the team's original rules otherwise.
+  const reasons = Array.isArray(g.reasons) ? g.reasons : matchReasons(g)
   return `
     <div style="border:1px solid #000;padding:18px;margin-bottom:14px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -216,7 +221,36 @@ function applicationDraftEmail(grant, companyName) {
 // dueByTier: { '3d': [grant...], '7d': [...], '14d': [...] } -- keys match the tier
 // keys used by the deadline-check cron in server/schedules/capitalWatchDeadlines.js.
 // Shape per tier maps to urgency: triangle (warning) > diamond (mid) > rectangle (low).
-function deadlineAlertEmail(dueByTier, dashboardUrl) {
+// The one-time sign-in link. Also the welcome email for a new account.
+function signInEmail(link, { isNew = false } = {}) {
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 12px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">${isNew ? 'Welcome to Capital Watch' : 'Sign in to Capital Watch'}</span></h1>
+    <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 6px;">${isNew
+      ? 'Capital Watch finds grants, loans, investors and competitions, and ranks them for your business. Click below to sign in, then describe your business so we can match you.'
+      : 'Click below to sign in. The link works once and expires in 20 minutes.'}</p>
+    ${footer(link, 'Sign in')}
+    <p style="font-size:12px;color:${SUBTLE};margin:16px 0 0;">If you didn't ask for this, you can ignore it.</p>
+  `)
+  return { from: FROM_EMAIL, subject: isNew ? 'Welcome to Capital Watch: sign in' : 'Your Capital Watch sign-in link', html }
+}
+
+// Weekly: the best new matches for each of a member's businesses.
+// sections: [{ businessName, matches: [grant with reasons] }]
+function memberDigestEmail(sections, dashboardUrl, unsubscribeUrl) {
+  const total = sections.reduce((n, s) => n + s.matches.length, 0)
+  const body = sections.map((s) => `
+    ${sections.length > 1 ? `<h2 style="font-family:${MONO};font-size:14px;font-weight:700;color:#000;border-bottom:2px solid #000;padding-bottom:8px;margin:24px 0 14px;">For ${escapeHtml(s.businessName)}</h2>` : ''}
+    ${s.matches.map((g, i) => matchCard(g, i)).join('')}`).join('')
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 8px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">${total} new match${total === 1 ? '' : 'es'} this week</span></h1>
+    <p style="color:#6b7280;font-size:13px;margin:0 0 18px;">Ranked against your business profile. Edit your profile on the dashboard to change what you see.</p>
+    ${body}
+    ${footer(dashboardUrl, 'See all matches', unsubscribeUrl)}
+  `)
+  return { from: FROM_EMAIL, subject: `Capital Watch: ${total} new funding match${total === 1 ? '' : 'es'} for you`, html }
+}
+
+function deadlineAlertEmail(dueByTier, dashboardUrl, unsubscribeUrl) {
   const sections = [
     { key: '3d', label: 'Final days, apply now', color: '#dc2626', shape: (c) => shapeTriangle(c, 12) },
     { key: '7d', label: '1 week left', color: '#ea580c', shape: (c) => shapeDiamond(c, 9) },
@@ -229,7 +263,7 @@ function deadlineAlertEmail(dueByTier, dashboardUrl) {
       const rows = dueByTier[s.key].map((g, i) => `
         <div style="padding:12px 0;${i < dueByTier[s.key].length - 1 ? `border-bottom:1px solid ${LINE};` : ''}">
           <div>${shapeDiamond('#000', 6)}<a href="${safeHref(g.link)}" style="margin-left:8px;color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid ${YELLOW};">${escapeHtml(g.title)}</a></div>
-          <div style="font-size:12px;color:#6b7280;margin-top:4px;padding-left:14px;">${escapeHtml(g.agency || '')} &middot; Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied/in progress' : 'Still pending review'}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px;padding-left:14px;">${g.businessName ? `${escapeHtml(g.businessName)} &middot; ` : ''}Due ${escapeHtml(g.dueDate || '')} &middot; ${g.status === 'approved' ? 'Applied / in progress' : 'Saved for later'}</div>
         </div>`).join('')
       return `
         <h2 style="font-family:${MONO};font-size:14px;font-weight:700;color:${s.color};border-bottom:2px solid ${s.color};padding-bottom:8px;margin:24px 0 4px;">${s.shape(s.color)}<span style="margin-left:9px;">${s.label} (${dueByTier[s.key].length})</span></h2>
@@ -241,7 +275,7 @@ function deadlineAlertEmail(dueByTier, dashboardUrl) {
   const html = shell(`
     <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 4px;">${shapeTriangle('#dc2626', 12)}<span style="margin-left:9px;">Deadline Alert</span></h1>
     ${sectionHtml}
-    ${footer(dashboardUrl)}
+    ${footer(dashboardUrl, null, unsubscribeUrl)}
   `)
 
   return {
@@ -251,4 +285,4 @@ function deadlineAlertEmail(dueByTier, dashboardUrl) {
   }
 }
 
-module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail, FROM_EMAIL }
+module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail, signInEmail, memberDigestEmail, FROM_EMAIL }

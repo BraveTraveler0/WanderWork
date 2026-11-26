@@ -1,18 +1,23 @@
 const mongoose = require('mongoose')
 
-// An email to someone outside the team (a grant contact, program officer, or
-// investor). Inanna and the approval flow only ever create drafts; a person reviews
-// and edits the draft in the dashboard's Outbox and clicks Send. Nothing here is
-// sent automatically.
+// An email to someone outside the business (a grant contact, program officer, or
+// investor). Inanna and approvals only ever create drafts; a person reviews and edits
+// the draft in the Outbox. Admins can send from our domain; everyone else sends it
+// from their own email app. Nothing here is sent automatically.
 const outboundEmailSchema = new mongoose.Schema({
+  business:  { type: mongoose.Schema.Types.ObjectId, ref: 'CapitalWatch.Business', index: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'CapitalWatch.Member' },
   grant:     { type: mongoose.Schema.Types.ObjectId, ref: 'CapitalWatch.Grant', index: true },
   grantTitle: { type: String },
-  company:   { type: String }, // id from capitalWatchCompanies.js
+  company:   { type: String }, // legacy: id from capitalWatchCompanies.js
   to:        { type: String, default: '' },
   subject:   { type: String, default: '' },
   body:      { type: String, default: '' },
   source:    { type: String, enum: ['approval', 'inanna', 'manual'], default: 'manual' },
   status:    { type: String, enum: ['draft', 'sent', 'discarded'], default: 'draft', index: true },
+  // 'server' = sent by us through SendGrid; 'own_email' = marked sent after the
+  // member sent it from their own email app.
+  sentVia:   { type: String, enum: ['server', 'own_email'] },
   sentAt:    { type: Date },
   sendError: { type: String },
 }, {

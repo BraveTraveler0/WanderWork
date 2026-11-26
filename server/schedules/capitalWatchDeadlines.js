@@ -3,10 +3,15 @@
 const cron = require('node-cron')
 const sgMail = require('@sendgrid/mail')
 const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
+const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
+const Business = require('../models/CapitalWatch/capitalWatch.Business')
+const Member = require('../models/CapitalWatch/capitalWatch.Member')
 const { deadlineAlertEmail } = require('../utils/capitalWatchEmail')
-const { getCapitalWatchUrl } = require('../utils/publicUrls')
+const { getCapitalWatchUrl, getPublicServerUrl } = require('../utils/publicUrls')
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
-const { RECIPIENTS, hasSendGrid } = require('../config/capitalWatchTeam')
+const { hasSendGrid } = require('../config/capitalWatchTeam')
+const { unsubscribeSig } = require('../utils/capitalWatchAuth')
+const { invalidateGrants } = require('../utils/capitalWatchData')
 
 // Daily 8am EST = 13:00 UTC
 const SCHEDULE = '0 13 * * *'
@@ -21,6 +26,7 @@ const TIERS = [
 ]
 
 const todayUtc = (now = new Date()) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+const dayKey = (now = new Date()) => todayUtc(now).toISOString().slice(0, 10)
 
 function daysUntil(dueDate) {
   const due = new Date(`${dueDate}T00:00:00Z`)
@@ -30,29 +36,28 @@ function daysUntil(dueDate) {
 
 let running = false
 
-function deadlineCheckDayKey(now = new Date()) {
-  return todayUtc(now).toISOString().slice(0, 10)
-}
-
-// Pending opportunities whose deadline has passed can't be applied to any more, so
-// they leave the review list. Applied (approved) ones are left alone.
+// Opportunities whose deadline has passed leave everyone's matches.
 async function expirePastDue() {
-  const today = deadlineCheckDayKey()
   const result = await Grant.updateMany(
-    { status: 'pending', rolling: { $ne: true }, dueDate: { $regex: /^\d{4}-\d{2}-\d{2}$/, $lt: today } },
+    { status: { $ne: 'expired' }, rolling: { $ne: true }, dueDate: { $regex: /^\d{4}-\d{2}-\d{2}$/, $lt: dayKey() } },
     { $set: { status: 'expired' } },
   )
-  if (result.modifiedCount) console.log(`[CapitalWatch] Expired ${result.modifiedCount} pending opportunit${result.modifiedCount === 1 ? 'y' : 'ies'} past their deadline.`)
+  if (result.modifiedCount) {
+    invalidateGrants()
+    console.log(`[CapitalWatch] Expired ${result.modifiedCount} opportunit${result.modifiedCount === 1 ? 'y' : 'ies'} past their deadline.`)
+  }
   return result.modifiedCount
 }
 
+// Applied and saved opportunities with a deadline coming up, one email per person,
+// covering every business they're on.
 async function checkDeadlines() {
   if (running) { console.log('[CapitalWatch] Deadline check already in progress, skipping.'); return }
   running = true
   // Both production services run this cron. Claiming the day prevents both instances
-  // from independently deciding the same grant is due and double-emailing the team.
-  const dayKey = deadlineCheckDayKey()
-  const claimed = await claimPeriod('capital_watch_deadlines', dayKey).catch((err) => {
+  // from emailing the same alerts.
+  const key = dayKey()
+  const claimed = await claimPeriod('capital_watch_deadlines', key).catch((err) => {
     console.error('[CapitalWatch] Deadline claim check failed:', err.message)
     return false
   })
@@ -63,46 +68,61 @@ async function checkDeadlines() {
   }
   try {
     await expirePastDue()
+    if (!hasSendGrid()) { console.log('[CapitalWatch] No SendGrid key set, skipping deadline alerts.'); return }
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
+    const decisions = await Decision.find({ status: { $in: ['approved', 'archived'] } }).select('business grant status deadlineAlertsSent').lean()
     const grants = await Grant.find({
-      status: { $in: ['pending', 'approved'] },
+      _id: { $in: [...new Set(decisions.map((d) => String(d.grant)))] },
       rolling: { $ne: true },
       dueDate: { $exists: true, $nin: [null, ''] },
-    }).select('title agency dueDate status link deadlineAlertsSent').lean()
+    }).select('title agency dueDate link').lean()
+    const grantById = new Map(grants.map((g) => [String(g._id), g]))
 
-    const dueByTier = { '3d': [], '7d': [], '14d': [] }
-    const updates = []
-
-    for (const grant of grants) {
-      const days = daysUntil(grant.dueDate)
+    // Per business: what's due, by tier, and which decision updates to save once sent.
+    const perBusiness = new Map()
+    for (const d of decisions) {
+      const g = grantById.get(String(d.grant))
+      if (!g) continue
+      const days = daysUntil(g.dueDate)
       if (days === null || days < 0) continue
-
-      const sent = new Set(grant.deadlineAlertsSent || [])
+      const sent = new Set(d.deadlineAlertsSent || [])
       const tier = TIERS.find((t) => days <= t.maxDays && !sent.has(t.key))
       if (!tier) continue
-
-      dueByTier[tier.key].push(grant)
-      // Mark coarser tiers as sent too -- no point alerting "2 weeks left" right after
-      // "3 days left" already went out for the same grant.
+      // Mark coarser tiers too: no "2 weeks left" right after "3 days left".
       TIERS.filter((t) => t.maxDays >= tier.maxDays).forEach((t) => sent.add(t.key))
-      updates.push({ updateOne: { filter: { _id: grant._id }, update: { $set: { deadlineAlertsSent: [...sent] } } } })
+      const entry = perBusiness.get(String(d.business)) || { items: [], updates: [] }
+      entry.items.push({ tier: tier.key, grant: { ...g, status: d.status } })
+      entry.updates.push({ updateOne: { filter: { _id: d._id }, update: { $set: { deadlineAlertsSent: [...sent] } } } })
+      perBusiness.set(String(d.business), entry)
     }
+    if (!perBusiness.size) return
 
-    if (!updates.length) return
-    if (!hasSendGrid()) {
-      console.log('[CapitalWatch] No SendGrid key set, skipping deadline alert email.')
-      return
+    const businesses = await Business.find({ _id: { $in: [...perBusiness.keys()] } }).select('name memberIds').lean()
+    const members = await Member.find({ _id: { $in: businesses.flatMap((b) => b.memberIds) }, digestOptOut: { $ne: true } }).select('email').lean()
+
+    let sent = 0
+    for (const m of members) {
+      const mine = businesses.filter((b) => b.memberIds.some((id) => String(id) === String(m._id)))
+      const dueByTier = { '3d': [], '7d': [], '14d': [] }
+      for (const b of mine) {
+        for (const item of perBusiness.get(String(b._id))?.items || []) dueByTier[item.tier].push({ ...item.grant, businessName: mine.length > 1 ? b.name : '' })
+      }
+      if (!Object.values(dueByTier).some((list) => list.length)) continue
+      const unsubscribe = `${getPublicServerUrl()}/capitalwatch/unsubscribe?m=${m._id}&s=${unsubscribeSig(String(m._id))}`
+      try {
+        await sgMail.send({ ...deadlineAlertEmail(dueByTier, getCapitalWatchUrl(), unsubscribe), to: m.email })
+        sent++
+      } catch (err) {
+        console.error('[CapitalWatch] Deadline alert failed:', err.message)
+      }
     }
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY)
-    await sgMail.send({ ...deadlineAlertEmail(dueByTier, getCapitalWatchUrl()), to: RECIPIENTS })
-    // Recorded only after the email went out, so a failed send is retried tomorrow.
-    await Grant.bulkWrite(updates)
-    console.log(`[CapitalWatch] Deadline alert sent for ${updates.length} grant(s).`)
+    // Recorded only after sending, so a day where every send failed is retried tomorrow.
+    if (sent) await Decision.bulkWrite([...perBusiness.values()].flatMap((e) => e.updates))
+    console.log(`[CapitalWatch] Deadline alerts sent to ${sent} member(s).`)
   } catch (err) {
     console.error('[CapitalWatch] Deadline check error:', err.message)
-    // Let tomorrow's run (or a manual retry) try again rather than permanently
-    // marking today done on a failed attempt.
-    await releasePeriodClaim('capital_watch_deadlines', dayKey).catch(() => {})
+    await releasePeriodClaim('capital_watch_deadlines', key).catch(() => {})
   } finally {
     running = false
   }

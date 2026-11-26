@@ -1,7 +1,9 @@
 const mongoose = require('mongoose')
 
-// A funding opportunity (grant, loan, prize, etc.) discovered by the weekly
-// Capital Watch scrape. status moves pending -> approved/rejected via the dashboard.
+// A funding opportunity (grant, loan, prize, investment program, etc.) found by the
+// weekly Capital Watch scrape. Opportunities are shared by everyone; whether one fits
+// a business, and what that business decided about it, lives in Decision and the
+// matching code, not here.
 const capitalWatchGrantSchema = new mongoose.Schema({
   title:       { type: String, required: true },
   agency:      { type: String },
@@ -25,33 +27,36 @@ const capitalWatchGrantSchema = new mongoose.Schema({
   contactEmail: { type: String },
   hotLead:      { type: Boolean, default: false },
 
-  // 'archived' = looks good for later, not a fit right now -- pulled out of the main
-  // pending list into its own view instead of being approved or rejected.
-  // 'expired' = the deadline passed while it was still pending (set by the daily
-  // deadline job), so it stops cluttering the review list.
+  // Who the opportunity is for, as stated on the page. Empty = not stated (open).
+  applicantTypes:    { type: [String], default: [] }, // for_profit, nonprofit, sole_proprietor, individual
+  eligibleCountries: { type: [String], default: [] },
+  industries:        { type: [String], default: [] }, // ids from capitalWatchOptions INDUSTRIES
+  stages:            { type: [String], default: [] }, // ids from capitalWatchOptions STAGES
+  // Investment program (angel/VC) rather than a grant or loan.
+  isInvestment:      { type: Boolean, default: false },
+
+  // 'pending' = open; 'expired' = the deadline passed (set by the daily job).
+  // approved/rejected/archived are from before decisions were per business; the
+  // migration script moves them into Decision and resets them to 'pending'.
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected', 'archived', 'expired'],
     default: 'pending',
     index: true,
   },
-  company: { type: String }, // id from capitalWatchCompanies.js, set on approval
 
+  // Legacy single-team fields, kept only so the migration can read them.
+  company: { type: String },
   outreachEmail:        { type: String },
   applicationNarrative: { type: String },
-  // One entry per stated requirement, so the approval email shows exactly what the AI
-  // already handled vs. what still needs the founder's input (documents, signatures, etc.).
   requirementsChecklist: [{
     requirement: String,
     status: { type: String, enum: ['drafted', 'needs_input', 'not_applicable'] },
     detail: String,
   }],
+  deadlineAlertsSent: { type: [String], default: [] },
 
   dateFound: { type: Date, default: Date.now },
-
-  // Which deadline-warning tiers ('14d', '7d', '3d') have already been emailed for
-  // this grant, so the daily deadline check doesn't re-send the same warning every day.
-  deadlineAlertsSent: { type: [String], default: [] },
 }, {
   collection: 'capitalwatch.grants',
   timestamps: true,
