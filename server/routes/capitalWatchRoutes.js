@@ -31,7 +31,7 @@ function keyMatches(given) {
 // anyone could have copied it. Until CAPITAL_WATCH_KEY is changed on the server,
 // sending email from the Outbox stays off (it would otherwise let anyone send mail
 // from our domain). Only the hash is kept here, never the key.
-const LEAKED_KEY_SHA256 = '81f2720b81af4ee56058f1146d6de0c78718538b81b9888f500641388a7f89e3'
+const LEAKED_KEY_SHA256 = '81f2720b81af4ee56058f1146d6de0c78718538b81b9888f500641388a7f89e3' // gitleaks:allow (SHA-256 of a revoked key, not a secret)
 const keyIsLeaked = () => sha256(process.env.CAPITAL_WATCH_KEY || '').toString('hex') === LEAKED_KEY_SHA256
 
 // Wrong-key attempts: counts only failed requests, so normal use is unaffected.
