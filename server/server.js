@@ -134,12 +134,16 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }))
 // SEO routes — sitemaps and feeds (need DB, but use their own error handling)
 app.use('/', require('./routes/seoRoutes'));
 
-const staticPage = (title, bodyHtml) => `<!DOCTYPE html>
+// Each page names its own address as canonical so Google does not treat the
+// frontend-proxied copy and this server's copy as duplicates.
+const staticPage = (path, title, bodyHtml) => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title} — Wander/Work</title>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="https://wanderwork.io${path}"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb;color:#333;padding:40px 20px;line-height:1.7}
@@ -166,7 +170,7 @@ ${bodyHtml}
 
 app.get('/privacy', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(staticPage('Privacy Policy', `
+  res.send(staticPage('/privacy', 'Privacy Policy', `
 <h1>Privacy Policy</h1>
 <p class="meta">Effective Date: January 3, 2026 &nbsp;|&nbsp; Last Updated: June 14, 2026</p>
 
@@ -225,7 +229,7 @@ app.get('/privacy', (req, res) => {
 
 app.get('/support', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(staticPage('Support', `
+  res.send(staticPage('/support', 'Support', `
 <h1>Support</h1>
 <p class="meta">We're here to help.</p>
 
@@ -252,7 +256,7 @@ app.get('/support', (req, res) => {
 
 app.get('/about', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(staticPage('About WanderWork', `
+  res.send(staticPage('/about', 'About WanderWork', `
 <h1>About WanderWork</h1>
 <p class="meta">Remote job board and AI job search platform</p>
 
@@ -301,7 +305,7 @@ app.get('/about', (req, res) => {
 
 app.get('/terms', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(staticPage('Terms of Service', `
+  res.send(staticPage('/terms', 'Terms of Service', `
 <h1>Terms of Service</h1>
 <p class="meta">Last Updated: January 3, 2026</p>
 

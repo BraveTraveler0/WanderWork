@@ -846,7 +846,15 @@ function App() {
     }
 
     const effectivePage = showLandingPage ? '__landing__' : showLogin || showSignup ? '__auth__' : currentPage
-    const meta = effectivePage === '__landing__'
+    // The SPA fallback answers every path with 200, so an address the app does
+    // not know (a typo, an old link) would look like a duplicate of the home page.
+    // Those get noindex and no self-canonical so Google drops them.
+    const isKnownPath = path === '/' || isPublicJobPage || isLandingPath(path) ||
+      path === '/privacy' || path === '/terms' || path === '/bug-report' || path === '/report-bug' ||
+      /^\/(aonverse\/)?blog(\/|$)/.test(path)
+    const meta = !isKnownPath
+      ? { title: 'Page Not Found | WanderWork', noindex: true }
+      : effectivePage === '__landing__'
       ? { title: 'Remote Jobs and Tailored Applications | WanderWork', noindex: false }
       : effectivePage === '__auth__'
       ? { title: 'WanderWork — Remote Jobs & AI Job Search', noindex: true }
@@ -870,7 +878,8 @@ function App() {
       canonicalTag.rel = 'canonical'
       document.head.appendChild(canonicalTag)
     }
-    canonicalTag.href = `https://wanderwork.io${window.location.pathname === '/' ? '/' : window.location.pathname}`
+    // Unknown paths point at the home page rather than at themselves.
+    canonicalTag.href = `https://wanderwork.io${!isKnownPath || path === '/' ? '/' : path}`
   }, [currentPage, showLogin, showSignup, showLandingPage])
 
   useEffect(() => {
