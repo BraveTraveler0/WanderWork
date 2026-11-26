@@ -26,8 +26,14 @@ function getPublicServerUrl() {
   );
 }
 
+// The Capital Watch dashboard is hosted on the AonCreative site, not wanderwork.io.
+function getCapitalWatchUrl() {
+  return safePublicUrl(process.env.CAPITAL_WATCH_URL, 'https://aoncreative.io/capitalwatch');
+}
+
 module.exports = {
   safePublicUrl,
+  getCapitalWatchUrl,
   getPublicAppUrl,
   getPublicServerUrl,
 };
