@@ -9,7 +9,7 @@ const Grant = require('../models/CapitalWatch/capitalWatch.Grant')
 const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
 const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
 const { aiChat } = require('./aiChat')
-const { GRANT_FIELDS, getOpenGrants, matchesFor, businessProfileText } = require('./capitalWatchData')
+const { GRANT_FIELDS, getOpenGrants, matchesFor, scopeFor, businessProfileText } = require('./capitalWatchData')
 const { checkFit } = require('./capitalWatchMatching')
 const { PERSONA, CRAFT, WRITING, RUBRIC, CHAT_VOICE } = require('../config/capitalWatchPersona')
 
@@ -89,10 +89,10 @@ async function searchForQuestion(question, excludeIds, business) {
     })
 }
 
-async function loadContext(business, question) {
+async function loadContext(business, question, memberId) {
   const [matches, decisions] = await Promise.all([
-    matchesFor(business),
-    Decision.find({ business: business._id, status: { $in: ['approved', 'archived'] } }).sort({ updatedAt: -1 }).limit(25).select('grant status requirementsChecklist').lean(),
+    matchesFor(business, { memberId }),
+    Decision.find({ ...scopeFor(business._id, memberId), status: { $in: ['approved', 'archived'] } }).sort({ updatedAt: -1 }).limit(25).select('grant status requirementsChecklist').lean(),
   ])
   const decidedGrants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) } }).select(GRANT_FIELDS).lean()
   const byId = new Map(decidedGrants.map((g) => [String(g._id), g]))
@@ -119,11 +119,11 @@ async function focusApplication(question, decided) {
 }
 
 // Cheap, no-AI summary for the "Today" tab and the orb's badge.
-async function buildBriefing(business) {
+async function buildBriefing(business, memberId) {
   const [matches, decisions, outboxDrafts] = await Promise.all([
-    matchesFor(business),
-    Decision.find({ business: business._id, status: { $in: ['approved', 'archived'] } }).select('grant status requirementsChecklist').lean(),
-    OutboundEmail.countDocuments({ business: business._id, status: 'draft' }),
+    matchesFor(business, { memberId }),
+    Decision.find({ ...scopeFor(business._id, memberId), status: { $in: ['approved', 'archived'] } }).select('grant status requirementsChecklist').lean(),
+    OutboundEmail.countDocuments({ business: business._id, status: 'draft', ...(memberId ? { hiddenFor: { $ne: memberId } } : {}) }),
   ])
   const decidedGrants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) }, status: { $ne: 'expired' } }).select('title amountUsd dueDate rolling link').lean()
   const byId = new Map(decidedGrants.map((g) => [String(g._id), g]))
@@ -255,7 +255,7 @@ function withoutRepeatedDrafts(reply, actions) {
 }
 
 // messages: [{ role: 'user' | 'assistant', content: string }], newest last.
-async function askAthena(business, messages) {
+async function askAthena(business, messages, memberId) {
   const history = (Array.isArray(messages) ? messages : [])
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-MAX_HISTORY)
@@ -263,7 +263,7 @@ async function askAthena(business, messages) {
   const question = [...history].reverse().find((m) => m.role === 'user')?.content
   if (!question) throw Object.assign(new Error('Ask a question first.'), { status: 400 })
 
-  const ctx = await loadContext(business, question)
+  const ctx = await loadContext(business, question, memberId)
   const response = await aiChat.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },

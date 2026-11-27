@@ -15,6 +15,12 @@
 
 const axios = require('axios')
 
+// Out-of-credit errors email the owner (at most once a day). Loaded lazily so scripts
+// that use aiChat without a database or SendGrid aren't affected.
+const noteAIError = (err, provider) => {
+    try { require('./creditAlerts').noteAIError(err, provider) } catch { /* alerts are best effort */ }
+}
+
 // Backup when OpenAI fails (user-facing calls). Checked against OpenRouter's
 // model list 2026-11: nemotron-3-super-120b-a12b no longer has a :free tier.
 const NEMOTRON_ROTATION = [
@@ -109,6 +115,7 @@ async function tryOpenRouter(body, models, backupTimeout, signal, { quiet = fals
             return { data }
         } catch (e) {
             lastErr = e
+            noteAIError(e, 'openrouter')
             if (e.response?.status === 429) cooldownUntil.set(model, Date.now() + COOLDOWN_MS)
             if (!quiet) console.warn(`[aiChat] OpenRouter ${model} failed (${describeError(e)})`)
         }
@@ -133,6 +140,7 @@ async function chatCompletion(body, { timeout = 30000, backupTimeout = 90000, si
             return await callOpenAIDirect(body, timeout, signal)
         } catch (e) {
             lastErr = e
+            noteAIError(e, 'openai')
             console.warn(`[aiChat] OpenAI failed (${describeError(e)})${prefer === 'cheap' ? '' : '; trying OpenRouter backup'}`)
         }
     }

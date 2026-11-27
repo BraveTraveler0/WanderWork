@@ -20,6 +20,11 @@ const outboundEmailSchema = new mongoose.Schema({
   sentVia:   { type: String, enum: ['server', 'own_email'] },
   sentAt:    { type: Date },
   sendError: { type: String },
+  // Discarding is personal: the draft is hidden for these people only. It's deleted
+  // once everyone on the business has discarded it (after 3 days).
+  hiddenFor: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+  // When Athena last looked on the opportunity's website for a contact address.
+  contactSearchedAt: { type: Date },
 }, {
   collection: 'capitalwatch.outbox',
   timestamps: true,

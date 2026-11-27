@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
 import { api, send, type ApplicationField, type OutboundEmail } from "./capitalWatchApi";
 
@@ -29,7 +29,7 @@ function verdictFor(email: OutboundEmail, to: string, body: string, fields: Appl
   if (ctx?.expired || pastDue) return { kind: "discard", reasons: ["The deadline has passed"] };
   const reasons: string[] = [];
   if (body.trim().length < 120 || WEAK_BODY_RE.test(body)) reasons.push("The message needs writing");
-  if (!EMAIL_RE.test(to.trim())) reasons.push("Add who it's going to");
+  if (!EMAIL_RE.test(to.trim())) reasons.push("No contact address yet");
   const openFields = fields.filter((f) => f.status === "needs_input").length;
   if (openFields) reasons.push(`${openFields} form answer${openFields === 1 ? "" : "s"} need you`);
   const gather = ctx?.needsInput.length || 0;
@@ -87,14 +87,37 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
   const [note, setNote] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [opened, setOpened] = useState(false);
-  const dirty = to !== email.to || subject !== email.subject || body !== email.body;
+  // The address as last saved (Athena may fill it in after the card loads).
+  const [savedTo, setSavedTo] = useState(email.to);
+  const [contactPage, setContactPage] = useState("");
+  const dirty = to !== savedTo || subject !== email.subject || body !== email.body;
   const ctx = email.context;
   const verdict = verdictFor(email, to, body, fields);
   const style = VERDICT_STYLE[verdict.kind];
   const weakBody = body.trim().length < 120 || WEAK_BODY_RE.test(body);
 
   const flashNote = (message: string) => { setNote(message); setError(null); };
-  const save = () => send(`/outbox/${email._id}`, "PATCH", { to, subject, body });
+
+  // No address yet: Athena looks on the opportunity's website for one (once a week at most).
+  const looked = useRef(false);
+  useEffect(() => {
+    if (looked.current || email.to || !email.grant) return;
+    looked.current = true;
+    setBusy("contact");
+    send<{ to: string; found: boolean; contactPage?: string }>(`/outbox/${email._id}/find-contact`, "POST")
+      .then((r) => {
+        if (r.found && r.to) {
+          setTo((current) => current || r.to);
+          setSavedTo(r.to);
+          setNote(`Athena found the contact address on the website: ${r.to}`);
+        } else if (r.contactPage) {
+          setContactPage(r.contactPage);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setBusy((b) => (b === "contact" ? null : b)));
+  }, [email._id, email.to, email.grant]);
+  const save = () => send(`/outbox/${email._id}`, "PATCH", { to, subject, body }).then((r) => { setSavedTo(to); return r; });
 
   async function run(kind: "save" | "send" | "discard" | "mark") {
     setBusy(kind);
@@ -102,7 +125,7 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
     try {
       if (kind === "discard") {
         await send(`/outbox/${email._id}`, "PATCH", { status: "discarded" });
-        return onDone("Draft discarded.");
+        return onDone("Discarded for you. Your teammates still see it.");
       }
       if (dirty) await save();
       if (kind === "send") { await send(`/outbox/${email._id}/send`, "POST"); return onDone(`Sent to ${to}.`); }
@@ -198,8 +221,14 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
       {open && (
         <div className="px-4 sm:px-6 pb-5 border-t border-gray-100 pt-4">
           <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1" htmlFor={`to-${email._id}`}>To</label>
-          <input id={`to-${email._id}`} value={to} onChange={(e) => setTo(e.target.value)} placeholder="Find the program contact on the opportunity's page"
-            className="w-full border border-gray-300 px-3 py-2 mb-3 outline-none focus:border-black" />
+          <input id={`to-${email._id}`} value={to} onChange={(e) => setTo(e.target.value)} placeholder={busy === "contact" ? "Athena is looking for the contact address on the website…" : "No address on the website yet"}
+            className="w-full border border-gray-300 px-3 py-2 mb-1 outline-none focus:border-black" />
+          <div className="text-xs text-gray-500 mb-3 min-h-[1rem]">
+            {busy === "contact" && "Athena is checking the opportunity's website for the right address…"}
+            {busy !== "contact" && !to && (contactPage
+              ? <>Athena couldn't find an email address on the website. The program may only take messages through a form: <a href={contactPage} target="_blank" rel="noopener noreferrer" className="underline">open its contact page</a>.</>
+              : "Athena couldn't find an email address on the website. The program may only take messages through its application form.")}
+          </div>
 
           <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1" htmlFor={`subj-${email._id}`}>Subject</label>
           <input id={`subj-${email._id}`} value={subject} onChange={(e) => setSubject(e.target.value)}
@@ -256,7 +285,7 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
                 )}
                 <button onClick={() => run("discard")} disabled={!!busy}
                   className="ml-auto text-gray-400 hover:text-black flex items-center gap-1 text-sm">
-                  <Trash2 size={14} /> Discard
+                  <Trash2 size={14} /> Discard for me
                 </button>
               </>
             )}

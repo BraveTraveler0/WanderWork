@@ -13,6 +13,7 @@ const { hasSendGrid } = require('../config/capitalWatchTeam')
 const { unsubscribeSig } = require('../utils/capitalWatchAuth')
 const { invalidateGrants, DISMISSED_DAYS } = require('../utils/capitalWatchData')
 const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
+const { checkCredits } = require('../utils/creditAlerts')
 
 // Daily 8am EST = 13:00 UTC
 const SCHEDULE = '0 13 * * *'
@@ -50,13 +51,27 @@ async function expirePastDue() {
   return result.modifiedCount
 }
 
-// Discarded Outbox drafts are deleted 3 days after they were discarded. (Dismissed
-// opportunities leave the Dismissed list after 3 days too; that's a filter in the
-// routes, and a small record stays so they never come back as matches.)
+// Discarding a draft hides it for that person only. Once everyone on the business has
+// discarded it, it's deleted 3 days later. (Dismissed opportunities leave each person's
+// Dismissed list after 3 days too; that's a filter in the routes, and a small record
+// stays so they never come back as matches.)
 async function clearOldDiscards() {
-  const result = await OutboundEmail.deleteMany({ status: 'discarded', updatedAt: { $lt: new Date(Date.now() - DISMISSED_DAYS * 86400000) } })
-  if (result.deletedCount) console.log(`[CapitalWatch] Deleted ${result.deletedCount} discarded Outbox draft${result.deletedCount === 1 ? '' : 's'}.`)
-  return result.deletedCount
+  const cutoff = new Date(Date.now() - DISMISSED_DAYS * 86400000)
+  const legacy = await OutboundEmail.deleteMany({ status: 'discarded', updatedAt: { $lt: cutoff } })
+  const hidden = await OutboundEmail.find({ status: 'draft', 'hiddenFor.0': { $exists: true }, updatedAt: { $lt: cutoff } }).select('business hiddenFor').lean()
+  const teams = new Map((await Business.find({ _id: { $in: [...new Set(hidden.map((e) => String(e.business)))] } }).select('memberIds').lean())
+    .map((b) => [String(b._id), b.memberIds.map(String)]))
+  const doomed = hidden
+    .filter((e) => {
+      const team = teams.get(String(e.business))
+      const gone = new Set(e.hiddenFor.map(String))
+      return !team || team.every((id) => gone.has(id))
+    })
+    .map((e) => e._id)
+  const removed = doomed.length ? (await OutboundEmail.deleteMany({ _id: { $in: doomed } })).deletedCount : 0
+  const total = legacy.deletedCount + removed
+  if (total) console.log(`[CapitalWatch] Deleted ${total} discarded Outbox draft${total === 1 ? '' : 's'}.`)
+  return total
 }
 
 // Applied and saved opportunities with a deadline coming up, one email per person,
@@ -79,10 +94,11 @@ async function checkDeadlines() {
   try {
     await expirePastDue()
     await clearOldDiscards()
+    await checkCredits().catch((err) => console.error('[credits] Daily check failed:', err.message))
     if (!hasSendGrid()) { console.log('[CapitalWatch] No SendGrid key set, skipping deadline alerts.'); return }
     sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
-    const decisions = await Decision.find({ status: { $in: ['approved', 'archived'] } }).select('business grant status deadlineAlertsSent').lean()
+    const decisions = await Decision.find({ status: { $in: ['approved', 'archived'] } }).select('business grant member status deadlineAlertsSent').lean()
     const grants = await Grant.find({
       _id: { $in: [...new Set(decisions.map((d) => String(d.grant)))] },
       rolling: { $ne: true },
@@ -103,7 +119,7 @@ async function checkDeadlines() {
       // Mark coarser tiers too: no "2 weeks left" right after "3 days left".
       TIERS.filter((t) => t.maxDays >= tier.maxDays).forEach((t) => sent.add(t.key))
       const entry = perBusiness.get(String(d.business)) || { items: [], updates: [] }
-      entry.items.push({ tier: tier.key, grant: { ...g, status: d.status } })
+      entry.items.push({ tier: tier.key, onlyFor: d.member ? String(d.member) : null, grant: { ...g, status: d.status } })
       entry.updates.push({ updateOne: { filter: { _id: d._id }, update: { $set: { deadlineAlertsSent: [...sent] } } } })
       perBusiness.set(String(d.business), entry)
     }
@@ -117,7 +133,7 @@ async function checkDeadlines() {
       const mine = businesses.filter((b) => b.memberIds.some((id) => String(id) === String(m._id)))
       const dueByTier = { '3d': [], '7d': [], '14d': [] }
       for (const b of mine) {
-        for (const item of perBusiness.get(String(b._id))?.items || []) dueByTier[item.tier].push({ ...item.grant, businessName: mine.length > 1 ? b.name : '' })
+        for (const item of perBusiness.get(String(b._id))?.items || []) if (!item.onlyFor || item.onlyFor === String(m._id)) dueByTier[item.tier].push({ ...item.grant, businessName: mine.length > 1 ? b.name : '' })
       }
       if (!Object.values(dueByTier).some((list) => list.length)) continue
       const unsubscribe = `${getPublicServerUrl()}/capitalwatch/unsubscribe?m=${m._id}&s=${unsubscribeSig(String(m._id))}`
