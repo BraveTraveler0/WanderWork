@@ -7,6 +7,11 @@ const memberSchema = new mongoose.Schema({
   name:  { type: String, trim: true, default: '' },
   role:  { type: String, enum: ['member', 'admin'], default: 'member' },
 
+  // Optional: accounts can sign in with a password, an emailed link, or both.
+  // Never returned by queries unless asked for with .select('+passwordHash').
+  passwordHash:  { type: String, select: false },
+  emailVerified: { type: Boolean, default: false },
+
   marketingConsent:   { type: Boolean, default: false },
   marketingConsentAt: { type: Date },
   // Weekly matches digest and deadline alerts. Turned off by the unsubscribe link.

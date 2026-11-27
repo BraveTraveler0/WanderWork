@@ -58,6 +58,7 @@ export type Member = {
   email: string;
   name: string;
   role: "member" | "admin";
+  hasPassword: boolean;
   digestOptOut: boolean;
   limits: { questions: number; drafts: number; businesses: number };
   usage: { questions: number; drafts: number };

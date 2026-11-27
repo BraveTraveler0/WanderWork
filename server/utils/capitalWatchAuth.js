@@ -37,7 +37,7 @@ async function requireMember(req, res, next) {
     const token = header.startsWith('Bearer ') ? header.slice(7) : ''
     if (!token) return res.status(401).json({ message: 'Please sign in.' })
     const payload = jwt.verify(token, secret(), { audience: AUDIENCE })
-    const member = await Member.findById(payload.sub)
+    const member = await Member.findById(payload.sub).select('+passwordHash')
     if (!member) return res.status(401).json({ message: 'Please sign in.' })
     req.member = member
     next()

@@ -234,6 +234,25 @@ function signInEmail(link, { isNew = false } = {}) {
   return { from: FROM_EMAIL, subject: isNew ? 'Welcome to Capital Watch: sign in' : 'Your Capital Watch sign-in link', html }
 }
 
+function passwordResetEmail(link) {
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 12px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">Reset your password</span></h1>
+    <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 6px;">Click below to choose a new password. The link works once and expires in 20 minutes.</p>
+    ${footer(link, 'Choose a new password')}
+    <p style="font-size:12px;color:${SUBTLE};margin:16px 0 0;">If you didn't ask for this, you can ignore it. Your password hasn't changed.</p>
+  `)
+  return { from: FROM_EMAIL, subject: 'Reset your Capital Watch password', html }
+}
+
+function welcomeEmail(dashboardUrl) {
+  const html = shell(`
+    <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 12px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">Welcome to Capital Watch</span></h1>
+    <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 6px;">Capital Watch finds grants, loans, investors, competitions and accelerators every week and ranks them for your business. Describe your business on the dashboard to see your matches; we'll email you the best new ones each week.</p>
+    ${footer(dashboardUrl, 'Open Capital Watch')}
+  `)
+  return { from: FROM_EMAIL, subject: 'Welcome to Capital Watch', html }
+}
+
 // Weekly: the best new matches for each of a member's businesses.
 // sections: [{ businessName, matches: [grant with reasons] }]
 function memberDigestEmail(sections, dashboardUrl, unsubscribeUrl) {
@@ -285,4 +304,4 @@ function deadlineAlertEmail(dueByTier, dashboardUrl, unsubscribeUrl) {
   }
 }
 
-module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail, signInEmail, memberDigestEmail, FROM_EMAIL }
+module.exports = { weeklyDigestEmail, topMatchesDigestEmail, applicationDraftEmail, deadlineAlertEmail, signInEmail, memberDigestEmail, passwordResetEmail, welcomeEmail, FROM_EMAIL }
