@@ -41,8 +41,8 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   return res.json();
 }
 
-export const send = (path: string, method: string, body?: unknown) =>
-  api(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+export const send = <T = any>(path: string, method: string, body?: unknown) =>
+  api<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
 export type Option = { id: string; label: string };
 export type Options = {
@@ -123,6 +123,9 @@ export type Draft = {
   outreachEmail?: string;
   applicationNarrative?: string;
   requirementsChecklist?: { requirement: string; status: "drafted" | "needs_input" | "not_applicable"; detail?: string }[];
+  applicationFields?: ApplicationField[];
+  fieldsSource?: "page" | "likely";
+  applyUrl?: string;
   updatedAt?: string;
 };
 
@@ -139,6 +142,27 @@ export type OutboundEmail = {
   sentAt?: string;
   sendError?: string;
   updatedAt: string;
+  // Drafts tied to an opportunity also carry what's needed to finish the application.
+  context?: {
+    link: string;
+    applyUrl: string;
+    dueDate: string | null;
+    rolling: boolean;
+    expired: boolean;
+    applied: boolean;
+    fields: ApplicationField[];
+    fieldsSource: "page" | "likely" | null;
+    needsInput: { requirement: string; detail?: string }[];
+  };
+};
+
+export type ApplicationField = {
+  label: string;
+  answer: string;
+  status: "ready" | "needs_input";
+  note?: string;
+  options?: string[];
+  required?: boolean;
 };
 
 export type InannaAction = {

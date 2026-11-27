@@ -17,6 +17,20 @@ const decisionSchema = new mongoose.Schema({
     detail: String,
   }],
 
+  // The application form's fields with ready-to-paste answers. source 'page' = read
+  // from the opportunity's own form; 'likely' = what this kind of application asks for.
+  applicationFields: [{
+    _id: false,
+    label: String,
+    answer: String,
+    status: { type: String, enum: ['ready', 'needs_input'] },
+    note: String,
+    options: [String],
+    required: Boolean,
+  }],
+  fieldsSource: { type: String, enum: ['page', 'likely'] },
+  applyUrl: { type: String },
+
   // Deadline warnings already emailed for this business ('14d', '7d', '3d').
   deadlineAlertsSent: { type: [String], default: [] },
 }, {
