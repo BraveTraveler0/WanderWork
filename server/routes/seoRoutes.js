@@ -293,6 +293,13 @@ function salarySchema(salary) {
   return { '@type': 'MonetaryAmount', currency, value }
 }
 
+function postedDateOf(job) {
+  const given = job.datePosted ? new Date(job.datePosted) : null
+  if (given && !Number.isNaN(given.getTime())) return given
+  if (job._id && typeof job._id.getTimestamp === 'function') return job._id.getTimestamp()
+  return new Date()
+}
+
 function jobPageHtml(job) {
   const title = escapeXml(job.title || 'Job')
   const company = escapeXml(job.company || '')
@@ -300,10 +307,11 @@ function jobPageHtml(job) {
   const salary = job.salary ? escapeXml(job.salary) : null
   const jobType = job.jobType || 'FULL_TIME'
   const applyUrl = job.url || APP_URL
-  const datePosted = job.datePosted ? new Date(job.datePosted).toISOString().split('T')[0] : null
-  const validThrough = job.datePosted
-    ? new Date(new Date(job.datePosted).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    : null
+  // Google requires datePosted on every JobPosting. When the source gave no date (or an
+  // unreadable one), use the time we added the job, which the ObjectId always carries.
+  const posted = postedDateOf(job)
+  const datePosted = posted.toISOString().split('T')[0]
+  const validThrough = new Date(posted.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
   const slug = jobSlug(job)
   const canonicalUrl = `${APP_URL}/jobs/${slug}`
   const tags = Array.isArray(job.tags) ? job.tags.slice(0, 8) : []
@@ -317,7 +325,8 @@ function jobPageHtml(job) {
     '@id': `${canonicalUrl}#job`,
     title: job.title || '',
     description: job.description_short || '',
-    ...(datePosted ? { datePosted, validThrough } : {}),
+    datePosted,
+    validThrough,
     employmentType: jobType === 'FULL_TIME' ? 'FULL_TIME' : jobType === 'PART_TIME' ? 'PART_TIME' : 'CONTRACTOR',
     hiringOrganization: {
       '@type': 'Organization',
