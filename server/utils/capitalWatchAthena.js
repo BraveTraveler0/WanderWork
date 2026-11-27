@@ -1,6 +1,6 @@
 'use strict'
 
-// Inanna for Capital Watch: the assistant from MarketGenius, scoped to one business.
+// Athena for Capital Watch: the funding assistant (adapted from MarketGenius's Inanna), scoped to one business.
 // It reads that business's profile, its ranked matches and its decisions, answers in
 // context, and suggests actions. It never changes anything itself: each action comes
 // back as a button the member clicks, which goes through the normal routes.
@@ -104,7 +104,7 @@ async function loadContext(business, question) {
 
 const REVIEW_RE = /\b(review|score|critique|feedback|grade|rate|improve|strengthen|weak|strong|ready|rewrite|edit)\b/i
 
-// The drafted application the question is about, so Inanna can review or rework the
+// The drafted application the question is about, so Athena can review or rework the
 // actual text. Named by title words, or the latest one when asked to review "my application".
 async function focusApplication(question, decided) {
   const applied = decided.filter((x) => x.decision.status === 'approved')
@@ -255,7 +255,7 @@ function withoutRepeatedDrafts(reply, actions) {
 }
 
 // messages: [{ role: 'user' | 'assistant', content: string }], newest last.
-async function askInanna(business, messages) {
+async function askAthena(business, messages) {
   const history = (Array.isArray(messages) ? messages : [])
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-MAX_HISTORY)
@@ -292,4 +292,4 @@ async function askInanna(business, messages) {
   }
 }
 
-module.exports = { askInanna, buildBriefing, daysUntil, cleanActions, withoutRepeatedDrafts, noEmDash }
+module.exports = { askAthena, buildBriefing, daysUntil, cleanActions, withoutRepeatedDrafts, noEmDash }

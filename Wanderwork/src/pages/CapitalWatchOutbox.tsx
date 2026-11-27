@@ -3,14 +3,15 @@ import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, Send, Spark
 import { api, send, type ApplicationField, type OutboundEmail } from "./capitalWatchApi";
 
 // The review step for every email that leaves a business, and the place to finish the
-// application it belongs to. Drafts come from applying to an opportunity, from Inanna,
+// application it belongs to. Drafts come from applying to an opportunity, from Athena,
 // or are written by hand. Nothing goes out until someone reads it here. Admins can send
 // from our domain; everyone else sends from their own email app (so replies come
 // straight back to them).
 
 const SOURCE_LABEL: Record<OutboundEmail["source"], string> = {
   approval: "From an application",
-  inanna: "Drafted by Inanna",
+  athena: "Drafted by Athena",
+  inanna: "Drafted by Athena",
   manual: "Written by hand",
 };
 
@@ -115,15 +116,15 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
     }
   }
 
-  async function inannaDraft() {
-    setBusy("inanna");
+  async function athenaDraft() {
+    setBusy("athena");
     setError(null);
     setNote(null);
     try {
-      const r = await send<{ subject: string; body: string; changes: string }>(`/outbox/${email._id}/inanna`, "POST", { to, subject, body });
+      const r = await send<{ subject: string; body: string; changes: string }>(`/outbox/${email._id}/athena`, "POST", { to, subject, body });
       setSubject(r.subject || subject);
       setBody(r.body);
-      flashNote(`Inanna's draft is in the box${r.changes ? `: ${r.changes}` : "."} Edit anything, then save or send.`);
+      flashNote(`Athena's draft is in the box${r.changes ? `: ${r.changes}` : "."} Edit anything, then save or send.`);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -206,13 +207,13 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
 
           <div className="flex items-end justify-between gap-2 mb-1">
             <label className="block text-xs uppercase tracking-wide text-gray-400" htmlFor={`body-${email._id}`}>Message</label>
-            <button onClick={inannaDraft} disabled={!!busy}
+            <button onClick={athenaDraft} disabled={!!busy}
               className="text-xs bg-black text-white px-3 py-1.5 flex items-center gap-1.5 hover:bg-gray-800 disabled:opacity-50">
-              {busy === "inanna" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              {busy === "inanna" ? "Inanna is drafting…" : weakBody ? "Have Inanna draft it" : "Improve with Inanna"}
+              {busy === "athena" ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {busy === "athena" ? "Athena is drafting…" : weakBody ? "Have Athena draft it" : "Improve with Athena"}
             </button>
           </div>
-          <textarea id={`body-${email._id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={10} disabled={busy === "inanna"}
+          <textarea id={`body-${email._id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={10} disabled={busy === "athena"}
             className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-black font-sans text-sm leading-relaxed disabled:bg-gray-50" />
 
           {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
@@ -358,13 +359,13 @@ export default function CapitalWatchOutbox({ businessId, isAdmin, onChange }: { 
         ))}
       </div>
       <p className="text-sm text-gray-500 mb-6">
-        A short note to the people who review applications helps you stand out. Open each one, let Inanna draft or improve it,
+        A short note to the people who review applications helps you stand out. Open each one, let Athena draft or improve it,
         copy the form answers into the application, then send the note from your own email.
       </p>
 
       {loading && emails.length === 0 && <div className="py-8 text-gray-400">Loading…</div>}
       {!loading && emails.length === 0 && (
-        <div className="py-8 text-gray-400">{tab === "draft" ? "Nothing waiting for review. Applying to an opportunity, or asking Inanna to write an email, puts a draft here." : "No emails sent yet."}</div>
+        <div className="py-8 text-gray-400">{tab === "draft" ? "Nothing waiting for review. Applying to an opportunity, or asking Athena to write an email, puts a draft here." : "No emails sent yet."}</div>
       )}
 
       {tab === "draft" && emails.map((email) => (

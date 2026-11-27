@@ -4,7 +4,7 @@ import {
   api, send, getSession, setSession, clearSession, labelOf, formatUsd,
   type Business, type Draft, type Grant, type Member, type Options, type Stats,
 } from "./capitalWatchApi";
-import CapitalWatchInanna from "./CapitalWatchInanna";
+import CapitalWatchAthena from "./CapitalWatchAthena";
 import CapitalWatchOutbox from "./CapitalWatchOutbox";
 import CapitalWatchBusiness from "./CapitalWatchBusiness";
 
@@ -589,6 +589,9 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
               <div>Opportunity</div><div>Website</div><div>Amount</div><div>Type</div><div>Description</div>
             </div>
 
+            {view === "dismissed" && (
+              <div className="pt-4 text-xs text-gray-400">Dismissed opportunities clear out after 3 days. They won't come back as matches.</div>
+            )}
             {loading && <div className="py-8 text-gray-400">Loading…</div>}
             {!loading && grants.length === 0 && (
               <div className="py-8 text-gray-400">
@@ -777,7 +780,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
       )}
 
       {page !== "profile" && page !== "new-business" && (
-        <CapitalWatchInanna
+        <CapitalWatchAthena
           businessId={business._id}
           businessName={business.name}
           refreshKey={refreshKey}
@@ -873,7 +876,7 @@ function AccountPanel({ member, onClose, onChanged, onSignOut }: { member: Membe
       </div>
 
       <div className="text-sm text-gray-600 border-t border-gray-200 pt-4 mb-4">
-        Today: {member.usage.questions} of {member.limits.questions} Inanna questions, {member.usage.drafts} of {member.limits.drafts} application drafts.
+        Today: {member.usage.questions} of {member.limits.questions} Athena questions, {member.usage.drafts} of {member.limits.drafts} application drafts.
       </div>
 
       <label className="flex items-center gap-3 text-sm mb-4 cursor-pointer">
