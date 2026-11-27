@@ -19,6 +19,7 @@ const auth = require('../utils/capitalWatchAuth')
 const { subscribe } = require('../utils/newsletter')
 const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const { aiChat: openai } = require('../utils/aiChat')
+const { readOpportunityPage } = require('../utils/capitalWatchPageReader')
 
 const router = express.Router()
 
@@ -453,16 +454,57 @@ router.get('/stats', withBusiness, async (req, res) => {
 // The drafted application package for one applied opportunity.
 router.get('/grants/:id/draft', withBusiness, async (req, res) => {
   const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, status: 'approved' })
-    .select('outreachEmail applicationNarrative requirementsChecklist updatedAt').lean().catch(() => null)
+    .select('outreachEmail applicationNarrative requirementsChecklist applicationFields fieldsSource applyUrl updatedAt').lean().catch(() => null)
   if (!decision) return fail(res, 404, 'No application draft for this opportunity.')
   res.json(decision)
 })
 
-async function generateApplicationDraft(grant, business) {
+// The person applying, for contact fields (name, email) on forms and sign-offs.
+const contactLine = (member) => member ? `Applicant contact: ${member.name || "name not given"}, ${member.email}` : ""
+
+// What the opportunity's own page says, for the prompts. Fields come first so the
+// model fills the real form rather than a guessed one.
+function pageSection(page) {
+  if (!page) return 'The opportunity page could not be read. Use the summary and requirements above.'
+  const fields = page.fields.length
+    ? page.fields.map((f, i) => `${i + 1}. ${f.label}${f.required ? ' (required)' : ''}${f.options.length ? ` [choices: ${f.options.join(' | ')}]` : ''}`).join('\n')
+    : 'None found on the page (the form may load later or sit behind a sign-in).'
+  return `Form fields found on the application page:\n${fields}\n\nPage text (excerpt):\n${page.text.slice(0, 8000)}`
+}
+
+const FIELDS_RULES = `Application fields: application_fields lists every field the founder will fill in on the application form, so they can copy and paste each answer.
+- If form fields were found on the page, use exactly those labels, in that order. Skip fields that are clearly not part of the application (newsletter sign-up, site search, cookie choices).
+- If none were found, list the fields this kind of application almost always asks for (for example: legal business name, website, year founded, business address, EIN, UEI or SAM registration, number of employees, annual revenue, amount requested, use of funds, short business description, founder bio), plus any the requirements or page text mention.
+- answer: ready-to-paste text written from the business profile. Match a field's choices exactly when choices are given. Respect any length limit you can see. Leave answer empty when the profile doesn't have the fact.
+- status: "ready" when the answer is complete, "needs_input" when the founder must supply or confirm it.
+- note: for needs_input, say exactly what to gather. Otherwise a short tip (a character limit, which document to attach) or empty.`
+
+const FIELD_STATUSES = new Set(['ready', 'needs_input'])
+function cleanFields(list, page) {
+  const byLabel = new Map((page?.fields || []).map((f) => [f.label.toLowerCase(), f]))
+  return (Array.isArray(list) ? list : [])
+    .filter((f) => f && f.label)
+    .slice(0, 60)
+    .map((f) => {
+      const found = byLabel.get(String(f.label).toLowerCase())
+      const answer = noEmDash(String(f.answer || '')).slice(0, 5000)
+      return {
+        label: noEmDash(String(f.label)).slice(0, 200),
+        answer,
+        status: FIELD_STATUSES.has(f.status) && (f.status === 'needs_input' || answer) ? f.status : 'needs_input',
+        note: noEmDash(String(f.note || '')).slice(0, 500),
+        options: found?.options || [],
+        required: Boolean(found?.required),
+      }
+    })
+}
+
+async function generateApplicationDraft(grant, business, page, member) {
   const systemPrompt = `You are a founder preparing a complete, near submission-ready application package for a funding opportunity. Do as much of the actual work as possible so the founder only has to review and submit, not write from scratch.
 
 Business profile (the only facts you may use about the business):
 ${businessProfileText(business)}
+${contactLine(member)}
 
 No generic template. Every opportunity is different; adapt tone and structure to what this one actually is:
 - Government/agency grant or compliance-heavy program: formal, precise, fact-based. Emphasize eligibility, compliance, measurable impact.
@@ -472,7 +514,9 @@ No generic template. Every opportunity is different; adapt tone and structure to
 - Scholarship / fellowship: personal narrative grounded in the founders' background and this program's mission.
 - If the opportunity is for a founder group or place the business genuinely belongs to, reference it specifically, never as a bolted-on statement.
 
-Outreach email: write outreach_email as a real email from a founder. If a contact email is given, address that contact or agency. If none is given, write a short, polite inquiry to the program team (greeting "Hello,") that the founder can send once they find the right address. Never use placeholders like [Name] or [Email]. Give it a specific subject line in outreach_subject.
+Outreach email: ALWAYS write outreach_email, even when applications go through a portal. A short personal note to the program team, reviewers or judges is the founder's edge over applicants who only fill in the form. Write it as the founder: say they are applying (or about to), give two or three lines of specific background tied to this program's goals, and close with one useful question (eligibility, timeline, or whether supporting materials are welcome) or an offer to share more. Under 180 words. Format it as a real email: the greeting on its own line, two or three short paragraphs separated by blank lines, then a sign-off with the founder's name from the profile. If a contact email is given, address that contact or agency; otherwise greet the program team ("Hello,"). Never say an email isn't needed. Never use placeholders like [Name] or [Email]. Give it a specific subject line in outreach_subject.
+
+${FIELDS_RULES}
 
 Never invent facts, numbers, customers, or results that are not in the profile. Where the application needs a fact the profile doesn't have, mark that requirement "needs_input" instead of making it up. Do not use em dashes anywhere.
 
@@ -490,7 +534,8 @@ Return ONLY valid JSON with this exact shape:
   "outreach_subject": "string",
   "outreach_email": "string",
   "application_narrative": "string",
-  "requirements_checklist": [ { "requirement": "string", "status": "drafted" | "needs_input" | "not_applicable", "detail": "string" } ]
+  "requirements_checklist": [ { "requirement": "string", "status": "drafted" | "needs_input" | "not_applicable", "detail": "string" } ],
+  "application_fields": [ { "label": "string", "answer": "string", "status": "ready" | "needs_input", "note": "string" } ]
 }`
 
   const userPrompt = `Write a complete application package for this funding opportunity:
@@ -506,7 +551,9 @@ Contact email: ${grant.contactEmail || 'None found on the page'}
 Founder groups stated as eligible: ${(grant.targetDemographics || []).join(', ') || 'None stated, open to all founders'}
 Summary: ${grant.summary || 'N/A'}
 Purpose: ${grant.why || 'N/A'}
-Stated submission requirements (break these into the checklist and follow them exactly): ${grant.requirements || 'None explicitly stated, use standard professional submission practice.'}`
+Stated submission requirements (break these into the checklist and follow them exactly): ${grant.requirements || 'None explicitly stated, use standard professional submission practice.'}
+
+${pageSection(page)}`
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -556,8 +603,10 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
     if (!claimed) { await auth.refundAllowance(req.member, 'drafts'); return fail(res, 409, 'Already being drafted.') }
 
     let draft
+    let page = null
     try {
-      draft = await generateApplicationDraft(grant, req.business)
+      page = await readOpportunityPage(grant.link)
+      draft = await generateApplicationDraft(grant, req.business, page, req.member)
     } catch (err) {
       // Put it back and give the allowance back, so they can try again.
       if (previous) await Decision.updateOne(key, { $set: { status: previous.status } })
@@ -575,6 +624,9 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
         outreachEmail: noEmDash(draft.outreach_email),
         applicationNarrative: noEmDash(draft.application_narrative),
         requirementsChecklist: checklist,
+        applicationFields: cleanFields(draft.application_fields, page),
+        fieldsSource: page?.fields?.length ? 'page' : 'likely',
+        ...(page?.applyUrl ? { applyUrl: page.applyUrl } : {}),
       },
     }, { new: true }).lean()
 
@@ -601,6 +653,52 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
   } catch (err) {
     console.error('[CapitalWatch] Decision failed:', err.message)
     fail(res, 500, 'Could not update this opportunity. Try again.')
+  }
+})
+
+// Reads the opportunity's page again and (re)fills the application form fields.
+// For applications drafted before fields existed, or when the form has changed.
+router.post('/grants/:id/fields', withBusiness, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 404, 'Opportunity not found.')
+  const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, status: 'approved' })
+    .select('applicationNarrative').lean()
+  if (!decision) return fail(res, 404, 'Apply to this opportunity first.')
+  if (!(await auth.useAllowance(req.member, 'questions'))) {
+    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Inanna requests. More tomorrow.`)
+  }
+  try {
+    const grant = await Grant.findById(req.params.id).select(GRANT_FIELDS).lean()
+    const page = await readOpportunityPage(grant?.link)
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: `You help a founder fill in a funding application form by copy and paste.
+
+Business profile (the only facts you may use about the business):
+${businessProfileText(req.business)}
+${contactLine(req.member)}
+
+${FIELDS_RULES}
+
+Never invent facts. Do not use em dashes. Return ONLY JSON: { "application_fields": [ { "label": "string", "answer": "string", "status": "ready" | "needs_input", "note": "string" } ] }` },
+        { role: 'user', content: `Opportunity: ${grant.title} (${grant.agency || 'organization not listed'})
+Type: ${categoryOf(grant)}
+Summary: ${grant.summary || 'N/A'}
+Stated requirements: ${grant.requirements || 'None stated'}
+${decision.applicationNarrative ? `\nThe founder's drafted application (reuse its wording for long answers):\n${decision.applicationNarrative.slice(0, 5000)}\n` : ''}
+${pageSection(page)}` },
+      ],
+      temperature: 0.3,
+    }, { timeout: 90000 })
+    const fields = cleanFields(JSON.parse(response.choices[0].message.content).application_fields, page)
+    const fieldsSource = page?.fields?.length ? 'page' : 'likely'
+    await Decision.updateOne({ _id: decision._id }, { $set: { applicationFields: fields, fieldsSource, ...(page?.applyUrl ? { applyUrl: page.applyUrl } : {}) } })
+    res.json({ fields, fieldsSource, applyUrl: page?.applyUrl || '' })
+  } catch (err) {
+    await auth.refundAllowance(req.member, 'questions')
+    console.error('[CapitalWatch] Field fill failed:', err.message)
+    fail(res, 500, "Couldn't read the application form right now. Try again in a moment.")
   }
 })
 
@@ -639,9 +737,105 @@ async function outboxEmailForMember(member, id) {
   return ok ? email : null
 }
 
+// Each draft comes with what's needed to finish the application it belongs to: the
+// opportunity's link and deadline, the form fields with answers, and open items.
 router.get('/outbox', withBusiness, async (req, res) => {
   const status = ['draft', 'sent', 'discarded'].includes(req.query.status) ? req.query.status : 'draft'
-  res.json(await OutboundEmail.find({ business: req.business._id, status }).sort({ updatedAt: -1 }).limit(100).lean())
+  const emails = await OutboundEmail.find({ business: req.business._id, status }).sort({ updatedAt: -1 }).limit(100).lean()
+  if (status !== 'draft') return res.json(emails)
+  const grantIds = [...new Set(emails.map((e) => e.grant && String(e.grant)).filter(Boolean))]
+  const [grants, decisions] = await Promise.all([
+    Grant.find({ _id: { $in: grantIds } }).select('link dueDate rolling status').lean(),
+    Decision.find({ business: req.business._id, grant: { $in: grantIds } })
+      .select('grant status applicationFields fieldsSource applyUrl requirementsChecklist').lean(),
+  ])
+  const grantById = new Map(grants.map((g) => [String(g._id), g]))
+  const decisionByGrant = new Map(decisions.map((d) => [String(d.grant), d]))
+  res.json(emails.map((e) => {
+    const g = e.grant && grantById.get(String(e.grant))
+    const d = e.grant && decisionByGrant.get(String(e.grant))
+    if (!g) return e
+    return {
+      ...e,
+      context: {
+        link: g.link,
+        applyUrl: d?.applyUrl || '',
+        dueDate: g.dueDate || null,
+        rolling: Boolean(g.rolling),
+        expired: g.status === 'expired',
+        applied: d?.status === 'approved',
+        fields: d?.applicationFields || [],
+        fieldsSource: d?.fieldsSource || null,
+        needsInput: (d?.requirementsChecklist || []).filter((r) => r.status === 'needs_input').map((r) => ({ requirement: r.requirement, detail: r.detail })),
+      },
+    }
+  }))
+})
+
+// "Have Inanna draft it": takes what's in the box now (even if empty) and makes it a
+// stronger note to the program team. Returns the new text; nothing is saved or sent.
+router.post('/outbox/:id/inanna', async (req, res) => {
+  const email = await outboxEmailForMember(req.member, req.params.id)
+  if (!email) return fail(res, 404, 'Draft not found.')
+  if (email.status !== 'draft') return fail(res, 409, `This email is already ${email.status}.`)
+  if (!(await auth.useAllowance(req.member, 'questions'))) {
+    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Inanna requests. More tomorrow.`)
+  }
+  try {
+    const [business, grant, decision] = await Promise.all([
+      Business.findById(email.business).lean(),
+      email.grant ? Grant.findById(email.grant).select(GRANT_FIELDS).lean() : null,
+      email.grant ? Decision.findOne({ business: email.business, grant: email.grant }).select('applicationNarrative').lean() : null,
+    ])
+    const current = {
+      to: String(req.body?.to ?? email.to).slice(0, 320),
+      subject: String(req.body?.subject ?? email.subject).slice(0, 300),
+      body: String(req.body?.body ?? email.body).slice(0, MAX_BODY),
+    }
+    const system = `You are Inanna, a funding coach who helps founders stand out to grant programs, lenders, investors and competition judges. You improve one outreach email.
+
+Business profile (the only facts you may use about the business):
+${businessProfileText(business)}
+${contactLine(req.member)}
+
+Rules:
+- Start from the founder's current draft. Keep every fact, name and personal touch they wrote, and keep their voice. If the draft is empty, a placeholder, or says no email is needed, write a fresh one.
+- The goal: be remembered by the people who review applications. Say the founder is applying (or about to), give two or three lines of specific background tied to what this program funds, and close with one useful question (eligibility, timeline, whether supporting materials are welcome) or an offer to share more.
+- Under 180 words. Warm, direct, professional. No hype, no buzzwords.
+- Format it as a real email: the greeting on its own line, two or three short paragraphs separated by blank lines, then a sign-off with the founder's name from the profile.
+- Never invent facts, numbers, customers or results. Never use placeholders like [Name]. Do not use em dashes.
+- If the recipient is known, greet them appropriately; otherwise "Hello,".
+
+Return ONLY JSON: { "subject": "string", "body": "string", "changes": "one short sentence on what you improved" }`
+    const user = `Opportunity: ${grant ? `${grant.title} (${grant.agency || 'organization not listed'})
+Type: ${categoryOf(grant)}
+Summary: ${grant.summary || 'N/A'}
+Purpose: ${grant.why || 'N/A'}
+Deadline: ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}` : 'General outreach (no specific opportunity)'}
+${decision?.applicationNarrative ? `\nThe founder's drafted application, for facts and themes:\n${decision.applicationNarrative.slice(0, 4000)}\n` : ''}
+Recipient: ${current.to || 'unknown'}
+Current subject: ${current.subject || '(empty)'}
+Current message:
+${current.body || '(empty)'}`
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.5,
+    }, { timeout: 60000 })
+    const out = JSON.parse(response.choices[0].message.content)
+    const body = noEmDash(String(out.body || '')).trim().slice(0, MAX_BODY)
+    if (!body) throw new Error('empty draft')
+    res.json({
+      subject: noEmDash(String(out.subject || current.subject)).trim().slice(0, 300),
+      body,
+      changes: noEmDash(String(out.changes || '')).slice(0, 300),
+    })
+  } catch (err) {
+    await auth.refundAllowance(req.member, 'questions')
+    console.error('[CapitalWatch] Inanna email draft failed:', err.message)
+    fail(res, 500, "Inanna couldn't draft this right now. Try again in a moment.")
+  }
 })
 
 // Saves a new draft (from an Inanna suggestion or written by hand). Never sends.

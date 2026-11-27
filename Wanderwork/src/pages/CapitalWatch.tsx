@@ -749,6 +749,21 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
                   ))}
                 </section>
               )}
+              {!!draftView.draft.applicationFields?.length && (
+                <section>
+                  <h3 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Form answers</h3>
+                  {draftView.draft.applicationFields.map((f, i) => (
+                    <div key={i} className="border-b border-gray-100 py-2">
+                      <div className="flex justify-between gap-3">
+                        <div className="font-bold">{f.label}{f.status === "needs_input" && <span className="ml-2 text-[10px] uppercase px-1.5 py-0.5 bg-[#FACC15] font-normal">Needs you</span>}</div>
+                        {f.answer && <button onClick={() => navigator.clipboard?.writeText(f.answer).then(() => flash(`Copied "${f.label}".`))} className="text-xs underline shrink-0">Copy</button>}
+                      </div>
+                      {f.answer && <div className="text-gray-600 mt-1 whitespace-pre-wrap font-sans">{f.answer}</div>}
+                      {f.note && <div className="text-gray-400 text-xs mt-1">{f.note}</div>}
+                    </div>
+                  ))}
+                </section>
+              )}
               <section>
                 <div className="flex justify-between items-baseline mb-2">
                   <h3 className="text-xs uppercase tracking-wide text-gray-400">Application</h3>
