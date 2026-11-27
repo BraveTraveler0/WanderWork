@@ -88,6 +88,8 @@ export type Business = {
   useOfFunds: string;
   memberIds: string[];
   pendingInvites: string[];
+  // Everyone on the business shares one saved/dismissed list and Outbox.
+  sharedView?: boolean;
 };
 
 export type Grant = {

@@ -531,7 +531,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
         <AccountPanel member={member} onClose={() => setMenu(null)} onChanged={onMemberChanged} onSignOut={onSignOut} />
       )}
 
-      {page === "outbox" && <CapitalWatchOutbox businessId={business._id} isAdmin={isAdmin} onChange={afterChange} />}
+      {page === "outbox" && <CapitalWatchOutbox businessId={business._id} isAdmin={isAdmin} sharedView={Boolean(business.sharedView)} onChange={afterChange} />}
 
       {(page === "profile" || page === "new-business") && (
         <CapitalWatchBusiness
@@ -541,6 +541,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
           onCancel={() => setPage("list")}
           onSaved={async (b) => { await onBusinessesChanged(b._id); setPage("list"); flash("Profile saved. Matches updated."); }}
           onDeleted={async () => { await onBusinessesChanged(); setPage("list"); }}
+          onTeamChanged={() => { onBusinessesChanged(business._id); afterChange(); }}
         />
       )}
 
@@ -590,7 +591,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
             </div>
 
             {view === "dismissed" && (
-              <div className="pt-4 text-xs text-gray-400">Only you see what you dismiss. Dismissed opportunities clear out after 3 days and won't come back as matches.</div>
+              <div className="pt-4 text-xs text-gray-400">{business.sharedView ? "Your whole team shares this list." : "Only you see what you dismiss."} Dismissed opportunities clear out after 3 days and won't come back as matches.</div>
             )}
             {loading && <div className="py-8 text-gray-400">Loading…</div>}
             {!loading && grants.length === 0 && (
