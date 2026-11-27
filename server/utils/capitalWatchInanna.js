@@ -11,6 +11,7 @@ const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail
 const { aiChat } = require('./aiChat')
 const { GRANT_FIELDS, getOpenGrants, matchesFor, businessProfileText } = require('./capitalWatchData')
 const { checkFit } = require('./capitalWatchMatching')
+const { PERSONA, CRAFT, WRITING, RUBRIC, CHAT_VOICE } = require('../config/capitalWatchPersona')
 
 const TOP_MATCHES = 35
 const SEARCH_EXTRA = 8
@@ -98,7 +99,23 @@ async function loadContext(business, question) {
   const decided = decisions.map((d) => ({ grant: byId.get(String(d.grant)), decision: d })).filter((x) => x.grant)
   const top = matches.slice(0, TOP_MATCHES)
   const extra = await searchForQuestion(question, [...top, ...decided.map((x) => x.grant)].map((g) => g._id), business)
-  return { matchCount: matches.length, top, decided, extra }
+  return { matchCount: matches.length, top, decided, extra, focus: await focusApplication(question, decided) }
+}
+
+const REVIEW_RE = /\b(review|score|critique|feedback|grade|rate|improve|strengthen|weak|strong|ready|rewrite|edit)\b/i
+
+// The drafted application the question is about, so Inanna can review or rework the
+// actual text. Named by title words, or the latest one when asked to review "my application".
+async function focusApplication(question, decided) {
+  const applied = decided.filter((x) => x.decision.status === 'approved')
+  if (!applied.length) return null
+  const words = (String(question || '').toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter((w) => !STOP.has(w))
+  const named = applied.find((x) => words.some((w) => String(x.grant.title || '').toLowerCase().includes(w)))
+  const pick = named || (REVIEW_RE.test(question) ? applied[0] : null)
+  if (!pick) return null
+  const d = await Decision.findById(pick.decision._id).select('applicationNarrative outreachEmail').lean()
+  if (!d?.applicationNarrative) return null
+  return { grant: pick.grant, narrative: d.applicationNarrative.slice(0, 6000), outreach: (d.outreachEmail || '').slice(0, 1500) }
 }
 
 // Cheap, no-AI summary for the "Today" tab and the orb's badge.
@@ -143,18 +160,26 @@ function systemPrompt(business, ctx) {
   const today = new Date().toISOString().slice(0, 10)
   const section = (title, rows) => `${title}\n${rows.length ? rows.join('\n') : '- none'}`
 
-  return `You are Inanna, the funding assistant inside Capital Watch, a tool that finds grants, loans, investors, competitions, accelerators and fellowships, and ranks them for a business. Today is ${today}. You are helping the business below.
+  return `${PERSONA}
 
-How it works: each opportunity is a "match" until the business applies (which drafts an application package), saves it for later, or dismisses it. "Fit score" is the tool's own ranking against the profile; higher is better. Opportunities marked NOT A FIT fail a hard rule from the profile.
+${CRAFT}
 
-Your job: help this business decide what to pursue and get applications done. Be direct and specific. Compare opportunities, explain fit and eligibility, flag deadlines, say what is still missing on applications in progress, and draft short pieces of text when asked. If the profile is missing something that would change the answer (location, founder backgrounds, stage), say what to add to the profile.
+${WRITING}
+
+${RUBRIC}
+
+${CHAT_VOICE}
+
+Where you work: Capital Watch finds grants, loans, investors, competitions, accelerators and fellowships, and ranks them for a business. Today is ${today}. You are helping the business below. Each opportunity is a "match" until the business applies (which drafts an application package), saves it for later, or dismisses it. "Fit score" is the tool's own ranking against the profile; higher is better. Opportunities marked NOT A FIT fail a hard rule from the profile.
+
+Your job: help this business decide what to pursue and win it. Switch roles to fit the question: funding strategist (the strongest argument and positioning), compliance checker (eligibility, disqualifiers, required attachments, limits), grant writer (actual text, not advice, when asked to write), reviewer (score with the rubric and give specific fixes), editor, impact specialist (measurable outcomes), or coach (encouragement after a setback). Compare opportunities, explain fit, flag deadlines, and say what is still missing on applications in progress. If the profile is missing something that would change the answer (location, founder backgrounds, stage, revenue, traction), say what to add to the profile.
 
 Rules:
 - Use only the data below. Never invent an opportunity, amount, deadline, requirement, or fact about the business. If something is not in the data, say so, and suggest opening the source link to check.
 - Refer to opportunities by their title, never by id.
 - The fit score is a rough ranking, not a verdict. Before recommending anything, read its summary and confirm this business could actually be the applicant and use the money for its own work. Do not recommend opportunities meant for a different kind of organization.
 - The scrape sometimes picks up news about awards already given rather than open calls. If an entry reads like that, say it is probably not open and suggest dismissing it.
-- Keep answers short: a few sentences or a short list. Plain text with simple "- " bullets; no markdown bold, no tables, no headings.
+- Keep answers short: a few sentences or a short list. A review or a requested piece of writing can be longer. Plain text with simple "- " bullets; no markdown bold, no tables, no headings.
 - Never promise to do something later. If asked to draft something, include the draft in this same reply.
 - Do not use em dashes.
 
@@ -176,7 +201,9 @@ ${section(`## Top matches (${ctx.matchCount} total; best ${ctx.top.length} shown
 
 ${section('## Applied and saved', ctx.decided.map((x) => grantLine(x.grant, x.decision)))}
 
-${ctx.extra.length ? section('## Other opportunities matching the question', ctx.extra.map((g) => grantLine(g))) : ''}`.trim()
+${ctx.extra.length ? section('## Other opportunities matching the question', ctx.extra.map((g) => grantLine(g))) : ''}
+
+${ctx.focus ? `## Drafted application for "${ctx.focus.grant.title}" (the one under discussion)\n${ctx.focus.narrative}${ctx.focus.outreach ? `\n\nIts outreach note:\n${ctx.focus.outreach}` : ''}` : ''}`.trim()
 }
 
 const VALID_EMAIL_RE = /^[^\s@<>[\]]+@[^\s@<>[\]]+\.[^\s@<>[\]]+$/
@@ -256,7 +283,9 @@ async function askInanna(business, messages) {
   const grantsById = new Map(all.map((g) => [String(g._id), g]))
   const decidedIds = new Set(ctx.decided.map((x) => String(x.grant._id)))
   const actions = cleanActions(parsed.actions, grantsById, decidedIds)
-  const reply = withoutRepeatedDrafts(noEmDash(parsed.reply), actions).trim()
+  // The chat shows plain text, so drop markdown emphasis and heading marks.
+  const plain = noEmDash(parsed.reply).replace(/\*\*|__/g, '').replace(/^#{1,6}\s+/gm, '')
+  const reply = withoutRepeatedDrafts(plain, actions).trim()
   return {
     reply: reply || "I couldn't put an answer together for that. Try asking it another way.",
     actions,
