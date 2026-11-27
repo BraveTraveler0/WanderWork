@@ -13,8 +13,10 @@ type Turn = { role: "user" | "assistant"; content: string; actions?: InannaActio
 const historyKey = (businessId: string) => `capitalwatch.inanna.${businessId}`;
 const STARTERS = [
   "Which 3 should we apply to this week, and why?",
-  "What deadlines are coming up?",
+  "Review my latest application like a grant evaluator would.",
+  "What's our strongest funding argument?",
   "What's still missing on the applications we started?",
+  "What deadlines are coming up?",
   "What should I add to my profile to get better matches?",
 ];
 

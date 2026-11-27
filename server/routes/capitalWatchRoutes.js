@@ -20,6 +20,7 @@ const { subscribe } = require('../utils/newsletter')
 const { getCapitalWatchUrl } = require('../utils/publicUrls')
 const { aiChat: openai } = require('../utils/aiChat')
 const { readOpportunityPage } = require('../utils/capitalWatchPageReader')
+const { PERSONA, CRAFT, WRITING } = require('../config/capitalWatchPersona')
 
 const router = express.Router()
 
@@ -500,7 +501,13 @@ function cleanFields(list, page) {
 }
 
 async function generateApplicationDraft(grant, business, page, member) {
-  const systemPrompt = `You are a founder preparing a complete, near submission-ready application package for a funding opportunity. Do as much of the actual work as possible so the founder only has to review and submit, not write from scratch.
+  const systemPrompt = `${PERSONA}
+
+${CRAFT}
+
+${WRITING}
+
+Your task now: act as the grant writer and prepare a complete, near submission-ready application package for this business, written in the founder's voice. Do as much of the actual work as possible so the founder only has to review and submit, not write from scratch. Lead with why funding this business advances the funder's own mission. Then review your own draft as a strict reviewer would and fix weak spots before returning it.
 
 Business profile (the only facts you may use about the business):
 ${businessProfileText(business)}
@@ -518,7 +525,7 @@ Outreach email: ALWAYS write outreach_email, even when applications go through a
 
 ${FIELDS_RULES}
 
-Never invent facts, numbers, customers, or results that are not in the profile. Where the application needs a fact the profile doesn't have, mark that requirement "needs_input" instead of making it up. Do not use em dashes anywhere.
+Never invent facts, numbers, customers, or results that are not in the profile. Where the application needs a fact the profile doesn't have, mark that requirement "needs_input" instead of making it up, and in application_narrative put a clearly labeled marker such as [NEEDS YOU: 2024 revenue] where it goes. Do not use em dashes anywhere.
 
 Requirements handling:
 1. Read the stated submission requirements line by line. Every required document, question, format rule, length limit, or audience instruction is binding.
@@ -565,6 +572,12 @@ ${pageSection(page)}`
 }
 
 const CHECK_STATUSES = new Set(['drafted', 'needs_input', 'not_applicable'])
+
+// The model sometimes returns a section-by-section object or a list instead of one string.
+const asText = (v) => typeof v === 'string' ? v
+  : Array.isArray(v) ? v.map(asText).filter(Boolean).join('\n\n')
+  : v && typeof v === 'object' ? Object.entries(v).map(([k, x]) => (typeof x === 'string' ? `${k}\n${x}` : asText(x) || k)).join('\n\n')
+  : ''
 
 // status: approved (apply: drafts an application) | archived (save) | rejected (dismiss)
 // | pending (move back to matches).
@@ -621,8 +634,8 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
     const decision = await Decision.findOneAndUpdate(key, {
       $set: {
         status: 'approved',
-        outreachEmail: noEmDash(draft.outreach_email),
-        applicationNarrative: noEmDash(draft.application_narrative),
+        outreachEmail: noEmDash(asText(draft.outreach_email)),
+        applicationNarrative: noEmDash(asText(draft.application_narrative)),
         requirementsChecklist: checklist,
         applicationFields: cleanFields(draft.application_fields, page),
         fieldsSource: page?.fields?.length ? 'page' : 'likely',
@@ -673,7 +686,11 @@ router.post('/grants/:id/fields', withBusiness, async (req, res) => {
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: `You help a founder fill in a funding application form by copy and paste.
+        { role: 'system', content: `${PERSONA}
+
+${WRITING}
+
+Your task now: help the founder fill in this funding application form by copy and paste. Short answers should be exact; longer answers should make the funder-mission case concisely within any limit.
 
 Business profile (the only facts you may use about the business):
 ${businessProfileText(req.business)}
@@ -792,7 +809,13 @@ router.post('/outbox/:id/inanna', async (req, res) => {
       subject: String(req.body?.subject ?? email.subject).slice(0, 300),
       body: String(req.body?.body ?? email.body).slice(0, MAX_BODY),
     }
-    const system = `You are Inanna, a funding coach who helps founders stand out to grant programs, lenders, investors and competition judges. You improve one outreach email.
+    const system = `${PERSONA}
+
+${CRAFT}
+
+${WRITING}
+
+Your task now: improve one outreach email from the founder to a grant program, lender, investor or competition judges. Use AIDA and tactical empathy: open with why this founder fits what the funder wants, make the reader want to see the application, and end with one easy ask.
 
 Business profile (the only facts you may use about the business):
 ${businessProfileText(business)}
