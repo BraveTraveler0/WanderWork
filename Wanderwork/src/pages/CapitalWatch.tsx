@@ -500,7 +500,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
               <span className="truncate">{business.name}</span><ChevronDown size={14} />
             </button>
             {menu === "business" && (
-              <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-black min-w-[240px] shadow-lg">
+              <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-40 bg-white border border-black min-w-[240px] max-w-[calc(100vw-2rem)] shadow-lg">
                 {businesses.map((b) => (
                   <button key={b._id} onClick={() => { setMenu(null); onSwitch(b._id); }}
                     className={`block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 ${b._id === business._id ? "font-bold" : ""}`}>{b.name}</button>
@@ -564,19 +564,22 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
           </div>
 
           {/* Category filters */}
-          <div className="px-4 sm:px-8 py-4 flex flex-wrap gap-2 items-center">
-            {[{ id: "all", label: "All types" }, ...options.fundingCategories].map((c) => {
-              const count = view === "matches" && c.id !== "all" ? stats?.byCategory?.[c.id] : undefined;
-              if (view === "matches" && c.id !== "all" && !count && category !== c.id) return null;
-              return (
-                <button key={c.id} onClick={() => setCategory(c.id)} aria-pressed={category === c.id}
-                  className={`text-xs px-3 py-1.5 border ${category === c.id ? "bg-black text-white border-black" : "border-gray-300 hover:border-black"}`}>
-                  {c.label}{count ? ` (${count})` : ""}
-                </button>
-              );
-            })}
+          {/* On phones the types are one row you can swipe sideways; wider screens wrap. */}
+          <div className="px-4 sm:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {[{ id: "all", label: "All types" }, ...options.fundingCategories].map((c) => {
+                const count = view === "matches" && c.id !== "all" ? stats?.byCategory?.[c.id] : undefined;
+                if (view === "matches" && c.id !== "all" && !count && category !== c.id) return null;
+                return (
+                  <button key={c.id} onClick={() => setCategory(c.id)} aria-pressed={category === c.id}
+                    className={`shrink-0 whitespace-nowrap text-xs px-3 py-2 sm:py-1.5 border ${category === c.id ? "bg-black text-white border-black" : "border-gray-300 hover:border-black"}`}>
+                    {c.label}{count ? ` (${count})` : ""}
+                  </button>
+                );
+              })}
+            </div>
             {view === "matches" && (
-              <label className="ml-auto flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+              <label className="sm:ml-auto flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                 <input type="checkbox" checked={showUnfit} onChange={(e) => setShowUnfit(e.target.checked)} className="accent-black" />
                 Also show ones that aren't a fit
               </label>
@@ -585,8 +588,8 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
 
           <hr className="border-gray-200" />
 
-          <div className="px-4 sm:px-8 pb-28">
-            <div className="hidden sm:grid grid-cols-[2fr_1.2fr_1fr_1fr_3fr] gap-4 py-4 text-gray-400 text-sm uppercase tracking-wide">
+          <div className="px-4 sm:px-8 pt-4 lg:pt-0 pb-28">
+            <div className="hidden lg:grid grid-cols-[2fr_1.2fr_1fr_1fr_3fr] gap-4 py-4 text-gray-400 text-sm uppercase tracking-wide">
               <div>Opportunity</div><div>Website</div><div>Amount</div><div>Type</div><div>Description</div>
             </div>
 
@@ -603,23 +606,25 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
             )}
 
             {grants.map((grant) => (
-              <div key={grant._id} className={`group relative border mb-4 px-2 transition-colors hover:border-black ${grant.fit === false ? "border-dashed border-gray-300 opacity-70" : "border-gray-200"}`}>
-                <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-[2fr_1.2fr_1fr_1fr_3fr] sm:gap-4 sm:py-6 sm:items-start">
-                  <div className="pr-14 sm:pr-10">
+              <div key={grant._id} className={`group relative border mb-4 px-3 lg:px-2 transition-colors hover:border-black ${grant.fit === false ? "border-dashed border-gray-300 opacity-70" : "border-gray-200"}`}>
+                {/* Phone: one column. Tablet: title, then website / amount / type side by side,
+                    then the description. Desktop: the five-column table. */}
+                <div className="grid grid-cols-1 gap-3 py-4 md:grid-cols-3 md:gap-x-6 lg:grid-cols-[2fr_1.2fr_1fr_1fr_3fr] lg:gap-4 lg:py-6 lg:items-start">
+                  <div className="md:col-span-3 lg:col-span-1 lg:pr-10">
                     <div className="font-bold">{grant.title}</div>
                     {grant.agency && <div className="text-xs text-gray-500 mt-1">{grant.agency}</div>}
                   </div>
-                  <div className="text-gray-600">
-                    <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Website</span>
-                    {grant.link ? <a href={grant.link} target="_blank" rel="noopener noreferrer" className="underline hover:text-black break-all">{websiteLabel(grant.link)}</a> : EMPTY}
+                  <div className="text-gray-600 min-w-0">
+                    <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Website</span>
+                    {grant.link ? <a href={grant.link} target="_blank" rel="noopener noreferrer" className="underline hover:text-black break-words">{websiteLabel(grant.link)}</a> : EMPTY}
                   </div>
                   <div>
-                    <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Amount</span>
+                    <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Amount</span>
                     {formatUsd(grant.amountUsd) || EMPTY}
                     <DeadlineLabel grant={grant} />
                   </div>
                   <div>
-                    <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Type</span>
+                    <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Type</span>
                     {labelOf(options.fundingCategories, grant.category) || EMPTY}
                     {!!grant.targetDemographics?.length && (
                       <div className="flex flex-wrap gap-1 mt-1">
@@ -629,8 +634,8 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
                       </div>
                     )}
                   </div>
-                  <div className="text-sm text-gray-500">
-                    <span className="sm:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Description</span>
+                  <div className="text-sm text-gray-500 md:col-span-3 lg:col-span-1">
+                    <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Description</span>
                     {grant.summary || EMPTY}
                     {grant.fit === false && grant.unfitReason && <div className="mt-2 text-xs text-black">Not a fit: {grant.unfitReason}</div>}
                     {grant.fit !== false && !!grant.reasons?.length && view === "matches" && (
@@ -643,7 +648,37 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
                   </div>
                 </div>
 
-                <div className="absolute -top-4 -right-4 flex flex-col gap-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                {/* Phone and tablet: labeled buttons inside the card, easy to tap. */}
+                <div className="lg:hidden flex flex-wrap gap-2 pb-4">
+                  {(view === "matches" || view === "saved") && (
+                    <button onClick={() => setApplying({ id: grant._id, title: grant.title })} aria-label={`Apply to ${grant.title}`}
+                      className="flex items-center gap-1.5 bg-[#FACC15] text-black px-4 py-2 text-sm font-bold active:bg-yellow-400">
+                      <Check size={15} strokeWidth={2.5} /> Apply
+                    </button>
+                  )}
+                  {view === "matches" && (
+                    <>
+                      <button onClick={() => decide(grant._id, "archived")} aria-label={`Save ${grant.title} for later`}
+                        className="flex items-center gap-1.5 border border-gray-300 px-4 py-2 text-sm active:border-black">
+                        <Archive size={14} /> Save
+                      </button>
+                      <button onClick={() => decide(grant._id, "rejected")} aria-label={`Dismiss ${grant.title}`}
+                        className="flex items-center gap-1.5 border border-gray-300 px-4 py-2 text-sm active:border-black">
+                        <X size={14} strokeWidth={2.5} /> Dismiss
+                      </button>
+                    </>
+                  )}
+                  {view !== "matches" && (
+                    <button onClick={() => decide(grant._id, "pending")} aria-label={`Move ${grant.title} back to matches`}
+                      className="flex items-center gap-1.5 border border-gray-300 px-4 py-2 text-sm active:border-black">
+                      <RotateCcw size={14} /> Back to matches
+                    </button>
+                  )}
+                </div>
+
+                {/* Desktop: floating buttons on the corner. With a mouse they appear on hover;
+                    on a large touchscreen (no hover) they always show. */}
+                <div className="hidden lg:flex absolute -top-4 -right-4 flex-col gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   {(view === "matches" || view === "saved") && (
                     <button onClick={() => setApplying({ id: grant._id, title: grant.title })} title="Apply: draft an application"
                       className="w-9 h-9 sm:w-8 sm:h-8 rotate-45 bg-[#FACC15] ring-4 ring-white shadow-lg flex items-center justify-center hover:bg-yellow-400 hover:scale-110 transition-transform">
