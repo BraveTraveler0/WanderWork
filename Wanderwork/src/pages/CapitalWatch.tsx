@@ -336,6 +336,15 @@ function App({ onSignOut }: { onSignOut: () => void }) {
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 type View = "matches" | "applied" | "saved" | "dismissed";
+type DraftJob = {
+  key: string;
+  grantId: string;
+  title: string;
+  businessName: string;
+  state: "drafting" | "done" | "error";
+  needsInput?: number;
+  message?: string;
+};
 const VIEWS: { id: View; label: string; stat: keyof Stats }[] = [
   { id: "matches", label: "Matches", stat: "matches" },
   { id: "applied", label: "Applied", stat: "applied" },
@@ -363,7 +372,9 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState<{ id: string; title: string } | null>(null);
-  const [drafting, setDrafting] = useState(false);
+  // Drafts run in the background so the page stays usable while they compose.
+  const [jobs, setJobs] = useState<DraftJob[]>([]);
+  const [jobsDocked, setJobsDocked] = useState(false);
   const [draftView, setDraftView] = useState<{ grant: Grant; draft: Draft | null } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [outboxCount, setOutboxCount] = useState(0);
@@ -420,20 +431,47 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
     }
   }
 
+  // The composing card starts in the middle of the screen and moves to the bottom
+  // left as soon as you scroll, so it never sits on top of what you're reading.
+  const activeJobs = jobs.length > 0;
+  useEffect(() => {
+    if (!activeJobs || jobsDocked) return;
+    const dock = () => setJobsDocked(true);
+    window.addEventListener("scroll", dock, { passive: true, once: true });
+    window.addEventListener("wheel", dock, { passive: true, once: true });
+    window.addEventListener("touchmove", dock, { passive: true, once: true });
+    return () => {
+      window.removeEventListener("scroll", dock);
+      window.removeEventListener("wheel", dock);
+      window.removeEventListener("touchmove", dock);
+    };
+  }, [activeJobs, jobsDocked]);
+
+  const updateJob = (key: string, patch: Partial<DraftJob>) =>
+    setJobs((prev) => prev.map((j) => (j.key === key ? { ...j, ...patch } : j)));
+  const dismissJob = (key: string) => setJobs((prev) => prev.filter((j) => j.key !== key));
+
   async function apply() {
     if (!applying) return;
-    setDrafting(true);
+    const { id, title } = applying;
+    setApplying(null);
+    if (jobs.some((j) => j.grantId === id && j.state === "drafting")) return;
+    const key = `${id}-${Date.now()}`;
+    const businessId = business._id;
+    // First draft on a quiet screen shows in the middle; later ones join the docked stack.
+    if (!jobs.length) setJobsDocked(false);
+    setJobs((prev) => [...prev, { key, grantId: id, title, businessName: business.name, state: "drafting" }]);
+    setGrants((prev) => prev.filter((g) => g._id !== id));
     try {
-      const r = await send(`/grants/${applying.id}`, "PATCH", { businessId: business._id, status: "approved" });
-      setGrants((prev) => prev.filter((g) => g._id !== applying.id));
-      flash(`Application drafted and emailed to you${r.needsInput ? `; ${r.needsInput} item${r.needsInput === 1 ? "" : "s"} need your input` : ""}. The outreach email is in your Outbox.`);
-      setApplying(null);
+      const r = await send(`/grants/${id}`, "PATCH", { businessId, status: "approved" });
+      updateJob(key, { state: "done", needsInput: r.needsInput || 0 });
+      setTimeout(() => dismissJob(key), 15000);
       afterChange();
       api<{ member: Member }>("/me").then((me) => onMemberChanged(me.member)).catch(() => {});
     } catch (err) {
-      flash((err as Error).message);
-    } finally {
-      setDrafting(false);
+      updateJob(key, { state: "error", message: (err as Error).message });
+      load();
+      loadStats();
     }
   }
 
@@ -634,27 +672,62 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
       )}
 
       {applying && (
-        <Modal onClose={() => !drafting && setApplying(null)}>
-          {drafting ? (
-            <div className="flex flex-col items-center gap-3 py-6 text-gray-500">
-              <Loader2 size={24} className="animate-spin" />
-              <div className="text-sm text-center">Drafting an application for {business.name}… this takes about 20 seconds.</div>
-            </div>
-          ) : (
-            <>
-              <h2 className="text-lg mb-2">Apply to {applying.title}?</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                We'll draft the application from {business.name}'s profile, list what you still need to gather, email it to you,
-                and put an outreach email in your Outbox. Nothing is submitted or sent for you.
-              </p>
-              <p className="text-xs text-gray-400 mb-6">{draftsLeft} of {member.limits.drafts} drafts left today.</p>
-              <div className="flex gap-3">
-                <button onClick={apply} disabled={draftsLeft === 0} className="bg-black text-white px-5 py-2 hover:bg-gray-800 disabled:opacity-40">Draft my application</button>
-                <button onClick={() => setApplying(null)} className="text-gray-500 underline">Cancel</button>
-              </div>
-            </>
-          )}
+        <Modal onClose={() => setApplying(null)}>
+          <h2 className="text-lg mb-2">Apply to {applying.title}?</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            We'll draft the application from {business.name}'s profile, list what you still need to gather, email it to you,
+            and put an outreach email in your Outbox. Nothing is submitted or sent for you. You can keep browsing while it drafts.
+          </p>
+          <p className="text-xs text-gray-400 mb-6">{Math.max(0, draftsLeft - jobs.filter((j) => j.state === "drafting").length)} of {member.limits.drafts} drafts left today.</p>
+          <div className="flex gap-3">
+            <button onClick={apply} disabled={draftsLeft - jobs.filter((j) => j.state === "drafting").length <= 0} className="bg-black text-white px-5 py-2 hover:bg-gray-800 disabled:opacity-40">Draft my application</button>
+            <button onClick={() => setApplying(null)} className="text-gray-500 underline">Cancel</button>
+          </div>
         </Modal>
+      )}
+
+      {jobs.length > 0 && (
+        <div
+          className="fixed z-40 flex flex-col gap-2 w-[calc(100%-6rem)] sm:w-96 transition-all duration-500 ease-out"
+          style={jobsDocked
+            ? { left: 16, top: "calc(100% - 16px)", transform: "translate(0, -100%)" }
+            : { left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}
+        >
+          {jobs.map((job) => (
+            <div key={job.key} role="status" aria-live="polite"
+              className={`border border-black shadow-xl p-4 text-sm ${job.state === "done" ? "bg-[#FACC15]" : "bg-white"}`}>
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 mt-0.5">
+                  {job.state === "drafting" && <Loader2 size={18} className="animate-spin text-gray-500" />}
+                  {job.state === "done" && <Check size={18} strokeWidth={2.5} />}
+                  {job.state === "error" && <X size={18} strokeWidth={2.5} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold truncate">{job.title}</div>
+                  {job.state === "drafting" && (
+                    <div className="text-gray-500 mt-1">Composing an application for {job.businessName}. This takes about 20 seconds; keep browsing.</div>
+                  )}
+                  {job.state === "done" && (
+                    <>
+                      <div className="mt-1">
+                        Success! Your application is drafted and emailed to you
+                        {job.needsInput ? `. ${job.needsInput} item${job.needsInput === 1 ? "" : "s"} still need your input` : ""}.
+                      </div>
+                      <div className="mt-2 flex gap-4">
+                        <button onClick={() => { dismissJob(job.key); setPage("outbox"); }} className="underline font-bold">Review in Outbox</button>
+                        <button onClick={() => { dismissJob(job.key); setPage("list"); setView("applied"); setCategory("all"); }} className="underline">See applied</button>
+                      </div>
+                    </>
+                  )}
+                  {job.state === "error" && <div className="mt-1 text-gray-600">Couldn't draft this one: {job.message}</div>}
+                </div>
+                {job.state !== "drafting" && (
+                  <button onClick={() => dismissJob(job.key)} aria-label="Close" className="shrink-0 text-gray-500 hover:text-black"><X size={16} /></button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {draftView && (
