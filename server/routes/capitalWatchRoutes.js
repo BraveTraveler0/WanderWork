@@ -245,6 +245,7 @@ router.delete('/me', async (req, res) => {
       OutboundEmail.deleteMany({ business: { $in: solo } }),
       Business.deleteMany({ _id: { $in: solo } }),
       Business.updateMany({ memberIds: req.member._id }, { $pull: { memberIds: req.member._id } }),
+      Decision.deleteMany({ member: req.member._id }),
     ])
     await Member.deleteOne({ _id: req.member._id })
     res.json({ message: 'Account deleted.' })
@@ -326,6 +327,7 @@ router.delete('/businesses/:id', async (req, res) => {
   if (!business) return fail(res, 404, 'Business not found.')
   if (business.memberIds.length > 1) {
     await Business.updateOne({ _id: business._id }, { $pull: { memberIds: req.member._id } })
+    await Decision.deleteMany({ business: business._id, member: req.member._id })
     return res.json({ message: 'You left this business.' })
   }
   await Promise.all([
@@ -374,6 +376,7 @@ router.delete('/businesses/:id/members/:who', async (req, res) => {
   if (mongoose.isValidObjectId(who)) {
     if (business.memberIds.length <= 1) return fail(res, 400, 'A business needs at least one person. Delete it instead.')
     await Business.updateOne({ _id: business._id }, { $pull: { memberIds: new mongoose.Types.ObjectId(who) } })
+    await Decision.deleteMany({ business: business._id, member: new mongoose.Types.ObjectId(who) })
   } else {
     await Business.updateOne({ _id: business._id }, { $pull: { pendingInvites: normalizeEmail(who) } })
   }
@@ -415,13 +418,15 @@ router.get('/grants', withBusiness, async (req, res) => {
     const inCategory = (g) => category === 'all' || (g.category || categoryOf(g)) === category
 
     if (view === 'matches' || view === 'all') {
-      const ranked = await matchesFor(req.business, { includeUnfit: view === 'all' })
+      const ranked = await matchesFor(req.business, { includeUnfit: view === 'all', memberId: req.member._id })
       return res.json(ranked.filter((g) => matchesSearch(g) && inCategory(g)).slice(0, LIST_LIMIT))
     }
 
     const status = VIEW_STATUS[view]
     if (!status) return fail(res, 400, 'Unknown view.')
-    const decisions = await Decision.find({ business: req.business._id, status, ...recentIfDismissed(status) }).sort({ updatedAt: -1 }).select('grant status updatedAt requirementsChecklist').lean()
+    // Applied is the business's; saved and dismissed are this person's own.
+    const owner = status === 'approved' ? null : req.member._id
+    const decisions = await Decision.find({ business: req.business._id, member: owner, status, ...recentIfDismissed(status) }).sort({ updatedAt: -1 }).select('grant status updatedAt requirementsChecklist').lean()
     const grants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) } }).select(GRANT_FIELDS).lean()
     const byId = new Map(grants.map((g) => [String(g._id), g]))
     const rows = decisions
@@ -445,9 +450,15 @@ router.get('/grants', withBusiness, async (req, res) => {
 router.get('/stats', withBusiness, async (req, res) => {
   try {
     const [matches, counts] = await Promise.all([
-      matchesFor(req.business),
+      matchesFor(req.business, { memberId: req.member._id }),
       Decision.aggregate([
-        { $match: { business: req.business._id, $or: [{ status: { $ne: 'rejected' } }, { updatedAt: { $gte: dismissedCutoff() } }] } },
+        { $match: {
+          business: req.business._id,
+          $and: [
+            { $or: [{ status: 'approved', member: null }, { status: { $in: ['archived', 'rejected'] }, member: req.member._id }] },
+            { $or: [{ status: { $ne: 'rejected' } }, { updatedAt: { $gte: dismissedCutoff() } }] },
+          ],
+        } },
         { $group: { _id: '$status', n: { $sum: 1 } } },
       ]),
     ])
@@ -462,7 +473,7 @@ router.get('/stats', withBusiness, async (req, res) => {
 
 // The drafted application package for one applied opportunity.
 router.get('/grants/:id/draft', withBusiness, async (req, res) => {
-  const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, status: 'approved' })
+  const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, member: null, status: 'approved' })
     .select('outreachEmail applicationNarrative requirementsChecklist applicationFields fieldsSource applyUrl updatedAt').lean().catch(() => null)
   if (!decision) return fail(res, 404, 'No application draft for this opportunity.')
   res.json(decision)
@@ -562,7 +573,7 @@ Amount: ${grant.amountUsd || 'N/A'}
 Deadline: ${grant.rolling ? 'Rolling' : (grant.dueDate || 'N/A')}
 Location: ${grant.location || 'N/A'}
 Link: ${grant.link}
-Contact email: ${grant.contactEmail || 'None found on the page'}
+Contact email: ${grant.contactEmail || page?.contact || 'None found on the website'}
 Founder groups stated as eligible: ${(grant.targetDemographics || []).join(', ') || 'None stated, open to all founders'}
 Summary: ${grant.summary || 'N/A'}
 Purpose: ${grant.why || 'N/A'}
@@ -596,19 +607,22 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 404, 'Opportunity not found.')
     const grant = await Grant.findById(req.params.id).select(GRANT_FIELDS).lean()
     if (!grant) return fail(res, 404, 'Opportunity not found.')
-    const key = { business: req.business._id, grant: grant._id }
+    // Applying is shared by the whole business; saving and dismissing are personal.
+    const key = { business: req.business._id, grant: grant._id, member: null }
+    const mine = { business: req.business._id, grant: grant._id, member: req.member._id }
 
     if (status === 'pending') {
-      await Decision.deleteOne({ ...key, status: { $ne: 'drafting' } })
+      // Undo my own save or dismissal first; otherwise this un-applies for the business.
+      const undone = await Decision.deleteOne(mine)
+      if (!undone.deletedCount) await Decision.deleteOne({ ...key, status: { $ne: 'drafting' } })
       return res.json({ ok: true })
     }
     if (status !== 'approved') {
-      const updated = await Decision.findOneAndUpdate(
-        { ...key, status: { $nin: ['drafting', 'approved'] } },
-        { $set: { status, decidedBy: req.member._id } },
-        { upsert: true, new: true },
-      ).catch((err) => (err.code === 11000 ? null : Promise.reject(err)))
-      if (!updated) return fail(res, 409, 'This opportunity was already applied to. Move it back to matches first.')
+      if (await Decision.exists({ ...key, status: { $in: ['drafting', 'approved'] } })) {
+        return fail(res, 409, 'This opportunity was already applied to. Move it back to matches first.')
+      }
+      await Decision.updateOne(mine, { $set: { status, decidedBy: req.member._id } }, { upsert: true })
+        .catch((err) => (err.code === 11000 ? null : Promise.reject(err)))
       return res.json({ ok: true })
     }
 
@@ -626,7 +640,7 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
     let draft
     let page = null
     try {
-      page = await readOpportunityPage(grant.link)
+      page = await readOpportunityPage(grant.link, { findContact: !grant.contactEmail })
       draft = await generateApplicationDraft(grant, req.business, page, req.member)
     } catch (err) {
       // Put it back and give the allowance back, so they can try again.
@@ -650,15 +664,19 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
         ...(page?.applyUrl ? { applyUrl: page.applyUrl } : {}),
       },
     }, { new: true }).lean()
+    // It's in Applied for everyone now, so it leaves anyone's Saved or Dismissed.
+    await Decision.deleteMany({ business: req.business._id, grant: grant._id, member: { $ne: null } })
 
-    // The outreach email waits in the Outbox to be reviewed, addressed and sent.
+    // The outreach email waits in the Outbox to be reviewed and sent. Athena addresses
+    // it from the opportunity's own website when the listing had no contact.
     if (decision.outreachEmail) {
       await OutboundEmail.create({
         business: req.business._id,
         createdBy: req.member._id,
         grant: grant._id,
         grantTitle: grant.title,
-        to: grant.contactEmail || '',
+        to: grant.contactEmail || page?.contact || '',
+        contactSearchedAt: grant.contactEmail ? undefined : new Date(),
         subject: noEmDash(String(draft.outreach_subject || '').trim()).slice(0, 300) || `${req.business.name}: ${grant.title}`,
         body: decision.outreachEmail,
         source: 'approval',
@@ -681,7 +699,7 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
 // For applications drafted before fields existed, or when the form has changed.
 router.post('/grants/:id/fields', withBusiness, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 404, 'Opportunity not found.')
-  const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, status: 'approved' })
+  const decision = await Decision.findOne({ business: req.business._id, grant: req.params.id, member: null, status: 'approved' })
     .select('applicationNarrative').lean()
   if (!decision) return fail(res, 404, 'Apply to this opportunity first.')
   if (!(await auth.useAllowance(req.member, 'questions'))) {
@@ -689,7 +707,7 @@ router.post('/grants/:id/fields', withBusiness, async (req, res) => {
   }
   try {
     const grant = await Grant.findById(req.params.id).select(GRANT_FIELDS).lean()
-    const page = await readOpportunityPage(grant?.link)
+    const page = await readOpportunityPage(grant?.link, { fresh: true })
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
@@ -731,7 +749,7 @@ ${pageSection(page)}` },
 
 router.get(['/athena/briefing', '/inanna/briefing'], withBusiness, async (req, res) => {
   try {
-    res.json(await buildBriefing(req.business))
+    res.json(await buildBriefing(req.business, req.member._id))
   } catch (err) {
     fail(res, 500, err.message)
   }
@@ -742,7 +760,7 @@ router.post(['/athena/ask', '/inanna/ask'], withBusiness, async (req, res) => {
     return fail(res, 429, `You've asked Athena ${auth.limitsFor(req.member).questions} questions today. More tomorrow.`)
   }
   try {
-    res.json(await askAthena(req.business, req.body?.messages))
+    res.json(await askAthena(req.business, req.body?.messages, req.member._id))
   } catch (err) {
     await auth.refundAllowance(req.member, 'questions')
     console.error('[CapitalWatch] Athena ask failed:', err.message)
@@ -766,12 +784,14 @@ async function outboxEmailForMember(member, id) {
 // opportunity's link and deadline, the form fields with answers, and open items.
 router.get('/outbox', withBusiness, async (req, res) => {
   const status = ['draft', 'sent', 'discarded'].includes(req.query.status) ? req.query.status : 'draft'
-  const emails = await OutboundEmail.find({ business: req.business._id, status }).sort({ updatedAt: -1 }).limit(100).lean()
+  // Drafts someone discarded are hidden for them only.
+  const emails = (await OutboundEmail.find({ business: req.business._id, status, ...(status === 'draft' ? { hiddenFor: { $ne: req.member._id } } : {}) })
+    .sort({ updatedAt: -1 }).limit(100).select('-hiddenFor').lean())
   if (status !== 'draft') return res.json(emails)
   const grantIds = [...new Set(emails.map((e) => e.grant && String(e.grant)).filter(Boolean))]
   const [grants, decisions] = await Promise.all([
     Grant.find({ _id: { $in: grantIds } }).select('link dueDate rolling status').lean(),
-    Decision.find({ business: req.business._id, grant: { $in: grantIds } })
+    Decision.find({ business: req.business._id, grant: { $in: grantIds }, member: null })
       .select('grant status applicationFields fieldsSource applyUrl requirementsChecklist').lean(),
   ])
   const grantById = new Map(grants.map((g) => [String(g._id), g]))
@@ -810,7 +830,7 @@ router.post(['/outbox/:id/athena', '/outbox/:id/inanna'], async (req, res) => {
     const [business, grant, decision] = await Promise.all([
       Business.findById(email.business).lean(),
       email.grant ? Grant.findById(email.grant).select(GRANT_FIELDS).lean() : null,
-      email.grant ? Decision.findOne({ business: email.business, grant: email.grant }).select('applicationNarrative').lean() : null,
+      email.grant ? Decision.findOne({ business: email.business, grant: email.grant, member: null }).select('applicationNarrative').lean() : null,
     ])
     const current = {
       to: String(req.body?.to ?? email.to).slice(0, 320),
@@ -892,12 +912,32 @@ router.patch('/outbox/:id', async (req, res) => {
   const email = await outboxEmailForMember(req.member, req.params.id)
   if (!email) return fail(res, 404, 'Draft not found.')
   if (email.status !== 'draft') return fail(res, 409, `This email is already ${email.status}.`)
-  if (req.body?.status === 'discarded') email.status = 'discarded'
+  // Discarding hides it for this person only; teammates still see it.
+  if (req.body?.status === 'discarded') {
+    await OutboundEmail.updateOne({ _id: email._id }, { $addToSet: { hiddenFor: req.member._id } })
+    return res.json({ ok: true })
+  }
   for (const f of ['to', 'subject', 'body']) {
     if (typeof req.body?.[f] === 'string') email[f] = f === 'body' ? req.body[f].slice(0, MAX_BODY) : req.body[f].trim().slice(0, 320)
   }
   await email.save()
   res.json(email)
+})
+
+// Athena looks on the opportunity's website for the address to send to. No AI, just
+// the page (cached), so it's cheap; tried at most once a week per draft.
+const CONTACT_RETRY_MS = 7 * 86400000
+router.post('/outbox/:id/find-contact', async (req, res) => {
+  const email = await outboxEmailForMember(req.member, req.params.id)
+  if (!email) return fail(res, 404, 'Draft not found.')
+  if (email.to) return res.json({ to: email.to, found: true })
+  if (email.contactSearchedAt && Date.now() - email.contactSearchedAt.getTime() < CONTACT_RETRY_MS) return res.json({ to: '', found: false, searched: true })
+  const grant = email.grant ? await Grant.findById(email.grant).select('link contactEmail').lean() : null
+  const page = grant?.contactEmail ? null : await readOpportunityPage(grant?.link, { findContact: true })
+  const to = grant?.contactEmail || page?.contact || ''
+  // Only fill it if nobody typed an address in the meantime.
+  await OutboundEmail.updateOne({ _id: email._id, to: '' }, { $set: { contactSearchedAt: new Date(), ...(to ? { to } : {}) } })
+  res.json({ to, found: Boolean(to), searched: true, contactPage: page?.contactPage || grant?.link || '' })
 })
 
 // A member sent it from their own email app (the dashboard opened it there).

@@ -11,6 +11,7 @@ const { invalidateGrants, matchesFor } = require('../utils/capitalWatchData')
 const { unsubscribeSig } = require('../utils/capitalWatchAuth')
 const Member = require('../models/CapitalWatch/capitalWatch.Member')
 const Business = require('../models/CapitalWatch/capitalWatch.Business')
+const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
 
 // Wednesday 12am EST = 05:00 UTC
 const SCHEDULE = '0 5 * * 3'
@@ -38,18 +39,27 @@ async function sendWeeklyDigests() {
   const members = await Member.find({ digestOptOut: { $ne: true } }).select('email').lean()
   const businesses = await Business.find({ memberIds: { $in: members.map((m) => m._id) } }).lean()
 
-  // Matches are computed once per business, then shared by everyone on it.
+  // Matches are ranked once per business; then each person's own saves and dismissals
+  // are taken out, since everyone has their own view.
   const newByBusiness = new Map()
   for (const b of businesses) {
-    const fresh = (await matchesFor(b)).filter((g) => new Date(g.dateFound).getTime() >= since).slice(0, PER_BUSINESS)
+    const fresh = (await matchesFor(b)).filter((g) => new Date(g.dateFound).getTime() >= since)
     if (fresh.length) newByBusiness.set(String(b._id), { businessName: b.name, matches: fresh })
   }
+  const personal = await Decision.find({ business: { $in: [...newByBusiness.keys()] }, member: { $in: members.map((m) => m._id) } })
+    .select('business grant member').lean()
+  const hiddenFor = new Set(personal.map((d) => `${d.member}:${d.business}:${d.grant}`))
 
   const messages = []
   for (const m of members) {
     const sections = businesses
       .filter((b) => b.memberIds.some((id) => String(id) === String(m._id)))
-      .map((b) => newByBusiness.get(String(b._id)))
+      .map((b) => {
+        const entry = newByBusiness.get(String(b._id))
+        if (!entry) return null
+        const matches = entry.matches.filter((g) => !hiddenFor.has(`${m._id}:${b._id}:${g._id}`)).slice(0, PER_BUSINESS)
+        return matches.length ? { businessName: entry.businessName, matches } : null
+      })
       .filter(Boolean)
     if (sections.length) messages.push({ ...memberDigestEmail(sections, getCapitalWatchUrl(), unsubscribeUrl(String(m._id))), to: m.email })
   }

@@ -146,31 +146,133 @@ function findApplyLink(html, baseUrl) {
   return null
 }
 
-// Returns { url, text, fields, applyUrl } or null when the page can't be read.
-async function readOpportunityPage(link) {
-  if (!link) return null
+// ─── Contact addresses ───────────────────────────────────────────────────────
+
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}/gi
+const FILE_RE = /\.(png|jpe?g|gif|svg|webp|css|js)$/i
+const JUNK_DOMAIN_RE = /(^|\.)(example\.(com|org)|domain\.com|email\.com|sentry\.io|wixpress\.com|sentry-next\.wixpress\.com|godaddy\.com|squarespace\.com|yourdomain\.com)$/i
+const BAD_LOCAL_RE = /^(no-?reply|donotreply|do-not-reply|privacy|webmaster|abuse|postmaster|press|media|news(letter)?|careers|jobs|hr|recruit(ing)?|unsubscribe|test|marketing|billing|accounts?payable|security|legal|dpo|foia)$/i
+const GOOD_LOCAL_RE = /grant|fund|program|apply|application|award|loan|lend|invest|capital|small|business|entrepreneur|startup|accelerat|fellow|scholar|competition|challenge|prize|inquir|partner/i
+const OK_LOCAL_RE = /^(info|contact|hello|help|support|admin|team|office|general)$/i
+
+// Cloudflare hides addresses as data-cfemail="<hex>": the first byte is the XOR key.
+function decodeCfEmail(hex) {
   try {
-    const first = await fetchHtml(link)
-    let fields = extractFields(first.html)
-    let text = extractText(first.html)
-    let applyUrl = null
-    if (fields.length < 3) {
-      const next = findApplyLink(first.html, first.finalUrl)
-      if (next && next !== first.finalUrl) {
-        applyUrl = next
-        const second = await fetchHtml(next).catch(() => null)
-        if (second) {
-          const more = extractFields(second.html)
-          if (more.length > fields.length) fields = more
-          text = `${text}\n\nApplication page (${next}):\n${extractText(second.html)}`.slice(0, MAX_TEXT)
-        }
+    const key = parseInt(hex.slice(0, 2), 16)
+    let out = ''
+    for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key)
+    return out
+  } catch { return '' }
+}
+
+function extractEmails(html) {
+  const found = new Set()
+  const add = (e) => {
+    const email = String(e || '').trim().toLowerCase().replace(/^mailto:/, '').split('?')[0]
+    if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}$/.test(email) || FILE_RE.test(email)) return
+    if (JUNK_DOMAIN_RE.test(email.split('@')[1])) return
+    found.add(email)
+  }
+  for (const m of html.matchAll(/href\s*=\s*["']mailto:([^"']+)["']/gi)) add(decodeURIComponent(m[1]))
+  for (const m of html.matchAll(/data-cfemail\s*=\s*["']([0-9a-f]+)["']/gi)) add(decodeCfEmail(m[1]))
+  const text = decode(html.replace(/<[^>]+>/g, ' '))
+  for (const m of text.matchAll(EMAIL_RE)) add(m[0])
+  // "grants [at] city [dot] gov" and similar.
+  for (const m of text.matchAll(/([a-z0-9._%+-]+)\s*[[(]\s*at\s*[\])]\s*([a-z0-9-]+(?:\s*[[(]\s*dot\s*[\])]\s*[a-z0-9-]+)+)/gi)) {
+    add(`${m[1]}@${m[2].replace(/\s*[[(]\s*dot\s*[\])]\s*/gi, '.')}`)
+  }
+  return [...found].slice(0, 30)
+}
+
+const baseDomain = (host) => String(host || '').toLowerCase().replace(/^www\./, '').split('.').slice(-2).join('.')
+
+// The address most likely to reach the program team, or '' when none looks right.
+function pickContact(emails, siteUrl) {
+  let site = ''
+  try { site = baseDomain(new URL(siteUrl).hostname) } catch { /* no site */ }
+  let best = ''
+  let bestScore = 0
+  for (const email of emails || []) {
+    const [local, domain] = email.split('@')
+    if (BAD_LOCAL_RE.test(local)) continue
+    let score = 0
+    if (site && baseDomain(domain) === site) score += 3
+    if (GOOD_LOCAL_RE.test(local)) score += 3
+    else if (OK_LOCAL_RE.test(local)) score += 1
+    if (/\.(gov|org|edu)$/.test(domain)) score += 1
+    if (score > bestScore) { best = email; bestScore = score }
+  }
+  // An off-site address with no program words is more likely a vendor than the program.
+  return bestScore >= 3 ? best : ''
+}
+
+function findContactLink(html, baseUrl) {
+  let fallback = null
+  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const text = stripTags(m[2])
+    const href = attr(m[1], 'href')
+    if (!href || /^(#|mailto:|tel:|javascript:)/i.test(href)) continue
+    let url
+    try { url = new URL(href, baseUrl) } catch { continue }
+    if (/^contact( us)?$|^get in touch$/i.test(text) || /\/contact(-us)?\/?$/i.test(url.pathname)) return url.toString()
+    if (!fallback && /\b(contact|staff|our team|about us)\b/i.test(text)) fallback = url.toString()
+  }
+  return fallback
+}
+
+// ─── Reading a page (cached a week) ──────────────────────────────────────────
+
+let PageCache = null
+const cacheModel = () => (PageCache ||= require('../models/CapitalWatch/capitalWatch.PageCache'))
+
+async function readFresh(link) {
+  const first = await fetchHtml(link)
+  let fields = extractFields(first.html)
+  let text = extractText(first.html)
+  const emails = new Set(extractEmails(first.html))
+  let applyUrl = null
+  if (fields.length < 3) {
+    const next = findApplyLink(first.html, first.finalUrl)
+    if (next && next !== first.finalUrl) {
+      applyUrl = next
+      const second = await fetchHtml(next).catch(() => null)
+      if (second) {
+        const more = extractFields(second.html)
+        if (more.length > fields.length) fields = more
+        text = `${text}\n\nApplication page (${next}):\n${extractText(second.html)}`.slice(0, MAX_TEXT)
+        extractEmails(second.html).forEach((e) => emails.add(e))
       }
     }
-    return { url: first.finalUrl, text, fields, applyUrl }
+  }
+  return { finalUrl: first.finalUrl, text, fields, applyUrl, emails: [...emails], contactPage: findContactLink(first.html, first.finalUrl) }
+}
+
+// Returns { url, text, fields, applyUrl, emails, contact, contactPage }, or null when the
+// page can't be read. findContact: also open the site's contact page when the
+// opportunity page itself has no usable address (one extra fetch, also cached).
+// fresh: skip the cache ("Read the form again").
+async function readOpportunityPage(link, { findContact = false, fresh = false } = {}) {
+  if (!link) return null
+  const Cache = cacheModel()
+  try {
+    let page = fresh ? null : await Cache.findOne({ url: link }).lean().catch(() => null)
+    if (!page) {
+      page = { url: link, ...(await readFresh(link)), contactChecked: false }
+      await Cache.updateOne({ url: link }, { $set: { ...page, createdAt: new Date() } }, { upsert: true }).catch(() => {})
+    }
+    let contact = pickContact(page.emails, page.finalUrl || link)
+    if (!contact && findContact && !page.contactChecked && page.contactPage) {
+      const extra = await fetchHtml(page.contactPage).then((r) => extractEmails(r.html)).catch(() => [])
+      page.emails = [...new Set([...(page.emails || []), ...extra])].slice(0, 40)
+      page.contactChecked = true
+      await Cache.updateOne({ url: link }, { $set: { emails: page.emails, contactChecked: true } }).catch(() => {})
+      contact = pickContact(page.emails, page.finalUrl || link)
+    }
+    return { url: page.finalUrl || link, text: page.text || '', fields: page.fields || [], applyUrl: page.applyUrl || null, emails: page.emails || [], contact, contactPage: page.contactPage || null }
   } catch (err) {
     console.warn('[CapitalWatch] Could not read page:', link, err.message)
     return null
   }
 }
 
-module.exports = { readOpportunityPage, extractFields, isPrivateIp }
+module.exports = { readOpportunityPage, extractFields, extractEmails, pickContact, isPrivateIp }

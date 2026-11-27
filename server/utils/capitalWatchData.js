@@ -36,14 +36,23 @@ async function businessForMember(member, businessId) {
   return Business.findOne({ _id: businessId, memberIds: member._id }).lean()
 }
 
-async function decisionsFor(businessId) {
-  const list = await Decision.find({ business: businessId }).select('grant status updatedAt requirementsChecklist').lean()
-  return new Map(list.map((d) => [String(d.grant), d]))
+// What one person sees on a business: the business's shared applications plus their
+// own saves and dismissals. Without a member, only the shared decisions.
+const scopeFor = (businessId, memberId) => (memberId
+  ? { business: businessId, $or: [{ member: null }, { member: memberId }] }
+  : { business: businessId, member: null })
+
+async function decisionsFor(businessId, memberId) {
+  const list = await Decision.find(scopeFor(businessId, memberId)).select('grant status member updatedAt requirementsChecklist').lean()
+  // A shared application outranks a personal save or dismissal of the same opportunity.
+  const map = new Map()
+  for (const d of list) if (!map.has(String(d.grant)) || !d.member) map.set(String(d.grant), d)
+  return map
 }
 
-// Ranked opportunities this business hasn't decided on yet.
-async function matchesFor(business, { includeUnfit = false } = {}) {
-  const [grants, decisions] = await Promise.all([getOpenGrants(), decisionsFor(business._id)])
+// Ranked opportunities this person (or, without one, the business) hasn't decided on yet.
+async function matchesFor(business, { includeUnfit = false, memberId } = {}) {
+  const [grants, decisions] = await Promise.all([getOpenGrants(), decisionsFor(business._id, memberId)])
   return rankForBusiness(grants.filter((g) => !decisions.has(String(g._id))), business, { includeUnfit })
 }
 
@@ -75,4 +84,4 @@ function businessProfileText(b) {
 // Dismissed opportunities and discarded Outbox drafts clear out after this many days.
 const DISMISSED_DAYS = 3
 
-module.exports = { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, invalidateGrants, businessForMember, decisionsFor, matchesFor, businessProfileText }
+module.exports = { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, invalidateGrants, businessForMember, scopeFor, decisionsFor, matchesFor, businessProfileText }

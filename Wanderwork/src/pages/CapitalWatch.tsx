@@ -590,7 +590,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
             </div>
 
             {view === "dismissed" && (
-              <div className="pt-4 text-xs text-gray-400">Dismissed opportunities clear out after 3 days. They won't come back as matches.</div>
+              <div className="pt-4 text-xs text-gray-400">Only you see what you dismiss. Dismissed opportunities clear out after 3 days and won't come back as matches.</div>
             )}
             {loading && <div className="py-8 text-gray-400">Loading…</div>}
             {!loading && grants.length === 0 && (
