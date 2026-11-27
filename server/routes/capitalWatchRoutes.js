@@ -12,8 +12,8 @@ const OPTIONS = require('../config/capitalWatchOptions')
 const { hasSendGrid } = require('../config/capitalWatchTeam')
 const bcrypt = require('bcrypt')
 const { applicationDraftEmail, signInEmail, passwordResetEmail, welcomeEmail, FROM_EMAIL } = require('../utils/capitalWatchEmail')
-const { askInanna, buildBriefing, noEmDash } = require('../utils/capitalWatchInanna')
-const { GRANT_FIELDS, getOpenGrants, businessForMember, matchesFor, businessProfileText } = require('../utils/capitalWatchData')
+const { askAthena, buildBriefing, noEmDash } = require('../utils/capitalWatchAthena')
+const { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, businessForMember, matchesFor, businessProfileText } = require('../utils/capitalWatchData')
 const { categoryOf } = require('../utils/capitalWatchMatching')
 const auth = require('../utils/capitalWatchAuth')
 const { subscribe } = require('../utils/newsletter')
@@ -402,6 +402,11 @@ function searchFilter(q) {
 }
 
 // view: matches (default) | all (matches including ones that aren't a fit) | applied | saved | dismissed
+// Dismissed opportunities stay in the Dismissed list for DISMISSED_DAYS (time to undo),
+// then drop off it. The record itself stays so they never come back as matches.
+const dismissedCutoff = () => new Date(Date.now() - DISMISSED_DAYS * 86400000)
+const recentIfDismissed = (status) => (status === 'rejected' ? { updatedAt: { $gte: dismissedCutoff() } } : {})
+
 router.get('/grants', withBusiness, async (req, res) => {
   try {
     const view = String(req.query.view || 'matches')
@@ -416,7 +421,7 @@ router.get('/grants', withBusiness, async (req, res) => {
 
     const status = VIEW_STATUS[view]
     if (!status) return fail(res, 400, 'Unknown view.')
-    const decisions = await Decision.find({ business: req.business._id, status }).sort({ updatedAt: -1 }).select('grant status updatedAt requirementsChecklist').lean()
+    const decisions = await Decision.find({ business: req.business._id, status, ...recentIfDismissed(status) }).sort({ updatedAt: -1 }).select('grant status updatedAt requirementsChecklist').lean()
     const grants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) } }).select(GRANT_FIELDS).lean()
     const byId = new Map(grants.map((g) => [String(g._id), g]))
     const rows = decisions
@@ -441,7 +446,10 @@ router.get('/stats', withBusiness, async (req, res) => {
   try {
     const [matches, counts] = await Promise.all([
       matchesFor(req.business),
-      Decision.aggregate([{ $match: { business: req.business._id } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
+      Decision.aggregate([
+        { $match: { business: req.business._id, $or: [{ status: { $ne: 'rejected' } }, { updatedAt: { $gte: dismissedCutoff() } }] } },
+        { $group: { _id: '$status', n: { $sum: 1 } } },
+      ]),
     ])
     const byCategory = Object.fromEntries(OPTIONS.FUNDING_CATEGORY_IDS.map((id) => [id, 0]))
     for (const g of matches) byCategory[g.category] = (byCategory[g.category] || 0) + 1
@@ -677,7 +685,7 @@ router.post('/grants/:id/fields', withBusiness, async (req, res) => {
     .select('applicationNarrative').lean()
   if (!decision) return fail(res, 404, 'Apply to this opportunity first.')
   if (!(await auth.useAllowance(req.member, 'questions'))) {
-    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Inanna requests. More tomorrow.`)
+    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Athena requests. More tomorrow.`)
   }
   try {
     const grant = await Grant.findById(req.params.id).select(GRANT_FIELDS).lean()
@@ -719,9 +727,9 @@ ${pageSection(page)}` },
   }
 })
 
-// ─── Inanna ──────────────────────────────────────────────────────────────────
+// ─── Athena ──────────────────────────────────────────────────────────────────
 
-router.get('/inanna/briefing', withBusiness, async (req, res) => {
+router.get(['/athena/briefing', '/inanna/briefing'], withBusiness, async (req, res) => {
   try {
     res.json(await buildBriefing(req.business))
   } catch (err) {
@@ -729,16 +737,16 @@ router.get('/inanna/briefing', withBusiness, async (req, res) => {
   }
 })
 
-router.post('/inanna/ask', withBusiness, async (req, res) => {
+router.post(['/athena/ask', '/inanna/ask'], withBusiness, async (req, res) => {
   if (!(await auth.useAllowance(req.member, 'questions'))) {
-    return fail(res, 429, `You've asked Inanna ${auth.limitsFor(req.member).questions} questions today. More tomorrow.`)
+    return fail(res, 429, `You've asked Athena ${auth.limitsFor(req.member).questions} questions today. More tomorrow.`)
   }
   try {
-    res.json(await askInanna(req.business, req.body?.messages))
+    res.json(await askAthena(req.business, req.body?.messages))
   } catch (err) {
     await auth.refundAllowance(req.member, 'questions')
-    console.error('[CapitalWatch] Inanna ask failed:', err.message)
-    fail(res, err.status || 500, err.status ? err.message : 'Inanna could not answer right now. Try again in a moment.')
+    console.error('[CapitalWatch] Athena ask failed:', err.message)
+    fail(res, err.status || 500, err.status ? err.message : 'Athena could not answer right now. Try again in a moment.')
   }
 })
 
@@ -789,14 +797,14 @@ router.get('/outbox', withBusiness, async (req, res) => {
   }))
 })
 
-// "Have Inanna draft it": takes what's in the box now (even if empty) and makes it a
+// "Have Athena draft it": takes what's in the box now (even if empty) and makes it a
 // stronger note to the program team. Returns the new text; nothing is saved or sent.
-router.post('/outbox/:id/inanna', async (req, res) => {
+router.post(['/outbox/:id/athena', '/outbox/:id/inanna'], async (req, res) => {
   const email = await outboxEmailForMember(req.member, req.params.id)
   if (!email) return fail(res, 404, 'Draft not found.')
   if (email.status !== 'draft') return fail(res, 409, `This email is already ${email.status}.`)
   if (!(await auth.useAllowance(req.member, 'questions'))) {
-    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Inanna requests. More tomorrow.`)
+    return fail(res, 429, `You've used today's ${auth.limitsFor(req.member).questions} Athena requests. More tomorrow.`)
   }
   try {
     const [business, grant, decision] = await Promise.all([
@@ -856,12 +864,12 @@ ${current.body || '(empty)'}`
     })
   } catch (err) {
     await auth.refundAllowance(req.member, 'questions')
-    console.error('[CapitalWatch] Inanna email draft failed:', err.message)
-    fail(res, 500, "Inanna couldn't draft this right now. Try again in a moment.")
+    console.error('[CapitalWatch] Athena email draft failed:', err.message)
+    fail(res, 500, "Athena couldn't draft this right now. Try again in a moment.")
   }
 })
 
-// Saves a new draft (from an Inanna suggestion or written by hand). Never sends.
+// Saves a new draft (from an Athena suggestion or written by hand). Never sends.
 router.post('/outbox', withBusiness, async (req, res) => {
   const { grantId, to, subject, body, source } = req.body || {}
   const grant = mongoose.isValidObjectId(grantId) ? await Grant.findById(grantId).select('title contactEmail').lean() : null
@@ -875,7 +883,7 @@ router.post('/outbox', withBusiness, async (req, res) => {
     to: String(to || grant?.contactEmail || '').trim().slice(0, 320),
     subject: noEmDash(String(subject || '')).trim().slice(0, 300),
     body: noEmDash(String(body || '')).slice(0, MAX_BODY),
-    source: source === 'inanna' ? 'inanna' : 'manual',
+    source: ['athena', 'inanna'].includes(source) ? 'athena' : 'manual',
   })
   res.status(201).json(email)
 })

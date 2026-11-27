@@ -1,4 +1,4 @@
-// Shared fetch helper and types for the Capital Watch dashboard, Inanna, and the Outbox.
+// Shared fetch helper and types for the Capital Watch dashboard, Athena, and the Outbox.
 // This file is kept identical in the WanderWork repo (Wanderwork/src/pages) and the
 // AonCreative repo (served at aoncreative.io/capitalwatch). Change both together.
 
@@ -136,7 +136,7 @@ export type OutboundEmail = {
   to: string;
   subject: string;
   body: string;
-  source: "approval" | "inanna" | "manual";
+  source: "approval" | "athena" | "inanna" | "manual";
   status: "draft" | "sent" | "discarded";
   sentVia?: "server" | "own_email";
   sentAt?: string;
@@ -165,7 +165,7 @@ export type ApplicationField = {
   required?: boolean;
 };
 
-export type InannaAction = {
+export type AthenaAction = {
   type: "open" | "approve" | "archive" | "reject" | "draft_email";
   grantId: string;
   grantTitle: string;

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 
 // An email to someone outside the business (a grant contact, program officer, or
-// investor). Inanna and approvals only ever create drafts; a person reviews and edits
+// investor). Athena and approvals only ever create drafts; a person reviews and edits
 // the draft in the Outbox. Admins can send from our domain; everyone else sends it
 // from their own email app. Nothing here is sent automatically.
 const outboundEmailSchema = new mongoose.Schema({
@@ -13,7 +13,7 @@ const outboundEmailSchema = new mongoose.Schema({
   to:        { type: String, default: '' },
   subject:   { type: String, default: '' },
   body:      { type: String, default: '' },
-  source:    { type: String, enum: ['approval', 'inanna', 'manual'], default: 'manual' },
+  source:    { type: String, enum: ['approval', 'athena', 'inanna', 'manual'], default: 'manual' },
   status:    { type: String, enum: ['draft', 'sent', 'discarded'], default: 'draft', index: true },
   // 'server' = sent by us through SendGrid; 'own_email' = marked sent after the
   // member sent it from their own email app.

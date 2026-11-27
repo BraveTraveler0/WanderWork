@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, ExternalLink, Loader2, Mail, RotateCcw, Sparkles, X } from "lucide-react";
-import { api, formatUsd, type Briefing, type InannaAction } from "./capitalWatchApi";
+import { api, formatUsd, type Briefing, type AthenaAction } from "./capitalWatchApi";
 
-// Inanna for Capital Watch: the floating orb from MarketGenius, scoped to funding.
+// Athena for Capital Watch: the floating orb (adapted from MarketGenius's Inanna), scoped to funding.
 // It reads the real grants, deadlines and company profiles on the server, answers in
 // context, and suggests actions. Every action is a button a person clicks; emails go
 // to the Outbox as drafts and are only sent from there.
 
-type Turn = { role: "user" | "assistant"; content: string; actions?: InannaAction[]; error?: boolean };
+type Turn = { role: "user" | "assistant"; content: string; actions?: AthenaAction[]; error?: boolean };
 
 // One conversation per business, kept in this browser.
+// Storage key kept from when she was called Inanna, so saved chats carry over.
 const historyKey = (businessId: string) => `capitalwatch.inanna.${businessId}`;
 const STARTERS = [
   "Which 3 should we apply to this week, and why?",
@@ -175,7 +176,7 @@ function ReplyText({ text }: { text: string }) {
   );
 }
 
-const ACTION_TEXT: Record<InannaAction["type"], string> = {
+const ACTION_TEXT: Record<AthenaAction["type"], string> = {
   open: "Open source",
   approve: "Approve",
   archive: "Archive for later",
@@ -193,7 +194,7 @@ type Props = {
   refreshKey: number;
 };
 
-export default function CapitalWatchInanna({ businessId, businessName, onBriefing, onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
+export default function CapitalWatchAthena({ businessId, businessName, onBriefing, onApprove, onDecide, onOpenOutbox, refreshKey }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"chat" | "today">("chat");
   const [turns, setTurns] = useState<Turn[]>(() => loadHistory(businessId));
@@ -217,9 +218,9 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
   const onBriefingRef = useRef(onBriefing);
   onBriefingRef.current = onBriefing;
   const loadBriefing = useCallback(() => {
-    api(`/inanna/briefing?businessId=${businessId}`)
+    api(`/athena/briefing?businessId=${businessId}`)
       .then((b: Briefing) => { setBriefing(b); onBriefingRef.current?.(b); })
-      .catch((err) => console.error("[Inanna] briefing failed:", err));
+      .catch((err) => console.error("[Athena] briefing failed:", err));
   }, [businessId]);
   useEffect(() => { loadBriefing(); }, [loadBriefing, refreshKey]);
   useEffect(() => { if (loadedFor.current === businessId) saveHistory(businessId, turns); }, [turns, businessId]);
@@ -246,7 +247,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
     abortRef.current = controller;
     try {
       const messages = next.filter((t) => !t.error).map(({ role, content }) => ({ role, content }));
-      const data = await api("/inanna/ask", { method: "POST", body: JSON.stringify({ businessId, messages }), signal: controller.signal });
+      const data = await api("/athena/ask", { method: "POST", body: JSON.stringify({ businessId, messages }), signal: controller.signal });
       setTurns((prev) => [...prev, { role: "assistant", content: data.reply, actions: data.actions }]);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -258,7 +259,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
     }
   }
 
-  async function runAction(action: InannaAction, key: string) {
+  async function runAction(action: AthenaAction, key: string) {
     if (doneActions[key]) return;
     try {
       if (action.type === "open" && action.link) {
@@ -281,7 +282,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
         setDoneActions((d) => ({ ...d, [key]: "Saving…" }));
         await api("/outbox", {
           method: "POST",
-          body: JSON.stringify({ businessId, grantId: action.grantId, to: action.to, subject: action.subject, body: action.body, source: "inanna" }),
+          body: JSON.stringify({ businessId, grantId: action.grantId, to: action.to, subject: action.subject, body: action.body, source: "athena" }),
         });
         setDoneActions((d) => ({ ...d, [key]: "In Outbox for review" }));
         window.dispatchEvent(new Event("capitalwatch:outbox-changed"));
@@ -296,17 +297,17 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
   const badge = (briefing?.urgentCount || 0) + (briefing?.outboxDrafts || 0);
   const tooltip = briefing && badge
     ? [briefing.urgentCount && `${briefing.urgentCount} due this week`, briefing.outboxDrafts && `${briefing.outboxDrafts} email${briefing.outboxDrafts === 1 ? "" : "s"} to review`].filter(Boolean).join(" · ")
-    : "Ask Inanna";
+    : "Ask Athena";
 
   return (
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3 font-mono">
       {open && (
-        <div role="dialog" aria-label="Inanna"
+        <div role="dialog" aria-label="Athena"
           className="w-[calc(100vw-2.5rem)] sm:w-[400px] h-[min(600px,calc(100vh-7rem))] bg-white border border-black shadow-[6px_6px_0_0_#FACC15] flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2">
               <Sparkles size={14} />
-              <span className="font-bold">Inanna</span>
+              <span className="font-bold">Athena</span>
               <span className="text-xs text-gray-400 truncate max-w-[160px]">for {businessName}</span>
             </div>
             <div className="flex items-center gap-3">
@@ -316,7 +317,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
                   <RotateCcw size={14} />
                 </button>
               )}
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-black" aria-label="Close Inanna">
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-black" aria-label="Close Athena">
                 <X size={16} />
               </button>
             </div>
@@ -450,7 +451,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
           <form onSubmit={(e) => { e.preventDefault(); ask(input); }} className="border-t border-gray-200 p-3 flex gap-2">
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={1}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input); } }}
-              placeholder="Ask Inanna about your funding…"
+              placeholder="Ask Athena about your funding…"
               className="flex-1 resize-none border border-gray-300 px-3 py-2 outline-none focus:border-black text-sm" />
             <button type="submit" disabled={asking || !input.trim()} aria-label="Send question"
               className="bg-black text-white px-3 hover:bg-gray-800 disabled:opacity-40">
@@ -466,7 +467,7 @@ export default function CapitalWatchInanna({ businessId, businessName, onBriefin
             {badge > 9 ? "9+" : badge}
           </span>
         )}
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-label={open ? "Close Inanna" : "Ask Inanna"} aria-expanded={open}
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-label={open ? "Close Athena" : "Ask Athena"} aria-expanded={open}
           className="w-14 h-14 rounded-full bg-black flex items-center justify-center overflow-hidden shadow-[0_8px_24px_rgba(250,204,21,0.35)] transition-transform hover:-translate-y-0.5 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-black">
           <OrbCanvas size={56} level={open || asking ? 0.6 : 0.18} />
         </button>

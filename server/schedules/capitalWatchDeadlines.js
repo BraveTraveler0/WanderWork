@@ -11,7 +11,8 @@ const { getCapitalWatchUrl, getPublicServerUrl } = require('../utils/publicUrls'
 const { claimPeriod, releasePeriodClaim } = require('../utils/schedulerClaim')
 const { hasSendGrid } = require('../config/capitalWatchTeam')
 const { unsubscribeSig } = require('../utils/capitalWatchAuth')
-const { invalidateGrants } = require('../utils/capitalWatchData')
+const { invalidateGrants, DISMISSED_DAYS } = require('../utils/capitalWatchData')
+const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
 
 // Daily 8am EST = 13:00 UTC
 const SCHEDULE = '0 13 * * *'
@@ -49,6 +50,15 @@ async function expirePastDue() {
   return result.modifiedCount
 }
 
+// Discarded Outbox drafts are deleted 3 days after they were discarded. (Dismissed
+// opportunities leave the Dismissed list after 3 days too; that's a filter in the
+// routes, and a small record stays so they never come back as matches.)
+async function clearOldDiscards() {
+  const result = await OutboundEmail.deleteMany({ status: 'discarded', updatedAt: { $lt: new Date(Date.now() - DISMISSED_DAYS * 86400000) } })
+  if (result.deletedCount) console.log(`[CapitalWatch] Deleted ${result.deletedCount} discarded Outbox draft${result.deletedCount === 1 ? '' : 's'}.`)
+  return result.deletedCount
+}
+
 // Applied and saved opportunities with a deadline coming up, one email per person,
 // covering every business they're on.
 async function checkDeadlines() {
@@ -68,6 +78,7 @@ async function checkDeadlines() {
   }
   try {
     await expirePastDue()
+    await clearOldDiscards()
     if (!hasSendGrid()) { console.log('[CapitalWatch] No SendGrid key set, skipping deadline alerts.'); return }
     sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
@@ -133,4 +144,4 @@ function initCapitalWatchDeadlines() {
   cron.schedule(SCHEDULE, checkDeadlines)
 }
 
-module.exports = { initCapitalWatchDeadlines, checkDeadlines, expirePastDue }
+module.exports = { initCapitalWatchDeadlines, checkDeadlines, expirePastDue, clearOldDiscards }

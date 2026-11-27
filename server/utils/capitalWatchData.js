@@ -10,7 +10,7 @@ const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
 const { rankForBusiness } = require('./capitalWatchMatching')
 const { INDUSTRIES, STAGES, ENTITY_TYPES, DEMOGRAPHICS, FUNDING_CATEGORIES } = require('../config/capitalWatchOptions')
 
-// Everything the list, matching and Inanna need; the large legacy draft fields stay out.
+// Everything the list, matching and Athena need; the large legacy draft fields stay out.
 const GRANT_FIELDS = 'title agency fundingType amountUsd dueDate rolling location link summary why requirements targetDemographics contactEmail hotLead applicantTypes eligibleCountries industries stages isInvestment status dateFound'
 
 // The pool only changes when the weekly scrape adds to it or the daily job expires
@@ -50,7 +50,7 @@ async function matchesFor(business, { includeUnfit = false } = {}) {
 const label = (list, id) => list.find((o) => o.id === id)?.label || id
 const labels = (list, ids) => (ids || []).map((id) => label(list, id)).join(', ')
 
-// The profile as text, for AI drafts and Inanna. Only what the founder wrote or picked.
+// The profile as text, for AI drafts and Athena. Only what the founder wrote or picked.
 function businessProfileText(b) {
   const lines = [
     `Business name: ${b.name}`,
@@ -72,4 +72,7 @@ function businessProfileText(b) {
   return lines.filter(Boolean).join('\n')
 }
 
-module.exports = { GRANT_FIELDS, getOpenGrants, invalidateGrants, businessForMember, decisionsFor, matchesFor, businessProfileText }
+// Dismissed opportunities and discarded Outbox drafts clear out after this many days.
+const DISMISSED_DAYS = 3
+
+module.exports = { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, invalidateGrants, businessForMember, decisionsFor, matchesFor, businessProfileText }
