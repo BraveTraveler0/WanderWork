@@ -37,6 +37,9 @@ const businessSchema = new mongoose.Schema({
   amountMin:      { type: Number },
   amountMax:      { type: Number },
   useOfFunds:     { type: String, trim: true, default: '' },
+  // Shared team view: everyone on the business sees the same saved and dismissed lists
+  // and Outbox discards. Off by default, so each person has their own view.
+  sharedView:     { type: Boolean, default: false },
 }, {
   collection: 'capitalwatch.businesses',
   timestamps: true,

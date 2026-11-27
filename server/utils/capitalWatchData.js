@@ -36,6 +36,26 @@ async function businessForMember(member, businessId) {
   return Business.findOne({ _id: businessId, memberIds: member._id }).lean()
 }
 
+// For a business with the shared team view: everyone's personal saves and dismissals
+// become the team's. When two people decided differently, the latest decision wins.
+// Hidden Outbox drafts become discarded for the whole team.
+async function foldIntoShared(businessId) {
+  const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
+  const personal = await Decision.find({ business: businessId, member: { $ne: null } }).sort({ updatedAt: 1 }).lean()
+  for (const d of personal) {
+    const shared = await Decision.findOne({ business: businessId, grant: d.grant, member: null }).lean()
+    if (!shared) {
+      await Decision.create({ business: businessId, grant: d.grant, member: null, status: d.status, decidedBy: d.decidedBy || d.member })
+        .catch((err) => { if (err.code !== 11000) throw err })
+    } else if (['archived', 'rejected'].includes(shared.status) && shared.updatedAt <= d.updatedAt) {
+      await Decision.updateOne({ _id: shared._id }, { $set: { status: d.status, decidedBy: d.decidedBy || d.member } })
+    }
+  }
+  await Decision.deleteMany({ business: businessId, member: { $ne: null } })
+  await OutboundEmail.updateMany({ business: businessId, status: 'draft', 'hiddenFor.0': { $exists: true } }, { $set: { status: 'discarded', hiddenFor: [] } })
+  return personal.length
+}
+
 // What one person sees on a business: the business's shared applications plus their
 // own saves and dismissals. Without a member, only the shared decisions.
 const scopeFor = (businessId, memberId) => (memberId
@@ -84,4 +104,4 @@ function businessProfileText(b) {
 // Dismissed opportunities and discarded Outbox drafts clear out after this many days.
 const DISMISSED_DAYS = 3
 
-module.exports = { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, invalidateGrants, businessForMember, scopeFor, decisionsFor, matchesFor, businessProfileText }
+module.exports = { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, invalidateGrants, businessForMember, scopeFor, decisionsFor, matchesFor, foldIntoShared, businessProfileText }

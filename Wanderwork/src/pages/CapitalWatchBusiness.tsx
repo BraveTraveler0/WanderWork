@@ -54,7 +54,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const input = "w-full border border-gray-300 px-3 py-2 outline-none focus:border-black bg-white";
 const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[$,\s]/g, "")));
 
-function Team({ business }: { business: Business }) {
+function Team({ business, onChanged }: { business: Business; onChanged?: () => void }) {
+  const [shared, setShared] = useState(Boolean(business.sharedView));
   const [people, setPeople] = useState<{ members: { id: string; email: string; name: string }[]; pendingInvites: string[] } | null>(null);
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -71,13 +72,32 @@ function Team({ business }: { business: Business }) {
       load();
     } catch (err) { setMsg((err as Error).message); }
   }
+  async function toggleShared(next: boolean) {
+    setShared(next);
+    setMsg(null);
+    try {
+      await send(`/businesses/${business._id}`, "PATCH", { sharedView: next });
+      setMsg(next ? "Shared team view is on. Everyone here now sees the same saved and dismissed lists." : "Shared team view is off. From now on, each person keeps their own saved and dismissed lists.");
+      onChanged?.();
+    } catch (err) {
+      setShared(!next);
+      setMsg((err as Error).message);
+    }
+  }
   async function remove(who: string) {
     try { await send(`/businesses/${business._id}/members/${encodeURIComponent(who)}`, "DELETE"); load(); } catch (err) { setMsg((err as Error).message); }
   }
 
   return (
     <Section title="Team">
-      <p className="text-sm text-gray-500 mb-3">Everyone here sees the same matches, applications and Outbox for this business.</p>
+      <p className="text-sm text-gray-500 mb-3">Everyone here works on the same business profile, applications and Outbox.</p>
+      <label className="flex items-start gap-2 text-sm mb-4 cursor-pointer">
+        <input type="checkbox" checked={shared} onChange={(e) => toggleShared(e.target.checked)} className="accent-black mt-1" />
+        <span>
+          <span className="font-bold">Shared team view</span>
+          <span className="block text-gray-500">On: when anyone saves, dismisses or discards something, it changes for the whole team. Off: each person keeps their own lists.</span>
+        </span>
+      </label>
       {people?.members.map((m) => (
         <div key={m.id} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm">
           <span>{m.name ? `${m.name} · ` : ""}{m.email}</span>
@@ -101,12 +121,13 @@ function Team({ business }: { business: Business }) {
   );
 }
 
-export default function CapitalWatchBusiness({ options, business, onSaved, onDeleted, onCancel, firstRun = false }: {
+export default function CapitalWatchBusiness({ options, business, onSaved, onDeleted, onCancel, onTeamChanged, firstRun = false }: {
   options: Options;
   business?: Business | null;
   onSaved: (b: Business) => void;
   onDeleted?: () => void;
   onCancel?: () => void;
+  onTeamChanged?: () => void;
   firstRun?: boolean;
 }) {
   const [form, setForm] = useState<Draft>(() => ({ ...EMPTY, ...(business || {}) }));
@@ -121,7 +142,9 @@ export default function CapitalWatchBusiness({ options, business, onSaved, onDel
     if (!form.name.trim()) { setError("Give the business a name."); return; }
     setSaving(true);
     setError(null);
-    const body = { ...form, ignoreKeywords: keywords.split(",").map((k) => k.trim()).filter(Boolean) };
+    // sharedView is changed only by the Team switch, never by saving the profile.
+    const { sharedView: _shared, ...profile } = form as Draft & { sharedView?: boolean };
+    const body = { ...profile, ignoreKeywords: keywords.split(",").map((k) => k.trim()).filter(Boolean) };
     try {
       const saved = business ? await send(`/businesses/${business._id}`, "PATCH", body) : await send("/businesses", "POST", body);
       onSaved(saved);
@@ -235,7 +258,7 @@ export default function CapitalWatchBusiness({ options, business, onSaved, onDel
         </div>
       </form>
 
-      {business && <Team business={business} />}
+      {business && <Team business={business} onChanged={onTeamChanged} />}
 
       {business && onDeleted && (
         <Section title="Delete">

@@ -13,7 +13,7 @@ const { hasSendGrid } = require('../config/capitalWatchTeam')
 const bcrypt = require('bcrypt')
 const { applicationDraftEmail, signInEmail, passwordResetEmail, welcomeEmail, FROM_EMAIL } = require('../utils/capitalWatchEmail')
 const { askAthena, buildBriefing, noEmDash } = require('../utils/capitalWatchAthena')
-const { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, businessForMember, matchesFor, businessProfileText } = require('../utils/capitalWatchData')
+const { GRANT_FIELDS, DISMISSED_DAYS, getOpenGrants, businessForMember, matchesFor, foldIntoShared, businessProfileText } = require('../utils/capitalWatchData')
 const { categoryOf } = require('../utils/capitalWatchMatching')
 const auth = require('../utils/capitalWatchAuth')
 const { subscribe } = require('../utils/newsletter')
@@ -288,6 +288,7 @@ function profileFromBody(body = {}) {
     teamSize: num(body.teamSize, 1, 1000000),
     amountMin: num(body.amountMin, 0, 1e10),
     amountMax: num(body.amountMax, 0, 1e10),
+    sharedView: typeof body.sharedView === 'boolean' ? body.sharedView : undefined,
   }
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))
 }
@@ -318,6 +319,8 @@ router.patch('/businesses/:id', async (req, res) => {
     { new: true },
   ).lean().catch(() => null)
   if (!business) return fail(res, 404, 'Business not found.')
+  // Turning on the shared team view merges everyone's saves and dismissals into one list.
+  if (fields.sharedView === true) await foldIntoShared(business._id)
   res.json(business)
 })
 
@@ -384,6 +387,10 @@ router.delete('/businesses/:id/members/:who', async (req, res) => {
 })
 
 // Every route below works on one business the member belongs to.
+// Whose saved and dismissed lists a decision belongs to: the team's (null) when the
+// business shares one view, otherwise this person's.
+const viewOwner = (business, member) => (business.sharedView ? null : member._id)
+
 async function withBusiness(req, res, next) {
   const id = req.query.businessId || req.body?.businessId
   const business = await businessForMember(req.member, id)
@@ -425,7 +432,7 @@ router.get('/grants', withBusiness, async (req, res) => {
     const status = VIEW_STATUS[view]
     if (!status) return fail(res, 400, 'Unknown view.')
     // Applied is the business's; saved and dismissed are this person's own.
-    const owner = status === 'approved' ? null : req.member._id
+    const owner = status === 'approved' ? null : viewOwner(req.business, req.member)
     const decisions = await Decision.find({ business: req.business._id, member: owner, status, ...recentIfDismissed(status) }).sort({ updatedAt: -1 }).select('grant status updatedAt requirementsChecklist').lean()
     const grants = await Grant.find({ _id: { $in: decisions.map((d) => d.grant) } }).select(GRANT_FIELDS).lean()
     const byId = new Map(grants.map((g) => [String(g._id), g]))
@@ -455,7 +462,7 @@ router.get('/stats', withBusiness, async (req, res) => {
         { $match: {
           business: req.business._id,
           $and: [
-            { $or: [{ status: 'approved', member: null }, { status: { $in: ['archived', 'rejected'] }, member: req.member._id }] },
+            { $or: [{ status: 'approved', member: null }, { status: { $in: ['archived', 'rejected'] }, member: viewOwner(req.business, req.member) }] },
             { $or: [{ status: { $ne: 'rejected' } }, { updatedAt: { $gte: dismissedCutoff() } }] },
           ],
         } },
@@ -607,13 +614,14 @@ router.patch('/grants/:id', withBusiness, async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 404, 'Opportunity not found.')
     const grant = await Grant.findById(req.params.id).select(GRANT_FIELDS).lean()
     if (!grant) return fail(res, 404, 'Opportunity not found.')
-    // Applying is shared by the whole business; saving and dismissing are personal.
+    // Applying is shared by the whole business. Saving and dismissing are personal,
+    // unless the business uses the shared team view.
     const key = { business: req.business._id, grant: grant._id, member: null }
-    const mine = { business: req.business._id, grant: grant._id, member: req.member._id }
+    const mine = { business: req.business._id, grant: grant._id, member: viewOwner(req.business, req.member) }
 
     if (status === 'pending') {
       // Undo my own save or dismissal first; otherwise this un-applies for the business.
-      const undone = await Decision.deleteOne(mine)
+      const undone = await Decision.deleteOne({ ...mine, status: { $in: ['archived', 'rejected'] } })
       if (!undone.deletedCount) await Decision.deleteOne({ ...key, status: { $ne: 'drafting' } })
       return res.json({ ok: true })
     }
@@ -912,8 +920,13 @@ router.patch('/outbox/:id', async (req, res) => {
   const email = await outboxEmailForMember(req.member, req.params.id)
   if (!email) return fail(res, 404, 'Draft not found.')
   if (email.status !== 'draft') return fail(res, 409, `This email is already ${email.status}.`)
-  // Discarding hides it for this person only; teammates still see it.
+  // Discarding hides it for this person only (teammates still see it), unless the
+  // business uses the shared team view, where it's discarded for everyone.
   if (req.body?.status === 'discarded') {
+    if ((await Business.findById(email.business).select('sharedView').lean())?.sharedView) {
+      await OutboundEmail.updateOne({ _id: email._id }, { $set: { status: 'discarded' } })
+      return res.json({ ok: true, shared: true })
+    }
     await OutboundEmail.updateOne({ _id: email._id }, { $addToSet: { hiddenFor: req.member._id } })
     return res.json({ ok: true })
   }

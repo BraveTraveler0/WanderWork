@@ -72,8 +72,8 @@ function FieldRow({ field, onCopied }: { field: ApplicationField; onCopied: (lab
   );
 }
 
-function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
-  email: OutboundEmail; businessId: string; isAdmin: boolean; startOpen: boolean; onDone: (message: string) => void;
+function DraftCard({ email, businessId, isAdmin, sharedView, startOpen, onDone }: {
+  email: OutboundEmail; businessId: string; isAdmin: boolean; sharedView: boolean; startOpen: boolean; onDone: (message: string) => void;
 }) {
   const [open, setOpen] = useState(startOpen);
   const [to, setTo] = useState(email.to);
@@ -125,7 +125,7 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
     try {
       if (kind === "discard") {
         await send(`/outbox/${email._id}`, "PATCH", { status: "discarded" });
-        return onDone("Discarded for you. Your teammates still see it.");
+        return onDone(sharedView ? "Discarded for the team." : "Discarded for you. Your teammates still see it.");
       }
       if (dirty) await save();
       if (kind === "send") { await send(`/outbox/${email._id}/send`, "POST"); return onDone(`Sent to ${to}.`); }
@@ -285,7 +285,7 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
                 )}
                 <button onClick={() => run("discard")} disabled={!!busy}
                   className="ml-auto text-gray-400 hover:text-black flex items-center gap-1 text-sm">
-                  <Trash2 size={14} /> Discard for me
+                  <Trash2 size={14} /> {sharedView ? "Discard" : "Discard for me"}
                 </button>
               </>
             )}
@@ -345,7 +345,7 @@ function DraftCard({ email, businessId, isAdmin, startOpen, onDone }: {
   );
 }
 
-export default function CapitalWatchOutbox({ businessId, isAdmin, onChange }: { businessId: string; isAdmin: boolean; onChange?: () => void }) {
+export default function CapitalWatchOutbox({ businessId, isAdmin, sharedView = false, onChange }: { businessId: string; isAdmin: boolean; sharedView?: boolean; onChange?: () => void }) {
   const [tab, setTab] = useState<"draft" | "sent">("draft");
   const [emails, setEmails] = useState<OutboundEmail[]>([]);
   const [loading, setLoading] = useState(false);
@@ -398,7 +398,7 @@ export default function CapitalWatchOutbox({ businessId, isAdmin, onChange }: { 
       )}
 
       {tab === "draft" && emails.map((email) => (
-        <DraftCard key={email._id} email={email} businessId={businessId} isAdmin={isAdmin} startOpen={emails.length === 1} onDone={done} />
+        <DraftCard key={email._id} email={email} businessId={businessId} isAdmin={isAdmin} sharedView={sharedView} startOpen={emails.length === 1} onDone={done} />
       ))}
 
       {tab === "sent" && emails.map((email) => (
