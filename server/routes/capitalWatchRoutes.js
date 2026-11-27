@@ -10,7 +10,8 @@ const Decision = require('../models/CapitalWatch/capitalWatch.Decision')
 const OutboundEmail = require('../models/CapitalWatch/capitalWatch.OutboundEmail')
 const OPTIONS = require('../config/capitalWatchOptions')
 const { hasSendGrid } = require('../config/capitalWatchTeam')
-const { applicationDraftEmail, signInEmail, FROM_EMAIL } = require('../utils/capitalWatchEmail')
+const bcrypt = require('bcrypt')
+const { applicationDraftEmail, signInEmail, passwordResetEmail, welcomeEmail, FROM_EMAIL } = require('../utils/capitalWatchEmail')
 const { askInanna, buildBriefing, noEmDash } = require('../utils/capitalWatchInanna')
 const { GRANT_FIELDS, getOpenGrants, businessForMember, matchesFor, businessProfileText } = require('../utils/capitalWatchData')
 const { categoryOf } = require('../utils/capitalWatchMatching')
@@ -41,8 +42,8 @@ function sendMail(msg) {
   return sgMail.send(msg)
 }
 
-const publicMember = (m) => ({
-  id: String(m._id), email: m.email, name: m.name, role: m.role,
+const publicMember = (m, hasPassword = Boolean(m.passwordHash)) => ({
+  id: String(m._id), email: m.email, name: m.name, role: m.role, hasPassword,
   digestOptOut: m.digestOptOut, limits: auth.limitsFor(m),
   usage: m.usage?.dayKey === auth.todayKey() ? { questions: m.usage.questions, drafts: m.usage.drafts } : { questions: 0, drafts: 0 },
 })
@@ -55,71 +56,138 @@ router.get('/options', (req, res) => {
   res.json({ fundingCategories: FUNDING_CATEGORIES, demographics: DEMOGRAPHICS, entityTypes: ENTITY_TYPES, stages: STAGES, industries: INDUSTRIES })
 })
 
-// Sign in or sign up. A new account requires joining the marketing list (that's the
-// deal for free access). Always answers the same way, so it can't be used to find
-// out who has an account.
-router.post('/auth/request', signInIpLimiter, signInEmailLimiter, async (req, res) => {
+// ─── Accounts: create, sign in (password or emailed link), forgot password ───
+
+const BCRYPT_ROUNDS = 12
+function passwordProblem(p) {
+  if (typeof p !== 'string' || p.length < 8) return 'Use a password of at least 8 characters.'
+  if (p.length > 200) return 'That password is too long.'
+  return null
+}
+const loginIpLimiter = limiter(15 * 60 * 1000, 20, 'Too many sign-in attempts. Try again in a few minutes.')
+const loginEmailLimiter = limiter(15 * 60 * 1000, 8, 'Too many attempts for this account. Try again in a few minutes, or reset your password.',
+  (req) => `cw-login:${normalizeEmail(req.body?.email)}`)
+
+// Signs the member in: records the time, attaches businesses a teammate invited
+// this address to, and returns the session token.
+async function startSession(res, member, extra = {}, status = 200) {
+  await Member.updateOne({ _id: member._id }, {
+    $set: { lastLoginAt: new Date(), ...extra, ...(auth.isAdminEmail(member.email) ? { role: 'admin' } : {}) },
+  })
+  await Business.updateMany(
+    { pendingInvites: member.email },
+    { $addToSet: { memberIds: member._id }, $pull: { pendingInvites: member.email } },
+  )
+  const fresh = await Member.findById(member._id).select('+passwordHash')
+  res.status(status).json({ token: auth.signSession(fresh), member: publicMember(fresh) })
+}
+
+// Emails a one-time link: 'signin' signs in, 'reset' opens "choose a new password".
+async function emailLink(email, purpose) {
+  const token = auth.newLoginToken()
+  await LoginToken.create({ tokenHash: auth.hashToken(token), email, purpose })
+  const link = `${getCapitalWatchUrl()}?${purpose === 'reset' ? 'reset' : 'signin'}=${encodeURIComponent(token)}`
+  await sendMail({ ...(purpose === 'reset' ? passwordResetEmail(link) : signInEmail(link)), to: email })
+}
+
+// Create an account. Joining the marketing list is the deal for free access.
+router.post('/auth/signup', loginIpLimiter, async (req, res) => {
   try {
     const email = normalizeEmail(req.body?.email)
-    if (!EMAIL_RE.test(email)) return fail(res, 400, 'Enter a valid email address.')
-    const consent = req.body?.consent === true
     const name = String(req.body?.name || '').trim().slice(0, 80)
+    if (!EMAIL_RE.test(email)) return fail(res, 400, 'Enter a valid email address.')
+    const problem = passwordProblem(req.body?.password)
+    if (problem) return fail(res, 400, problem)
+    if (req.body?.consent !== true) return fail(res, 400, 'To create a free account, agree to receive our emails.')
+    if (await Member.exists({ email })) return fail(res, 409, 'There is already an account for this email. Sign in instead.')
 
-    let member = await Member.findOne({ email })
-    const isNew = !member
-    if (isNew && !consent) return fail(res, 400, 'To create a free account, agree to receive our emails.')
-    if (isNew) {
-      member = await Member.create({
-        email, name, role: auth.isAdminEmail(email) ? 'admin' : 'member',
-        marketingConsent: true, marketingConsentAt: new Date(),
-      }).catch(async (err) => {
-        if (err.code === 11000) return Member.findOne({ email }) // two requests at once
-        throw err
-      })
-    } else if (consent && !member.marketingConsent) {
-      await Member.updateOne({ _id: member._id }, { $set: { marketingConsent: true, marketingConsentAt: new Date() } })
-    }
-    if (consent) subscribe(email, 'capitalwatch').catch((err) => console.error('[CapitalWatch] Newsletter add failed:', err.message))
+    const member = await Member.create({
+      email, name,
+      role: auth.isAdminEmail(email) ? 'admin' : 'member',
+      passwordHash: await bcrypt.hash(req.body.password, BCRYPT_ROUNDS),
+      marketingConsent: true, marketingConsentAt: new Date(),
+    }).catch((err) => (err.code === 11000 ? null : Promise.reject(err)))
+    if (!member) return fail(res, 409, 'There is already an account for this email. Sign in instead.')
 
-    const token = auth.newLoginToken()
-    await LoginToken.create({ tokenHash: auth.hashToken(token), email })
-    const link = `${getCapitalWatchUrl()}?signin=${encodeURIComponent(token)}`
-    if (!hasSendGrid()) {
-      console.warn('[CapitalWatch] SendGrid not configured; sign-in link not emailed.')
-      return fail(res, 503, 'Email is not configured on this server.')
-    }
-    await sendMail({ ...signInEmail(link, { isNew }), to: email })
-    res.json({ message: 'Check your email for a sign-in link.' })
+    subscribe(email, 'capitalwatch').catch((err) => console.error('[CapitalWatch] Newsletter add failed:', err.message))
+    sendMail({ ...welcomeEmail(getCapitalWatchUrl()), to: email }).catch((err) => console.error('[CapitalWatch] Welcome email failed:', err.message))
+    await startSession(res, member, {}, 201)
   } catch (err) {
-    console.error('[CapitalWatch] Sign-in request failed:', err.message)
-    fail(res, 500, 'Could not send the sign-in email. Try again.')
+    console.error('[CapitalWatch] Sign-up failed:', err.message)
+    fail(res, 500, 'Could not create your account. Try again.')
   }
 })
 
+router.post('/auth/login', loginIpLimiter, loginEmailLimiter, async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email)
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
+    const member = EMAIL_RE.test(email) ? await Member.findOne({ email }).select('+passwordHash') : null
+    if (member && !member.passwordHash) {
+      return fail(res, 400, "This account doesn't have a password yet. Use \"Email me a sign-in link\", or \"Forgot password\" to set one.")
+    }
+    // Same answer for an unknown email and a wrong password.
+    if (!member || !password || !(await bcrypt.compare(password, member.passwordHash))) {
+      return fail(res, 401, 'Email or password is incorrect.')
+    }
+    await startSession(res, member)
+  } catch (err) {
+    console.error('[CapitalWatch] Sign-in failed:', err.message)
+    fail(res, 500, 'Could not sign you in. Try again.')
+  }
+})
+
+// Emailed sign-in link and forgot password. Both answer the same way whether or not
+// the account exists, so they can't be used to find out who has an account.
+for (const [path, purpose, message] of [
+  ['/auth/request', 'signin', "If there's an account for that email, we sent a sign-in link."],
+  ['/auth/forgot', 'reset', "If there's an account for that email, we sent a link to reset your password."],
+]) {
+  router.post(path, signInIpLimiter, signInEmailLimiter, async (req, res) => {
+    try {
+      const email = normalizeEmail(req.body?.email)
+      if (!EMAIL_RE.test(email)) return fail(res, 400, 'Enter a valid email address.')
+      if (!hasSendGrid()) return fail(res, 503, 'Email is not configured on this server.')
+      if (await Member.exists({ email })) await emailLink(email, purpose)
+      res.json({ message })
+    } catch (err) {
+      console.error(`[CapitalWatch] ${purpose} email failed:`, err.message)
+      fail(res, 500, 'Could not send the email. Try again.')
+    }
+  })
+}
+
+// Uses a one-time link (deleted as it's used, so it works once).
+async function useLink(token, purpose) {
+  if (!token) return null
+  return LoginToken.findOneAndDelete({ tokenHash: auth.hashToken(String(token)), purpose: purpose === 'signin' ? { $in: ['signin', null] } : purpose })
+}
+
 router.post('/auth/verify', signInIpLimiter, async (req, res) => {
   try {
-    const token = String(req.body?.token || '')
-    if (!token) return fail(res, 400, 'Missing sign-in link.')
-    // Deleted as it's used, so each link works once.
-    const login = await LoginToken.findOneAndDelete({ tokenHash: auth.hashToken(token) })
+    const login = await useLink(req.body?.token, 'signin')
     if (!login) return fail(res, 400, 'This sign-in link has expired or was already used. Request a new one.')
-
-    const member = await Member.findOneAndUpdate(
-      { email: login.email },
-      { $set: { lastLoginAt: new Date(), ...(auth.isAdminEmail(login.email) ? { role: 'admin' } : {}) } },
-      { new: true },
-    )
-    if (!member) return fail(res, 400, 'Account not found. Sign up again.')
-
-    // Businesses a teammate invited this address to.
-    await Business.updateMany(
-      { pendingInvites: member.email },
-      { $addToSet: { memberIds: member._id }, $pull: { pendingInvites: member.email } },
-    )
-    res.json({ token: auth.signSession(member), member: publicMember(member) })
+    const member = await Member.findOne({ email: login.email })
+    if (!member) return fail(res, 400, 'Account not found. Create one instead.')
+    await startSession(res, member, { emailVerified: true })
   } catch (err) {
-    console.error('[CapitalWatch] Sign-in verify failed:', err.message)
+    console.error('[CapitalWatch] Sign-in link failed:', err.message)
     fail(res, 500, 'Could not sign you in. Try again.')
+  }
+})
+
+router.post('/auth/reset', signInIpLimiter, async (req, res) => {
+  try {
+    const problem = passwordProblem(req.body?.password)
+    if (problem) return fail(res, 400, problem)
+    const login = await useLink(req.body?.token, 'reset')
+    if (!login) return fail(res, 400, 'This reset link has expired or was already used. Request a new one.')
+    const member = await Member.findOne({ email: login.email })
+    if (!member) return fail(res, 400, 'Account not found.')
+    await startSession(res, member, { emailVerified: true, passwordHash: await bcrypt.hash(req.body.password, BCRYPT_ROUNDS) })
+  } catch (err) {
+    console.error('[CapitalWatch] Password reset failed:', err.message)
+    fail(res, 500, 'Could not reset your password. Try again.')
   }
 })
 
@@ -146,7 +214,23 @@ router.patch('/me', async (req, res) => {
   if (typeof req.body?.name === 'string') set.name = req.body.name.trim().slice(0, 80)
   if (typeof req.body?.digestOptOut === 'boolean') set.digestOptOut = req.body.digestOptOut
   const member = await Member.findByIdAndUpdate(req.member._id, { $set: set }, { new: true })
-  res.json({ member: publicMember(member) })
+  res.json({ member: publicMember(member, Boolean(req.member.passwordHash)) })
+})
+
+// Set a password (accounts made from an emailed link have none) or change it.
+router.post('/me/password', loginIpLimiter, async (req, res) => {
+  try {
+    const problem = passwordProblem(req.body?.newPassword)
+    if (problem) return fail(res, 400, problem)
+    if (req.member.passwordHash) {
+      const current = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : ''
+      if (!current || !(await bcrypt.compare(current, req.member.passwordHash))) return fail(res, 400, 'Your current password is incorrect.')
+    }
+    await Member.updateOne({ _id: req.member._id }, { $set: { passwordHash: await bcrypt.hash(req.body.newPassword, BCRYPT_ROUNDS) } })
+    res.json({ member: publicMember(req.member, true), message: 'Password saved.' })
+  } catch (err) {
+    fail(res, 500, 'Could not save your password. Try again.')
+  }
 })
 
 // Deletes the account and every business that no one else shares.

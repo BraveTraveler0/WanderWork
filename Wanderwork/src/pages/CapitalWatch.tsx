@@ -64,62 +64,168 @@ function Modal({ onClose, children, wide = false }: { onClose: () => void; child
 
 // ─── Sign in ─────────────────────────────────────────────────────────────────
 
-function SignIn({ notice }: { notice?: string | null }) {
+const fieldClass = "w-full border border-gray-300 px-4 py-2 mb-4 outline-none focus:border-black";
+
+function AuthShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-white font-mono">
+      <div className="bg-[#FACC15] px-4 sm:px-8 py-6"><Logo /></div>
+      <div className="max-w-md mx-auto px-4 py-12">{children}</div>
+    </div>
+  );
+}
+
+function PasswordField({ id, label, value, onChange, autoComplete }: { id: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <>
+      <div className="flex justify-between items-baseline mb-1">
+        <label className="block text-sm font-bold" htmlFor={id}>{label}</label>
+        <button type="button" onClick={() => setShow((s) => !s)} className="text-xs underline text-gray-500">{show ? "Hide" : "Show"}</button>
+      </div>
+      <input id={id} type={show ? "text" : "password"} required value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} minLength={autoComplete === "new-password" ? 8 : undefined}
+        className={fieldClass} />
+    </>
+  );
+}
+
+type AuthMode = "signin" | "signup" | "link" | "forgot";
+
+// Sign in (password), create account, emailed sign-in link, and forgot password.
+function SignIn({ notice, onSignedIn }: { notice?: string | null; onSignedIn: () => void }) {
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [consent, setConsent] = useState(false);
-  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(notice || null);
+
+  const go = (m: AuthMode) => { setMode(m); setError(null); setSent(null); };
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setState("sending");
+    setBusy(true);
     setError(null);
     try {
-      await send("/auth/request", "POST", { email, name, consent });
-      setState("sent");
+      if (mode === "signin" || mode === "signup") {
+        const r = mode === "signin"
+          ? await send("/auth/login", "POST", { email, password })
+          : await send("/auth/signup", "POST", { email, password, name, consent });
+        setSession(r.token);
+        onSignedIn();
+      } else {
+        const r = await send(mode === "link" ? "/auth/request" : "/auth/forgot", "POST", { email });
+        setSent(r.message);
+      }
     } catch (err) {
       setError((err as Error).message);
-      setState("idle");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tabs = mode === "signin" || mode === "signup";
+  return (
+    <AuthShell>
+      <h1 className="text-2xl mb-3">Find funding that fits your business</h1>
+      <p className="text-sm text-gray-600 mb-8">
+        Capital Watch finds grants, loans, investors, competitions and accelerators every week, ranks them against your business,
+        and drafts your applications. Free when you join our email list.
+      </p>
+
+      {tabs && (
+        <div className="flex border-b border-gray-200 mb-6" role="tablist">
+          {([["signin", "Sign in"], ["signup", "Create account"]] as const).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={mode === id} onClick={() => go(id)}
+              className={`flex-1 py-2 text-sm ${mode === id ? "border-b-2 border-black font-bold" : "text-gray-400 hover:text-black"}`}>{label}</button>
+          ))}
+        </div>
+      )}
+      {!tabs && (
+        <div className="mb-6">
+          <button onClick={() => go("signin")} className="text-sm underline text-gray-500">← Back to sign in</button>
+          <h2 className="text-lg mt-3">{mode === "link" ? "Email me a sign-in link" : "Forgot your password?"}</h2>
+          <p className="text-sm text-gray-500 mt-1">{mode === "link" ? "We'll email you a link that signs you in. No password needed." : "We'll email you a link to choose a new password."}</p>
+        </div>
+      )}
+
+      {sent ? (
+        <div className="border border-black p-5">
+          <div className="font-bold mb-2">Check your email</div>
+          <p className="text-sm text-gray-600">{sent} The link works once and expires in 20 minutes.</p>
+          <button onClick={() => setSent(null)} className="text-sm underline mt-4">Send it again or use a different email</button>
+        </div>
+      ) : (
+        <form onSubmit={submit}>
+          {mode === "signup" && (
+            <>
+              <label className="block text-sm font-bold mb-1" htmlFor="cw-name">Name</label>
+              <input id="cw-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={80} className={fieldClass} />
+            </>
+          )}
+          <label className="block text-sm font-bold mb-1" htmlFor="cw-email">Email</label>
+          <input id="cw-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className={fieldClass} />
+          {mode === "signin" && <PasswordField id="cw-pass" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />}
+          {mode === "signup" && <PasswordField id="cw-pass" label="Password (8+ characters)" value={password} onChange={setPassword} autoComplete="new-password" />}
+          {mode === "signup" && (
+            <label className="flex items-start gap-3 text-sm mb-6 cursor-pointer">
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required className="mt-1 accent-black w-4 h-4" />
+              <span>Email me funding matches and news from Aon Creative. Required for a free account. Unsubscribe anytime.</span>
+            </label>
+          )}
+          {error && <div role="alert" className="text-sm text-red-600 mb-4">{error}</div>}
+          <button type="submit" disabled={busy} className="w-full bg-black text-white px-6 py-3 flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50">
+            {busy && <Loader2 size={14} className="animate-spin" />}
+            {mode === "signin" ? "Sign in" : mode === "signup" ? "Create free account" : mode === "link" ? "Email me a sign-in link" : "Email me a reset link"}
+          </button>
+          {mode === "signin" && (
+            <div className="flex flex-wrap justify-between gap-2 mt-4 text-sm">
+              <button type="button" onClick={() => go("forgot")} className="underline text-gray-600">Forgot password?</button>
+              <button type="button" onClick={() => go("link")} className="underline text-gray-600">Email me a sign-in link instead</button>
+            </div>
+          )}
+          {mode === "signup" && <p className="text-xs text-gray-400 mt-4">Already have an account? <button type="button" onClick={() => go("signin")} className="underline">Sign in</button></p>}
+        </form>
+      )}
+    </AuthShell>
+  );
+}
+
+// Opened from a "reset your password" email.
+function ResetPassword({ token, onDone, onCancel }: { token: string; onDone: () => void; onCancel: () => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await send("/auth/reset", "POST", { token, password });
+      setSession(r.token);
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-white font-mono">
-      <div className="bg-[#FACC15] px-4 sm:px-8 py-6"><Logo /></div>
-      <div className="max-w-md mx-auto px-4 py-12">
-        <h1 className="text-2xl mb-3">Find funding that fits your business</h1>
-        <p className="text-sm text-gray-600 mb-8">
-          Capital Watch finds grants, loans, investors, competitions and accelerators every week, ranks them against your business,
-          and drafts your applications. Free when you join our email list.
-        </p>
-        {state === "sent" ? (
-          <div className="border border-black p-5">
-            <div className="font-bold mb-2">Check your email</div>
-            <p className="text-sm text-gray-600">We sent a sign-in link to <strong>{email}</strong>. It works once and expires in 20 minutes.</p>
-            <button onClick={() => setState("idle")} className="text-sm underline mt-4">Use a different email</button>
-          </div>
-        ) : (
-          <form onSubmit={submit}>
-            <label className="block text-sm font-bold mb-1" htmlFor="cw-email">Email</label>
-            <input id="cw-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email"
-              className="w-full border border-gray-300 px-4 py-2 mb-4 outline-none focus:border-black" />
-            <label className="block text-sm font-bold mb-1" htmlFor="cw-name">Name <span className="font-normal text-gray-400">(new accounts)</span></label>
-            <input id="cw-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={80}
-              className="w-full border border-gray-300 px-4 py-2 mb-4 outline-none focus:border-black" />
-            <label className="flex items-start gap-3 text-sm mb-6 cursor-pointer">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 accent-black w-4 h-4" />
-              <span>Email me funding matches and news from Aon Creative. Required for a new free account. Unsubscribe anytime.</span>
-            </label>
-            {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
-            <button type="submit" disabled={state === "sending"} className="w-full bg-black text-white px-6 py-3 flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50">
-              {state === "sending" && <Loader2 size={14} className="animate-spin" />} Email me a sign-in link
-            </button>
-            <p className="text-xs text-gray-400 mt-4">No password. Already have an account? Just enter your email.</p>
-          </form>
-        )}
-      </div>
-    </div>
+    <AuthShell>
+      <h1 className="text-2xl mb-6">Choose a new password</h1>
+      <form onSubmit={submit}>
+        <PasswordField id="cw-new" label="New password (8+ characters)" value={password} onChange={setPassword} autoComplete="new-password" />
+        {error && <div role="alert" className="text-sm text-red-600 mb-4">{error}</div>}
+        <button type="submit" disabled={busy} className="w-full bg-black text-white px-6 py-3 flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50">
+          {busy && <Loader2 size={14} className="animate-spin" />} Save and sign in
+        </button>
+        <button type="button" onClick={onCancel} className="text-sm underline text-gray-500 mt-4">Back to sign in</button>
+      </form>
+    </AuthShell>
   );
 }
 
@@ -129,6 +235,16 @@ export default function CapitalWatch() {
   const [signedIn, setSignedIn] = useState(() => Boolean(getSession()));
   const [verifying, setVerifying] = useState(() => new URLSearchParams(window.location.search).has("signin"));
   const [notice, setNotice] = useState<string | null>(null);
+  // A "reset your password" link: read once, then removed from the address bar.
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("reset");
+    if (token) {
+      params.delete("reset");
+      window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`);
+    }
+    return token;
+  });
 
   // Internal tool on a public site: keep the dashboard out of search results.
   useEffect(() => {
@@ -161,7 +277,8 @@ export default function CapitalWatch() {
   }, []);
 
   if (verifying) return <div className="min-h-screen font-mono flex items-center justify-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> Signing you in…</div>;
-  if (!signedIn) return <SignIn notice={notice} />;
+  if (resetToken) return <ResetPassword token={resetToken} onDone={() => { setResetToken(null); setSignedIn(true); }} onCancel={() => setResetToken(null)} />;
+  if (!signedIn) return <SignIn notice={notice} onSignedIn={() => setSignedIn(true)} />;
   return <App onSignOut={() => { clearSession(); setSignedIn(false); }} />;
 }
 
@@ -595,6 +712,52 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
 
 // ─── Account ─────────────────────────────────────────────────────────────────
 
+// Accounts made from an emailed link have no password until they set one here.
+function PasswordSection({ member, onChanged }: { member: Member; onChanged: (m: Member) => void }) {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await send("/me/password", "POST", { currentPassword: current, newPassword: next });
+      onChanged(r.member);
+      setMsg({ text: r.message, ok: true });
+      setOpen(false);
+      setCurrent("");
+      setNext("");
+    } catch (err) {
+      setMsg({ text: (err as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-200 pt-4 mb-4 text-sm">
+      {!open ? (
+        <button onClick={() => { setOpen(true); setMsg(null); }} className="underline">{member.hasPassword ? "Change password" : "Set a password"}</button>
+      ) : (
+        <form onSubmit={save}>
+          {member.hasPassword && <PasswordField id="cw-current" label="Current password" value={current} onChange={setCurrent} autoComplete="current-password" />}
+          <PasswordField id="cw-next" label="New password (8+ characters)" value={next} onChange={setNext} autoComplete="new-password" />
+          <div className="flex gap-3">
+            <button type="submit" disabled={busy} className="bg-black text-white px-4 py-2 disabled:opacity-50">Save password</button>
+            <button type="button" onClick={() => setOpen(false)} className="underline text-gray-500">Cancel</button>
+          </div>
+        </form>
+      )}
+      {msg && <div className={`mt-2 ${msg.ok ? "text-gray-600" : "text-red-600"}`}>{msg.text}</div>}
+      {!member.hasPassword && !open && <div className="text-xs text-gray-400 mt-1">You sign in with emailed links. A password lets you sign in directly.</div>}
+    </div>
+  );
+}
+
 function AccountPanel({ member, onClose, onChanged, onSignOut }: { member: Member; onClose: () => void; onChanged: (m: Member) => void; onSignOut: () => void }) {
   const [summary, setSummary] = useState<Record<string, number | string | null> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -629,6 +792,8 @@ function AccountPanel({ member, onClose, onChanged, onSignOut }: { member: Membe
         <input type="checkbox" checked={!member.digestOptOut} onChange={toggleDigest} className="accent-black w-4 h-4" />
         Weekly match digest and deadline alerts
       </label>
+
+      <PasswordSection member={member} onChanged={onChanged} />
 
       {summary && (
         <div className="text-sm border-t border-gray-200 pt-4 mb-4">
