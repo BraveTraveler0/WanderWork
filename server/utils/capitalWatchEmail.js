@@ -226,12 +226,12 @@ function signInEmail(link, { isNew = false } = {}) {
   const html = shell(`
     <h1 style="font-family:${MONO};font-size:19px;font-weight:700;color:#000;margin:0 0 12px;">${shapeTriangle('#000', 12)}<span style="margin-left:9px;">${isNew ? 'Welcome to Capital Watch' : 'Sign in to Capital Watch'}</span></h1>
     <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 6px;">${isNew
-      ? 'Capital Watch finds grants, loans, investors and competitions, and ranks them for your business. Click below to sign in, then describe your business so we can match you.'
+      ? 'Capital Watch finds grants, loans, investors and competitions, and ranks them for your business. Click below to confirm your email and sign in, then describe your business so we can match you. The link works once and expires in 20 minutes; you can always get a new one with "Email me a sign-in link".'
       : 'Click below to sign in. The link works once and expires in 20 minutes.'}</p>
-    ${footer(link, 'Sign in')}
+    ${footer(link, isNew ? 'Confirm my email' : 'Sign in')}
     <p style="font-size:12px;color:${SUBTLE};margin:16px 0 0;">If you didn't ask for this, you can ignore it.</p>
   `)
-  return { from: FROM_EMAIL, subject: isNew ? 'Welcome to Capital Watch: sign in' : 'Your Capital Watch sign-in link', html }
+  return { from: FROM_EMAIL, subject: isNew ? 'Welcome to Capital Watch: confirm your email' : 'Your Capital Watch sign-in link', html }
 }
 
 function passwordResetEmail(link) {

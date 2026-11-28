@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy, ExternalLink, Loader2, RefreshCw, Send, Sparkles, Trash2 } from "lucide-react";
-import { api, send, type ApplicationField, type OutboundEmail } from "./capitalWatchApi";
+import { api, send, safeHref, type ApplicationField, type OutboundEmail } from "./capitalWatchApi";
 
 // The review step for every email that leaves a business, and the place to finish the
 // application it belongs to. Drafts come from applying to an opportunity, from Athena,
@@ -111,7 +111,7 @@ function DraftCard({ email, businessId, isAdmin, sharedView, startOpen, onDone }
           setSavedTo(r.to);
           setNote(`Athena found the contact address on the website: ${r.to}`);
         } else if (r.contactPage) {
-          setContactPage(r.contactPage);
+          setContactPage(safeHref(r.contactPage));
         }
       })
       .catch(() => {})
@@ -199,7 +199,7 @@ function DraftCard({ email, businessId, isAdmin, sharedView, startOpen, onDone }
   }
 
   const due = dueLabel(ctx);
-  const applicationLink = applyUrl || ctx?.link || "";
+  const applicationLink = safeHref(applyUrl) || safeHref(ctx?.link);
 
   return (
     <div className={`border mb-3 transition-colors ${open ? "border-black" : "border-gray-200 hover:border-black"}`}>

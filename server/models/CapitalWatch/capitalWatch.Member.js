@@ -10,7 +10,10 @@ const memberSchema = new mongoose.Schema({
   // Optional: accounts can sign in with a password, an emailed link, or both.
   // Never returned by queries unless asked for with .select('+passwordHash').
   passwordHash:  { type: String, select: false },
+  // Set once they use an emailed link. Until then: no admin role, no shared businesses.
   emailVerified: { type: Boolean, default: false },
+  // Sessions issued before this time are refused (set on password change or reset).
+  sessionsValidAfter: { type: Date },
 
   marketingConsent:   { type: Boolean, default: false },
   marketingConsentAt: { type: Date },

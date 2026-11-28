@@ -50,7 +50,8 @@
     "passport-twitter": "^0.1.5",
     "pdf-parse": "^2.4.5",
     "react-router-dom": "^6.21.2",
-    "stripe": "^15.8.0"
+    "stripe": "^15.8.0",
+    "undici": "^6.29.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

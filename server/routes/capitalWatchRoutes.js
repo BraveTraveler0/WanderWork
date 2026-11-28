@@ -24,6 +24,26 @@ const { PERSONA, CRAFT, WRITING } = require('../config/capitalWatchPersona')
 
 const router = express.Router()
 
+// Express 4 doesn't catch errors thrown by async handlers, and an unhandled rejection
+// can take the whole server down. Every handler here passes its errors to the error
+// handler at the bottom, which answers with a plain message (no internal details).
+const catchAsync = (fn) => function handler(req, res, next) {
+  try {
+    const out = fn.call(this, req, res, next)
+    if (out && typeof out.catch === 'function') out.catch(next)
+  } catch (err) {
+    next(err)
+  }
+}
+for (const method of ['get', 'post', 'patch', 'put', 'delete', 'use']) {
+  const original = router[method].bind(router)
+  router[method] = (...args) => original(...args.map((h) => (typeof h === 'function' && h.length < 4 ? catchAsync(h) : h)))
+}
+const serverError = (res, err, what = 'Request') => {
+  console.error(`[CapitalWatch] ${what} failed:`, err?.message || err)
+  res.status(500).json({ message: 'Something went wrong. Try again in a moment.' })
+}
+
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/
 const normalizeEmail = (v) => String(v || '').trim().toLowerCase().slice(0, 254)
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -45,7 +65,7 @@ function sendMail(msg) {
 }
 
 const publicMember = (m, hasPassword = Boolean(m.passwordHash)) => ({
-  id: String(m._id), email: m.email, name: m.name, role: m.role, hasPassword,
+  id: String(m._id), email: m.email, name: m.name, role: m.role, hasPassword, emailVerified: Boolean(m.emailVerified),
   digestOptOut: m.digestOptOut, limits: auth.limitsFor(m),
   usage: m.usage?.dayKey === auth.todayKey() ? { questions: m.usage.questions, drafts: m.usage.drafts } : { questions: 0, drafts: 0 },
 })
@@ -70,26 +90,35 @@ const loginIpLimiter = limiter(15 * 60 * 1000, 20, 'Too many sign-in attempts. T
 const loginEmailLimiter = limiter(15 * 60 * 1000, 8, 'Too many attempts for this account. Try again in a few minutes, or reset your password.',
   (req) => `cw-login:${normalizeEmail(req.body?.email)}`)
 
-// Signs the member in: records the time, attaches businesses a teammate invited
-// this address to, and returns the session token.
+// Signs the member in: records the time and returns the session token. Only once the
+// address is proven (they used an emailed link) do they get the admin role or the
+// businesses a teammate invited that address to, so nobody can sign up with someone
+// else's email to get into their team's data.
 async function startSession(res, member, extra = {}, status = 200) {
+  const verified = Boolean(member.emailVerified || extra.emailVerified)
   await Member.updateOne({ _id: member._id }, {
-    $set: { lastLoginAt: new Date(), ...extra, ...(auth.isAdminEmail(member.email) ? { role: 'admin' } : {}) },
+    $set: { lastLoginAt: new Date(), ...extra, ...(verified && auth.isAdminEmail(member.email) ? { role: 'admin' } : {}) },
   })
-  await Business.updateMany(
-    { pendingInvites: member.email },
-    { $addToSet: { memberIds: member._id }, $pull: { pendingInvites: member.email } },
-  )
+  if (verified) {
+    await Business.updateMany(
+      { pendingInvites: member.email },
+      { $addToSet: { memberIds: member._id }, $pull: { pendingInvites: member.email } },
+    )
+  }
+  // First confirmation of the address: now it's safe to add it to the mailing list.
+  if (extra.emailVerified && !member.emailVerified && member.marketingConsent) {
+    subscribe(member.email, 'capitalwatch').catch((err) => console.error('[CapitalWatch] Newsletter add failed:', err.message))
+  }
   const fresh = await Member.findById(member._id).select('+passwordHash')
   res.status(status).json({ token: auth.signSession(fresh), member: publicMember(fresh) })
 }
 
 // Emails a one-time link: 'signin' signs in, 'reset' opens "choose a new password".
-async function emailLink(email, purpose) {
+async function emailLink(email, purpose, { isNew = false } = {}) {
   const token = auth.newLoginToken()
   await LoginToken.create({ tokenHash: auth.hashToken(token), email, purpose })
   const link = `${getCapitalWatchUrl()}?${purpose === 'reset' ? 'reset' : 'signin'}=${encodeURIComponent(token)}`
-  await sendMail({ ...(purpose === 'reset' ? passwordResetEmail(link) : signInEmail(link)), to: email })
+  await sendMail({ ...(purpose === 'reset' ? passwordResetEmail(link) : signInEmail(link, { isNew })), to: email })
 }
 
 // Create an account. Joining the marketing list is the deal for free access.
@@ -103,16 +132,20 @@ router.post('/auth/signup', loginIpLimiter, async (req, res) => {
     if (req.body?.consent !== true) return fail(res, 400, 'To create a free account, agree to receive our emails.')
     if (await Member.exists({ email })) return fail(res, 409, 'There is already an account for this email. Sign in instead.')
 
+    // Admin role, shared businesses and the mailing list wait until the address is
+    // confirmed with the link in the welcome email.
     const member = await Member.create({
       email, name,
-      role: auth.isAdminEmail(email) ? 'admin' : 'member',
+      role: 'member',
       passwordHash: await bcrypt.hash(req.body.password, BCRYPT_ROUNDS),
       marketingConsent: true, marketingConsentAt: new Date(),
     }).catch((err) => (err.code === 11000 ? null : Promise.reject(err)))
     if (!member) return fail(res, 409, 'There is already an account for this email. Sign in instead.')
 
-    subscribe(email, 'capitalwatch').catch((err) => console.error('[CapitalWatch] Newsletter add failed:', err.message))
-    sendMail({ ...welcomeEmail(getCapitalWatchUrl()), to: email }).catch((err) => console.error('[CapitalWatch] Welcome email failed:', err.message))
+    const welcome = hasSendGrid()
+      ? emailLink(email, 'signin', { isNew: true })
+      : sendMail({ ...welcomeEmail(getCapitalWatchUrl()), to: email })
+    welcome.catch((err) => console.error('[CapitalWatch] Welcome email failed:', err.message))
     await startSession(res, member, {}, 201)
   } catch (err) {
     console.error('[CapitalWatch] Sign-up failed:', err.message)
@@ -186,7 +219,8 @@ router.post('/auth/reset', signInIpLimiter, async (req, res) => {
     if (!login) return fail(res, 400, 'This reset link has expired or was already used. Request a new one.')
     const member = await Member.findOne({ email: login.email })
     if (!member) return fail(res, 400, 'Account not found.')
-    await startSession(res, member, { emailVerified: true, passwordHash: await bcrypt.hash(req.body.password, BCRYPT_ROUNDS) })
+    // A new password signs out every other session (for example, someone who knew the old one).
+    await startSession(res, member, { emailVerified: true, sessionsValidAfter: auth.sessionCutoff(), passwordHash: await bcrypt.hash(req.body.password, BCRYPT_ROUNDS) })
   } catch (err) {
     console.error('[CapitalWatch] Password reset failed:', err.message)
     fail(res, 500, 'Could not reset your password. Try again.')
@@ -228,9 +262,11 @@ router.post('/me/password', loginIpLimiter, async (req, res) => {
       const current = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : ''
       if (!current || !(await bcrypt.compare(current, req.member.passwordHash))) return fail(res, 400, 'Your current password is incorrect.')
     }
-    await Member.updateOne({ _id: req.member._id }, { $set: { passwordHash: await bcrypt.hash(req.body.newPassword, BCRYPT_ROUNDS) } })
-    res.json({ member: publicMember(req.member, true), message: 'Password saved.' })
+    // Signs out every other session; this one gets a fresh token.
+    await Member.updateOne({ _id: req.member._id }, { $set: { passwordHash: await bcrypt.hash(req.body.newPassword, BCRYPT_ROUNDS), sessionsValidAfter: auth.sessionCutoff() } })
+    res.json({ member: publicMember(req.member, true), token: auth.signSession(req.member), message: 'Password saved. Other devices are signed out.' })
   } catch (err) {
+    console.error('[CapitalWatch] Password change failed:', err.message)
     fail(res, 500, 'Could not save your password. Try again.')
   }
 })
@@ -250,7 +286,7 @@ router.delete('/me', async (req, res) => {
     await Member.deleteOne({ _id: req.member._id })
     res.json({ message: 'Account deleted.' })
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -306,7 +342,7 @@ router.post('/businesses', async (req, res) => {
     const business = await Business.create({ ...fields, memberIds: [req.member._id] })
     res.status(201).json(business)
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -350,26 +386,36 @@ router.get('/businesses/:id/members', async (req, res) => {
 
 // Share a business with a teammate. They get an email; the business shows up for
 // them once they sign in (signing up joins the list like anyone else).
-router.post('/businesses/:id/members', signInIpLimiter, async (req, res) => {
+// Invites go to addresses we haven't verified, so cap them per person, not only per IP.
+const inviteLimiter = limiter(24 * 60 * 60 * 1000, 25, 'You have sent a lot of invites today. Try again tomorrow.',
+  (req) => `cw-invite:${req.member._id}`)
+// Names typed by members go into an email to someone else: keep them to plain words,
+// with no links, so an invite can't be dressed up as a phishing message.
+const plainName = (s) => String(s || '').replace(/https?:\/\/\S*|www\.\S*|\b\S+\.(com|net|org|io|co|info|biz|xyz|ru|app|link)\b\S*/gi, '').replace(/[<>\r\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
+
+router.post('/businesses/:id/members', signInIpLimiter, inviteLimiter, async (req, res) => {
   const business = await businessForMember(req.member, req.params.id)
   if (!business) return fail(res, 404, 'Business not found.')
   const email = normalizeEmail(req.body?.email)
   if (!EMAIL_RE.test(email)) return fail(res, 400, 'Enter a valid email address.')
   if ((business.memberIds.length + (business.pendingInvites || []).length) >= 10) return fail(res, 400, 'A business can have up to 10 people.')
-  const existing = await Member.findOne({ email }).select('_id').lean()
-  if (existing) {
+  // Only an account whose owner has confirmed the address joins right away. Otherwise
+  // the invite waits until someone signs in with a link sent to that address.
+  const existing = await Member.findOne({ email }).select('_id emailVerified').lean()
+  if (existing?.emailVerified) {
     await Business.updateOne({ _id: business._id }, { $addToSet: { memberIds: existing._id } })
   } else {
     await Business.updateOne({ _id: business._id }, { $addToSet: { pendingInvites: email } })
   }
-  const inviter = req.member.name || req.member.email
+  const inviter = plainName(req.member.name) || req.member.email
+  const businessName = plainName(business.name) || 'a business'
   sendMail({
     from: FROM_EMAIL,
     to: email,
-    subject: `${inviter} shared ${business.name} with you on Capital Watch`,
-    text: `${inviter} added you to ${business.name} on Capital Watch, a free tool that finds grants, loans and investors and ranks them for your business.\n\nOpen it here: ${getCapitalWatchUrl()}\n\nSign in with this email address (${email}) to see it.`,
+    subject: `${inviter} shared ${businessName} with you on Capital Watch`,
+    text: `${inviter} added you to ${businessName} on Capital Watch, a free tool that finds grants, loans and investors and ranks them for your business.\n\nOpen it here: ${getCapitalWatchUrl()}\n\nSign in with this email address (${email}) to see it. If you create a password, confirm your email with the link we send you first.\n\nIf you don't know this person, you can ignore this email.`,
   }).catch((err) => console.error('[CapitalWatch] Invite email failed:', err.message))
-  res.json({ message: existing ? 'Added.' : 'Invite sent.' })
+  res.json({ message: existing?.emailVerified ? 'Added.' : 'Invite sent.' })
 })
 
 router.delete('/businesses/:id/members/:who', async (req, res) => {
@@ -450,7 +496,7 @@ router.get('/grants', withBusiness, async (req, res) => {
       .filter((g) => g && matchesSearch(g) && inCategory(g))
     res.json(rows.slice(0, LIST_LIMIT))
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -474,7 +520,7 @@ router.get('/stats', withBusiness, async (req, res) => {
     const n = Object.fromEntries(counts.map((c) => [c._id, c.n]))
     res.json({ matches: matches.length, byCategory, applied: n.approved || 0, saved: n.archived || 0, dismissed: n.rejected || 0 })
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -759,7 +805,7 @@ router.get(['/athena/briefing', '/inanna/briefing'], withBusiness, async (req, r
   try {
     res.json(await buildBriefing(req.business, req.member._id))
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -1005,7 +1051,7 @@ router.post('/outbox/:id/send', auth.requireAdmin, sendLimiter, async (req, res)
     }
     res.json(email)
   } catch (err) {
-    fail(res, 500, err.message)
+    serverError(res, err)
   }
 })
 
@@ -1023,6 +1069,14 @@ router.get('/admin/summary', auth.requireAdmin, async (req, res) => {
     mongoose.connection.collection('capitalwatch.state').findOne({ _id: 'rotation' }),
   ])
   res.json({ members, signupsLast7Days: week, signupsLast30Days: month, businesses, openOpportunities: open, lastScrapeAt: state?.lastRunAt || null })
+})
+
+// Anything a handler threw: a bad id is a 400, everything else a plain 500.
+router.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
+  if (err?.name === 'CastError') return fail(res, 400, 'That request had a bad id.')
+  if (err?.type === 'entity.too.large') return fail(res, 413, 'That is too much text.')
+  serverError(res, err, `${req.method} ${req.path}`)
 })
 
 module.exports = router

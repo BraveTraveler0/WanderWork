@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, ExternalLink, Loader2, Mail, RotateCcw, Sparkles, X } from "lucide-react";
-import { api, formatUsd, type Briefing, type AthenaAction } from "./capitalWatchApi";
+import { api, formatUsd, safeHref, type Briefing, type AthenaAction } from "./capitalWatchApi";
 
 // Athena for Capital Watch: the floating orb (adapted from MarketGenius's Inanna), scoped to funding.
 // It reads the real grants, deadlines and company profiles on the server, answers in
@@ -262,8 +262,8 @@ export default function CapitalWatchAthena({ businessId, businessName, onBriefin
   async function runAction(action: AthenaAction, key: string) {
     if (doneActions[key]) return;
     try {
-      if (action.type === "open" && action.link) {
-        window.open(action.link, "_blank", "noopener,noreferrer");
+      if (action.type === "open" && safeHref(action.link)) {
+        window.open(safeHref(action.link), "_blank", "noopener,noreferrer");
         return;
       }
       if (action.type === "approve") {
