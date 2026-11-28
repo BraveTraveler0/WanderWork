@@ -44,6 +44,18 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
 export const send = <T = any>(path: string, method: string, body?: unknown) =>
   api<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
+// Links from scraped listings and opportunity pages: only open real web addresses
+// (never javascript: or data: links a page might have slipped in).
+export function safeHref(link?: string | null): string {
+  if (!link) return "";
+  try {
+    const url = new URL(link);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 export type Option = { id: string; label: string };
 export type Options = {
   fundingCategories: Option[];
@@ -59,6 +71,7 @@ export type Member = {
   name: string;
   role: "member" | "admin";
   hasPassword: boolean;
+  emailVerified?: boolean;
   digestOptOut: boolean;
   limits: { questions: number; drafts: number; businesses: number };
   usage: { questions: number; drafts: number };

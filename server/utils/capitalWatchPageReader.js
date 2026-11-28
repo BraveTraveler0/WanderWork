@@ -5,10 +5,14 @@
 // choices). If the page has no form but links to an application, follows that one link.
 //
 // Safety: http(s) only, public addresses only (no localhost or private networks, checked
-// on every redirect), a 10 second timeout, and a 1.5 MB size cap.
+// on every redirect and again on the address actually connected to, so a DNS answer
+// that changes between the check and the request can't reach the private network),
+// a 10 second timeout, and a 1.5 MB size cap.
 
 const dns = require('dns').promises
+const dnsCb = require('dns')
 const net = require('net')
+const { Agent, fetch } = require('undici')
 
 const TIMEOUT_MS = 10000
 const MAX_BYTES = 1.5 * 1024 * 1024
@@ -35,11 +39,25 @@ async function assertPublicUrl(raw) {
   return url
 }
 
+// Every connection resolves through this lookup, which refuses private addresses.
+function publicLookup(hostname, options, callback) {
+  dnsCb.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err)
+    const list = Array.isArray(addresses) ? addresses : [{ address: addresses, family: options?.family || 4 }]
+    if (!list.length || list.some((a) => isPrivateIp(a.address))) return callback(new Error('That address is not public.'))
+    if (options?.all) return callback(null, list)
+    callback(null, list[0].address, list[0].family)
+  })
+}
+let agent = null
+const publicAgent = () => (agent ||= new Agent({ connect: { lookup: publicLookup }, headersTimeout: TIMEOUT_MS, bodyTimeout: TIMEOUT_MS }))
+
 async function fetchHtml(raw) {
   let current = raw
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const url = await assertPublicUrl(current)
     const res = await fetch(url, {
+      dispatcher: publicAgent(),
       redirect: 'manual',
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CapitalWatchReader/1.0)', Accept: 'text/html,application/xhtml+xml' },
@@ -140,7 +158,10 @@ function findApplyLink(html, baseUrl) {
     const href = attr(m[1], 'href')
     if (!href || /^(#|mailto:|tel:|javascript:)/i.test(href)) continue
     if (/\b(apply( now| here| online| today)?|start (your )?application|application form|submit (an )?application)\b/i.test(text)) {
-      try { return new URL(href, baseUrl).toString() } catch { /* bad link */ }
+      try {
+        const url = new URL(href, baseUrl)
+        if (url.protocol === 'http:' || url.protocol === 'https:') return url.toString()
+      } catch { /* bad link */ }
     }
   }
   return null
@@ -214,6 +235,7 @@ function findContactLink(html, baseUrl) {
     if (!href || /^(#|mailto:|tel:|javascript:)/i.test(href)) continue
     let url
     try { url = new URL(href, baseUrl) } catch { continue }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
     if (/^contact( us)?$|^get in touch$/i.test(text) || /\/contact(-us)?\/?$/i.test(url.pathname)) return url.toString()
     if (!fallback && /\b(contact|staff|our team|about us)\b/i.test(text)) fallback = url.toString()
   }

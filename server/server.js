@@ -28,6 +28,12 @@ const runsScheduledJobs = process.env.RUN_SCHEDULED_JOBS !== 'false';
 
 app.set('trust proxy', 1);
 
+// An error nobody caught in an async route or job: log it instead of letting it
+// stop the whole server (and every app it serves).
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] Unhandled promise rejection:', reason?.stack || reason);
+});
+
 app.use(compression());
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },

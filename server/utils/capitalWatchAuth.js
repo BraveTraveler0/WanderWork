@@ -36,15 +36,23 @@ async function requireMember(req, res, next) {
     const header = req.get('authorization') || ''
     const token = header.startsWith('Bearer ') ? header.slice(7) : ''
     if (!token) return res.status(401).json({ message: 'Please sign in.' })
-    const payload = jwt.verify(token, secret(), { audience: AUDIENCE })
+    const payload = jwt.verify(token, secret(), { audience: AUDIENCE, algorithms: ['HS256'] })
     const member = await Member.findById(payload.sub).select('+passwordHash')
     if (!member) return res.status(401).json({ message: 'Please sign in.' })
+    // A password change or reset signs out every session issued before it.
+    if (member.sessionsValidAfter && payload.iat * 1000 < member.sessionsValidAfter.getTime()) {
+      return res.status(401).json({ message: 'Your session expired. Please sign in again.' })
+    }
     req.member = member
     next()
   } catch {
     res.status(401).json({ message: 'Your session expired. Please sign in again.' })
   }
 }
+
+// The time to store as sessionsValidAfter: this second, so a token signed right after it
+// (same second) still works and every older one doesn't.
+const sessionCutoff = () => new Date(Math.floor(Date.now() / 1000) * 1000)
 
 function requireAdmin(req, res, next) {
   if (req.member?.role !== 'admin') return res.status(403).json({ message: 'Admins only.' })
@@ -79,6 +87,6 @@ function verifyUnsubscribe(memberId, sig) {
 }
 
 module.exports = {
-  signSession, requireMember, requireAdmin, hashToken, newLoginToken, isAdminEmail,
+  signSession, requireMember, requireAdmin, sessionCutoff, hashToken, newLoginToken, isAdminEmail,
   useAllowance, refundAllowance, limitsFor, unsubscribeSig, verifyUnsubscribe, todayKey,
 }

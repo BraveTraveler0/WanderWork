@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, Check, ChevronDown, Loader2, Mail, RotateCcw, Settings, Triangle, User, X } from "lucide-react";
 import {
-  api, send, getSession, setSession, clearSession, labelOf, formatUsd,
+  api, send, getSession, setSession, clearSession, labelOf, formatUsd, safeHref,
   type Business, type Draft, type Grant, type Member, type Options, type Stats,
 } from "./capitalWatchApi";
 import CapitalWatchAthena from "./CapitalWatchAthena";
@@ -531,6 +531,8 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
         <AccountPanel member={member} onClose={() => setMenu(null)} onChanged={onMemberChanged} onSignOut={onSignOut} />
       )}
 
+      {member.emailVerified === false && <ConfirmEmailNotice email={member.email} />}
+
       {page === "outbox" && <CapitalWatchOutbox businessId={business._id} isAdmin={isAdmin} sharedView={Boolean(business.sharedView)} onChange={afterChange} />}
 
       {(page === "profile" || page === "new-business") && (
@@ -616,7 +618,7 @@ function Dashboard({ member, options, businesses, business, onSwitch, onBusiness
                   </div>
                   <div className="text-gray-600 min-w-0">
                     <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Website</span>
-                    {grant.link ? <a href={grant.link} target="_blank" rel="noopener noreferrer" className="underline hover:text-black break-words">{websiteLabel(grant.link)}</a> : EMPTY}
+                    {safeHref(grant.link) ? <a href={safeHref(grant.link)} target="_blank" rel="noopener noreferrer" className="underline hover:text-black break-words">{websiteLabel(grant.link)}</a> : EMPTY}
                   </div>
                   <div>
                     <span className="lg:hidden block text-xs uppercase tracking-wide text-gray-400 mb-0.5">Amount</span>
@@ -853,6 +855,8 @@ function PasswordSection({ member, onChanged }: { member: Member; onChanged: (m:
     setMsg(null);
     try {
       const r = await send("/me/password", "POST", { currentPassword: current, newPassword: next });
+      // Changing the password signs out older sessions; keep this one with the new token.
+      if (r.token) setSession(r.token);
       onChanged(r.member);
       setMsg({ text: r.message, ok: true });
       setOpen(false);
@@ -881,6 +885,27 @@ function PasswordSection({ member, onChanged }: { member: Member; onChanged: (m:
       )}
       {msg && <div className={`mt-2 ${msg.ok ? "text-gray-600" : "text-red-600"}`}>{msg.text}</div>}
       {!member.hasPassword && !open && <div className="text-xs text-gray-400 mt-1">You sign in with emailed links. A password lets you sign in directly.</div>}
+    </div>
+  );
+}
+
+// Accounts made with a password haven't proven they own the address yet. Until they use
+// an emailed link, businesses teammates share with them stay pending.
+function ConfirmEmailNotice({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  async function resend() {
+    setState("sending");
+    try { await send("/auth/request", "POST", { email }); setState("sent"); } catch { setState("error"); }
+  }
+  return (
+    <div className="border border-black bg-[#FEF9C3] px-4 py-3 mb-4 text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+      <span className="flex-1">
+        Confirm your email with the link we sent to <span className="font-bold break-all">{email}</span>. Until then, businesses teammates share with you won't show up.
+      </span>
+      {state === "sent" ? <span className="text-gray-700">Sent. Check your inbox.</span>
+        : <button onClick={resend} disabled={state === "sending"} className="underline text-left disabled:opacity-50 shrink-0">
+            {state === "error" ? "Couldn't send. Try again" : state === "sending" ? "Sending..." : "Send a new link"}
+          </button>}
     </div>
   );
 }
