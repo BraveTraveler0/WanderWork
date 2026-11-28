@@ -889,23 +889,17 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     </div>
                   </div>
 
+                  {/* We don't store card details. Stripe (or PayPal) keeps them, so this
+                      points to the real place to see, add or remove them. */}
                   <div className="border rounded-[10px] p-4" style={{ borderColor: '#DCDCDC' }}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[14px] font-semibold" style={{ color: '#306770' }}>
-                          {paymentProvider === 'stripe' ? 'Visa •••• 4451' : 'PayPal'}
-                        </p>
-                        <p className="text-[12px]" style={{ color: '#787878' }}>
-                          {paymentProvider === 'stripe' ? 'Expires 12/26' : profile.email}
-                        </p>
-                      </div>
-                      <button
-                        className="px-3 py-1 rounded-[8px] text-[12px] border transition-colors"
-                        style={{ borderColor: '#306770', color: '#306770', background: 'white' }}
-                      >
-                        Remove
-                      </button>
-                    </div>
+                    <p className="text-[14px] font-semibold" style={{ color: '#306770' }}>
+                      {paymentProvider === 'stripe' ? 'Your saved cards' : 'PayPal'}
+                    </p>
+                    <p className="text-[12px] mt-1" style={{ color: '#787878' }}>
+                      {paymentProvider === 'stripe'
+                        ? 'Cards are stored securely by Stripe, not by WanderWork. Use the button below to see, add or remove them.'
+                        : `You pay with your PayPal account${profile.email ? ` (${profile.email})` : ''}. Manage it on PayPal.`}
+                    </p>
                   </div>
                   </>}
 
@@ -935,7 +929,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       }
                     }}
                   >
-                    {isNative ? 'Manage Subscription' : `+ Add ${paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method`}
+                    {isNative ? 'Manage Subscription' : (paymentProvider === 'stripe' ? 'Manage cards in Stripe' : 'Open PayPal')}
                   </button>
 
                   {!isNative && <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
