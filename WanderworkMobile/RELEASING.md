@@ -20,6 +20,10 @@ backup, see the end.
      `wanderwork_premium_monthly`
    - Consumables: `wanderwork_tokens_10`, `wanderwork_tokens_30`,
      `wanderwork_tokens_100`
+   Prices: the website charges Pro $19/mo, Premium $49/mo and 3 tokens per
+   $1. Suggested App Store prices: Pro $19.99, Premium $49.99, 10 tokens
+   $3.99, 30 tokens $9.99, 100 tokens $29.99. The app shows whatever prices you
+   set (it reads them from the App Store), so any price works.
 4. RevenueCat: add the iOS app, import the products, make one Offering with all
    five, and copy the iOS public API key (`appl_...`). Webhook and server
    settings are in `README.md` under "Native in-app purchases".
@@ -90,8 +94,10 @@ In Xcode:
 - **Support URL:** https://www.wanderwork.io/bug-report
 - **Marketing URL:** https://www.wanderwork.io
 - **Privacy Policy URL:** https://www.wanderwork.io/privacy
-- **Screenshots:** iPhone 6.9" (1320 x 2868), at least 3: job feed, a job's
-  details, profile or matches, plans.
+- **Screenshots:** ready in `store-assets/` (iPhone 6.9", 1320 x 2868, no
+  transparency): job feed, a job's details, filters, and tailored resumes.
+  Upload them in that order. They show live jobs from the day they were made;
+  regenerate them before a later release if you want fresh listings.
 - **Copyright:** 2026 Aon Technology (same as Aonverse, change if WanderWork is
   under another name).
 
