@@ -149,12 +149,74 @@ pins `kotlin-gradle-plugin:1.8.20`, which doesn't recognize JVM target 21.
 Build with a JDK 17 `JAVA_HOME` (not Android Studio's bundled JBR, which is
 JDK 21) or the Kotlin compile step fails with "Unknown Kotlin JVM target: 21".
 
+## Sign in with Apple — setup required
+
+The App Store requires Sign in with Apple because the app also offers Google and
+LinkedIn. The iPhone app shows "Continue with Apple" first on the sign-in and
+sign-up screens (`src/components/AppleAuthButton.tsx`); the server verifies it at
+`POST /oauth/apple` (`server/utils/appleSignIn.js`).
+
+1. Apple Developer → Certificates, Identifiers & Profiles → Identifiers →
+   `io.wanderwork.app` → turn on **Sign in with Apple**. (The app already has
+   the entitlement in `ios/App/App/App.entitlements`.)
+2. Keys → create a key with **Sign in with Apple** enabled, download the `.p8`.
+3. On Render, add `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the
+   `.p8` file's contents). Sign-in works without these; they're needed so that
+   deleting an account also revokes the person's Apple sign-in, which Apple
+   requires.
+
+## Building for the App Store without a Mac
+
+iOS apps can only be built on a Mac, so `codemagic.yaml` (repo root) builds on
+Codemagic's Macs and uploads to TestFlight. One-time setup:
+
+1. Apple Developer Program membership ($99/year) and an app record in
+   App Store Connect with bundle ID `io.wanderwork.app`.
+2. App Store Connect → Users and Access → Integrations → App Store Connect API
+   → create a key with **App Manager** access; download the `.p8`.
+3. Sign up at codemagic.io with GitHub and add the WanderWork repo.
+4. Codemagic → Team settings → Integrations → Developer Portal → add the key
+   from step 2, named exactly **WanderWork App Store Connect**.
+5. Codemagic → the app → Environment variables → group `wanderwork_ios`:
+   `VITE_REVENUECAT_IOS_API_KEY` (from RevenueCat), and optionally
+   `VITE_GOOGLE_IOS_CLIENT_ID` (the Google button stays hidden without it).
+6. Put the app's numeric Apple ID (App Store Connect → App Information) in
+   `APP_STORE_APPLE_ID` in `codemagic.yaml`.
+7. Start the **WanderWork iOS to TestFlight** workflow. When it finishes,
+   install TestFlight on an iPhone or iPad and test the build there.
+
+## App Store submission checklist
+
+Done in the project:
+- iPhone only (`TARGETED_DEVICE_FAMILY = 1`), arm64.
+- Privacy manifest (`ios/App/App/PrivacyInfo.xcprivacy`). Answer App Privacy in
+  App Store Connect to match it: email, name, user ID, purchases, user content
+  (resume and job preferences), all linked to the person and used for app
+  functionality; page views for analytics, not linked; no tracking.
+- `ITSAppUsesNonExemptEncryption = false` (HTTPS only), so no export questions
+  on each upload.
+- Sign in with Apple; Google is hidden until configured.
+- In-app account deletion (Settings), which also revokes Apple sign-in.
+- Purchases only through Apple (RevenueCat), Restore Purchases, and the
+  subscription terms with Terms of Use and Privacy Policy links on the Plans
+  screen.
+
+Needed from you in App Store Connect:
+- Subscriptions and token packs created with the product IDs in
+  `src/native-iap.ts`, and RevenueCat set up (see above). Apple tests a real
+  purchase in the sandbox, so this has to work before review.
+- A demo account (email and password) with some job matches, in App Review
+  Information, so the reviewer can get past sign-in.
+- Privacy Policy URL https://www.wanderwork.io/privacy and a support URL.
+- Terms of Use: add https://www.wanderwork.io/terms to the description (or use
+  Apple's standard EULA) since the app sells subscriptions.
+- iPhone screenshots: 6.9" (1320 × 2868) at minimum.
+- Age rating questionnaire, category (Business), description, keywords.
+
 ## Still to do
 
 - Deeper mobile UI pass (offline/error states)
 - Secure token storage (currently `localStorage`, same as web)
-- Code signing for real device/TestFlight/Play Store builds (everything so
-  far is debug/"Sign to Run Locally")
 - Push notifications (optional, but strengthens the App Store "not a
   repackaged website" case)
 - Store listing assets (screenshots, descriptions, keywords, ratings)

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google'
 import { API_BASE_URL } from '../api/config'
-import { isNative, signInWithGoogleNative } from '../native'
+import { googleNativeConfigured, isNative, signInWithGoogleNative } from '../native'
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '406462367912-qsnckspm7sepdi011ubrvo80q49l1ovf.apps.googleusercontent.com'
 
@@ -105,7 +105,9 @@ function WebGoogleButton({ onAuth, onError, beforeStart, label }: GoogleAuthButt
 }
 
 export default function GoogleAuthButton(props: GoogleAuthButtonProps) {
-  if (isNative) return <NativeGoogleButton {...props} />
+  // In the phone app, hide the button until this build has its Google client ID,
+  // rather than show a button that can only fail (App Review rejects broken features).
+  if (isNative) return googleNativeConfigured() ? <NativeGoogleButton {...props} /> : null
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <WebGoogleButton {...props} />

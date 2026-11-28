@@ -59,10 +59,15 @@ const deleteUser = asyncHandler(async (req, res) => {
                 ...(authId ? [{ _id: authId }] : []),
                 { email: authEmail },
             ],
-        });
+        }).select('+appleRefreshToken');
 
         if (!deletedUser) {
             return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Signed up with Apple: Apple requires us to revoke their token too.
+        if (deletedUser.appleRefreshToken) {
+            require('../utils/appleSignIn').revokeRefreshToken(deletedUser.appleRefreshToken).catch(() => {});
         }
 
         try {
@@ -102,10 +107,13 @@ const deleteUser = asyncHandler(async (req, res) => {
         }
 
         // Delete the user
-        const deletedUser = await User.findOneAndDelete({ _id: id });
+        const deletedUser = await User.findOneAndDelete({ _id: id }).select('+appleRefreshToken');
 
         if (!deletedUser) {
             return res.status(500).json({ message: 'Error deleting user' });
+        }
+        if (deletedUser.appleRefreshToken) {
+            require('../utils/appleSignIn').revokeRefreshToken(deletedUser.appleRefreshToken).catch(() => {});
         }
 
         const reply = `Username ${deletedUser.displayName} with ID ${deletedUser._id} deleted`;

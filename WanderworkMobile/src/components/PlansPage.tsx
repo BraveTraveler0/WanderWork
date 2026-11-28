@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
-import { isNative } from '../native'
+import { getNativePlatform, isNative } from '../native'
 import { purchaseSubscription, purchaseTokenPack, restorePurchases, withNativePurchase, TOKEN_PACK_PRODUCTS } from '../native-iap'
 
 const LS_URLS: Record<string, string> = {
@@ -700,6 +700,19 @@ const PlansPage = ({
             >
               {restoring ? 'Restoring…' : 'Restore Purchases'}
             </button>
+            {/* Required by the App Store and Google Play next to any subscription offer. */}
+            <p style={{ maxWidth: 480, margin: '16px auto 0', padding: '0 16px', color: '#6B7280', fontSize: 11, lineHeight: 1.5, fontFamily: 'Manrope' }}>
+              Pro and Premium are monthly subscriptions that renew automatically at the price shown until you cancel.
+              Payment is charged to your {getNativePlatform() === 'ios' ? 'Apple ID' : 'Google Play'} account when you confirm the purchase.
+              Your subscription renews unless you cancel at least 24 hours before the current period ends.
+              You can manage or cancel it anytime in your {getNativePlatform() === 'ios' ? 'App Store account settings' : 'Google Play subscriptions'}.
+              Token packs are one-time purchases.
+            </p>
+            <p style={{ margin: '8px 0 0', fontSize: 11, fontFamily: 'Manrope' }}>
+              <a href="https://wanderwork.io/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#306770', textDecoration: 'underline' }}>Terms of Use</a>
+              <span style={{ color: '#9CA3AF' }}>{'  ·  '}</span>
+              <a href="https://wanderwork.io/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#306770', textDecoration: 'underline' }}>Privacy Policy</a>
+            </p>
           </div>
         )}
 

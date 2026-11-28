@@ -3,6 +3,7 @@ import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { API_BASE_URL } from '../api/config'
 import { startLinkedInAuth } from '../native'
 import GoogleAuthButton from './GoogleAuthButton'
+import AppleAuthButton from './AppleAuthButton'
 
 const BASE_URL = API_BASE_URL
 
@@ -19,6 +20,7 @@ function SocialButtons({ onLogin, onError }: { onLogin: (user: any, token: strin
 
   return (
     <div className="flex flex-col gap-3 mt-2">
+      <AppleAuthButton onAuth={onLogin} onError={onError} />
       <GoogleAuthButton onAuth={onLogin} onError={onError} />
 
       <button

@@ -93,6 +93,9 @@ const GOOGLE_NATIVE_CLIENT_ID: Record<string, string | undefined> = {
   android: import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID as string | undefined,
 }
 
+/** True when this build has a Google client ID for the current phone platform. */
+export const googleNativeConfigured = () => isNative && Boolean(GOOGLE_NATIVE_CLIENT_ID[getNativePlatform()])
+
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = ''
   bytes.forEach((b) => { binary += String.fromCharCode(b) })
