@@ -110,6 +110,10 @@ const BASE_URL = API_BASE_URL;
 
 const TIMEOUT_MS = 10000;
 
+export function isUnauthorizedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 401;
+}
+
 function getAuthHeader(): Record<string, string> {
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('wanderworkToken') : null
@@ -132,7 +136,12 @@ async function fetchJson<T>(path: string, init?: RequestInit & { signal?: AbortS
         ...(init?.headers || {}),
       },
     });
-    if (!res.ok) throw new Error(`Request failed ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null);
+      const error = new Error(errorBody?.message || `Request failed ${res.status} ${res.statusText}`) as Error & { status: number };
+      error.status = res.status;
+      throw error;
+    }
     return res.json();
   } finally {
     clearTimeout(timeout);

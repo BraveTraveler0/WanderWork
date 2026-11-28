@@ -6,6 +6,7 @@ import { parseSignupResume, uploadCandidateResume } from '../api/jobseeker'
 import { API_BASE_URL } from '../api/config'
 import { startLinkedInAuth } from '../native'
 import GoogleAuthButton from './GoogleAuthButton'
+import AppleAuthButton, { appleSignInAvailable } from './AppleAuthButton'
 import TermsOfServicePage from './TermsOfServicePage'
 
 interface SignupPageProps {
@@ -60,6 +61,21 @@ function SocialSignupBox({
   return (
     <div>
       <p className="mb-3 text-center text-sm font-semibold text-[#306770]">Create your account faster</p>
+      {appleSignInAvailable() && (
+        <div className="mb-3">
+          <AppleAuthButton
+            onAuth={onSignup}
+            onError={onError}
+            beforeStart={() => {
+              if (!termsAccepted) {
+                onRequireTerms()
+                return false
+              }
+              return true
+            }}
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <GoogleAuthButton
           onAuth={onSignup}

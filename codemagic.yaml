@@ -1,0 +1,55 @@
+# Cloud build for the WanderWork iPhone app (WanderworkMobile/), since iOS apps can
+# only be built on a Mac. Codemagic runs this on a Mac, signs it with your Apple
+# Developer account and uploads it to TestFlight. One-time setup steps are in
+# WanderworkMobile/README.md under "Building for the App Store without a Mac".
+workflows:
+  ios-testflight:
+    name: WanderWork iOS to TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    working_directory: WanderworkMobile
+    integrations:
+      # The App Store Connect API key you add in Codemagic (Team settings >
+      # Integrations > Developer Portal). Must be named exactly this.
+      app_store_connect: WanderWork App Store Connect
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: io.wanderwork.app
+      groups:
+        # Codemagic environment group holding the app's build settings:
+        # VITE_REVENUECAT_IOS_API_KEY (required for purchases) and,
+        # optionally, VITE_GOOGLE_IOS_CLIENT_ID (shows the Google button).
+        - wanderwork_ios
+      vars:
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+        APP_STORE_APPLE_ID: "" # fill in: App Store Connect > App Information > Apple ID (a number)
+      node: 20
+      xcode: latest
+      cocoapods: default
+    triggers: []  # run it by hand from Codemagic when you want a new TestFlight build
+    scripts:
+      - name: Install packages
+        script: npm ci
+      - name: Build the web app and copy it into the iOS project
+        script: |
+          npm run build
+          npx cap sync ios
+      - name: Install iOS libraries
+        script: cd ios/App && pod install
+      - name: Use the App Store signing profile
+        script: xcode-project use-profiles
+      - name: Next build number
+        script: |
+          # Each TestFlight upload needs a higher build number than the last one.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          cd ios/App && agvtool new-version -all $((LATEST + 1))
+      - name: Build the app
+        script: xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

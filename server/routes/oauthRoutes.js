@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { sendWelcomeEmail } = require('../utils/welcomeEmail');
 const { reportConversion, readAttribution } = require('../utils/marketGenius');
 const { safePublicUrl, getPublicAppUrl, getPublicServerUrl } = require('../utils/publicUrls');
+const appleSignIn = require('../utils/appleSignIn');
 
 const normalizeBaseUrl = (value, fallback = '') => String(value || fallback).trim().replace(/\/+$/, '');
 
@@ -262,6 +263,71 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
   });
 }
 
+// Finds or creates the WanderWork account and job-seeker profile for a verified
+// Google or Apple identity, then returns what the app needs to sign in.
+// existingUser: an account already matched another way (Apple's stable id).
+async function completeSocialSignIn({ email, name, picture, method, attribution, existingUser = null }) {
+  let user = existingUser || await User.findOne({ email });
+  const isNewUser = !user;
+  if (!user) {
+    const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+    user = await User.create({
+      email,
+      displayName: name || email.split('@')[0],
+      password: randomPass,
+      verified: true,
+    });
+    reportConversion('signup_completed', { email, attribution, method });
+  }
+
+  if (user.active === false) {
+    const err = new Error('Account is disabled');
+    err.status = 403;
+    throw err;
+  }
+
+  const profileEmail = user.email;
+  const nameParts = (name || '').trim().split(' ').filter(Boolean);
+  const existingCandidate = await Candidates.findOneAndUpdate(
+    { email: profileEmail },
+    {
+      $setOnInsert: {
+        email: profileEmail,
+        firstName: nameParts[0] || profileEmail.split('@')[0],
+        lastName: nameParts.slice(1).join(' ') || '',
+        phone: '',
+        location: [],
+        targetRoles: [],
+        seniority: [],
+        skills: [],
+        urls: [],
+        resume: {},
+        status: 'active',
+        paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        tokenBalance: 100,
+        recruiterContactsLeft: 10,
+        recruiterContactsUpdatedAt: new Date(),
+        ...(picture ? { profileImage: picture } : {}),
+      },
+    },
+    { upsert: true, new: false }
+  ).catch((e) => { console.warn('Candidate upsert failed:', e.message); return null; });
+
+  if (picture && existingCandidate && !existingCandidate.profileImage) {
+    Candidates.updateOne({ email: profileEmail }, { $set: { profileImage: picture } }).catch(() => {});
+  }
+
+  if (!existingCandidate) {
+    setImmediate(() => {
+      sendWelcomeEmail({ email: profileEmail, firstName: nameParts[0] || profileEmail.split('@')[0] }).catch(() => {});
+    });
+  }
+
+  const token = jwtUtils.generateToken(user);
+  const doc = user._doc || user;
+  return { user: { ...doc, password: undefined, appleRefreshToken: undefined }, token, isNewUser };
+}
+
 // ── Google token verify (used by frontend @react-oauth/google) ───────────────
 router.post('/google', async (req, res) => {
   const { credential, accessToken, attribution } = req.body || {};
@@ -270,72 +336,62 @@ router.post('/google', async (req, res) => {
     if (!credential && !accessToken) return res.status(400).json({ message: 'Google credential is required' });
 
     const googleIdentity = await resolveGoogleIdentity({ credential, accessToken });
-    const googleEmail = googleIdentity.email;
-    const googleName = googleIdentity.name;
-    const googlePicture = googleIdentity.picture;
+    if (!googleIdentity.email) return res.status(400).json({ message: 'Could not verify Google identity' });
 
-    if (!googleEmail) return res.status(400).json({ message: 'Could not verify Google identity' });
-
-    let user = await User.findOne({ email: googleEmail });
-    const isNewUser = !user;
-    if (!user) {
-      const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
-      user = await User.create({
-        email: googleEmail,
-        displayName: googleName || googleEmail.split('@')[0],
-        password: randomPass,
-        verified: true,
-      });
-      reportConversion('signup_completed', { email: googleEmail, attribution, method: 'google' });
-    }
-
-    if (user.active === false) {
-      return res.status(403).json({ message: 'Account is disabled' });
-    }
-
-    const nameParts = (googleName || '').trim().split(' ').filter(Boolean);
-    const existingCandidate = await Candidates.findOneAndUpdate(
-      { email: googleEmail },
-      {
-        $setOnInsert: {
-          email: googleEmail,
-          firstName: nameParts[0] || googleEmail.split('@')[0],
-          lastName: nameParts.slice(1).join(' ') || '',
-          phone: '',
-          location: [],
-          targetRoles: [],
-          seniority: [],
-          skills: [],
-          urls: [],
-          resume: {},
-          status: 'active',
-          paidUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          tokenBalance: 100,
-          recruiterContactsLeft: 10,
-          recruiterContactsUpdatedAt: new Date(),
-          ...(googlePicture ? { profileImage: googlePicture } : {}),
-        },
-      },
-      { upsert: true, new: false }
-    ).catch((e) => { console.warn('Candidate upsert failed:', e.message); return null; });
-
-    if (googlePicture && existingCandidate && !existingCandidate.profileImage) {
-      Candidates.updateOne({ email: googleEmail }, { $set: { profileImage: googlePicture } }).catch(() => {});
-    }
-
-    if (!existingCandidate) {
-      setImmediate(() => {
-        sendWelcomeEmail({ email: googleEmail, firstName: nameParts[0] || googleEmail.split('@')[0] }).catch(() => {});
-      });
-    }
-
-    const token = jwtUtils.generateToken(user);
-    res.json({ user: { ...user._doc, password: undefined }, token, isNewUser });
+    res.json(await completeSocialSignIn({
+      email: googleIdentity.email,
+      name: googleIdentity.name,
+      picture: googleIdentity.picture,
+      method: 'google',
+      attribution,
+    }));
   } catch (err) {
+    if (err.status === 403) return res.status(403).json({ message: err.message });
     console.error('Google OAuth error:', err);
-    if (/Invalid Google|Token used too|Wrong recipient|audience/i.test(String(err?.message))) {
+    if (/Invalid Google|Token used too|Wrong recipient|audience|Wrong number of segments|signature|Invalid token/i.test(String(err?.message))) {
       return res.status(401).json({ message: 'Google sign-in could not be verified. Please try again.' });
     }
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+// ── Sign in with Apple (iOS app) ─────────────────────────────────────────────
+// The app sends Apple's identity token (proves who they are), the one-time
+// authorization code (traded for a refresh token we revoke if they delete their
+// account), and their name, which Apple only shares the first time.
+router.post('/apple', async (req, res) => {
+  const { identityToken, authorizationCode, givenName, familyName, attribution } = req.body || {};
+  try {
+    if (!identityToken) return res.status(400).json({ message: 'Apple identity token is required' });
+    const apple = await appleSignIn.verifyIdentityToken(identityToken);
+
+    // Apple's id is stable even when the person hides their email or changes it.
+    const byAppleId = await User.findOne({ appleId: apple.sub });
+    const email = byAppleId?.email || apple.email;
+    if (!email) {
+      return res.status(400).json({ message: "Apple didn't share an email address. In Settings, remove WanderWork from Sign in with Apple and try again." });
+    }
+    // Only link to an existing account by email when Apple has verified that email.
+    if (!byAppleId && !apple.emailVerified) {
+      return res.status(400).json({ message: 'Your Apple email address is not verified. Please sign in another way.' });
+    }
+
+    const name = [givenName, familyName].map((v) => String(v || '').trim()).filter(Boolean).join(' ').slice(0, 80);
+    const result = await completeSocialSignIn({ email, name, method: 'apple', attribution, existingUser: byAppleId });
+
+    const refreshToken = await appleSignIn.exchangeCode(authorizationCode);
+    await User.updateOne(
+      { _id: result.user._id },
+      { $set: { appleId: apple.sub, ...(refreshToken ? { appleRefreshToken: refreshToken } : {}) } }
+    );
+    res.json(result);
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ message: err.message });
+    if (err.code === 11000) return res.status(409).json({ message: 'This Apple ID is already linked to another WanderWork account.' });
+    if (/Invalid Apple|jwt|audience|issuer|signature/i.test(String(err?.message))) {
+      return res.status(401).json({ message: 'Apple sign-in could not be verified. Please try again.' });
+    }
+    console.error('Apple sign-in error:', err);
     res.status(500).json({ message: 'Server Error' });
   }
 });

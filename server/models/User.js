@@ -43,6 +43,16 @@ const userSchema = new mongoose.Schema({
     verified: {
         type: Boolean
     },
+    // Sign in with Apple: Apple's stable user id ("sub"), and the refresh token we
+    // must revoke with Apple when the account is deleted (App Store rule 5.1.1).
+    appleId: {
+        type: String,
+        index: { unique: true, sparse: true }
+    },
+    appleRefreshToken: {
+        type: String,
+        select: false
+    },
     verificationToken: {
         type: String,
         default: null
