@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import { createCheckoutSession, createTokenCheckoutSession, type Plan as StripePlan } from '../api/stripe'
 import { getNativePlatform, isNative } from '../native'
-import { purchaseSubscription, purchaseTokenPack, restorePurchases, withNativePurchase, TOKEN_PACK_PRODUCTS } from '../native-iap'
+import { getStorePrices, purchaseSubscription, purchaseTokenPack, restorePurchases, withNativePurchase, SUBSCRIPTION_PRODUCTS, TOKEN_PACK_PRODUCTS } from '../native-iap'
 
 const LS_URLS: Record<string, string> = {
   tokens: import.meta.env.VITE_LS_TOKENS_URL || '',
@@ -105,12 +105,25 @@ function PaymentModal({ planKey, onClose, onStripe }: {
 // Apple/Google IAP can't sell an arbitrary token quantity at a dynamic price
 // (only pre-registered fixed products), so native purchases pick from a
 // short fixed list instead of the web app's +/- quantity stepper.
+/** Store prices in the phone app (empty on the web or before they load). */
+export function useStorePrices(): Record<string, string> {
+  const [prices, setPrices] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!isNative) return
+    let alive = true
+    getStorePrices().then((p) => { if (alive) setPrices(p) })
+    return () => { alive = false }
+  }, [])
+  return prices
+}
+
 export function NativeTokenPackModal({ onClose, onPurchase, purchasing, error }: {
   onClose: () => void
   onPurchase: (productId: string, tokens: number) => void
   purchasing: string | null
   error: string | null
 }) {
+  const prices = useStorePrices()
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -140,7 +153,7 @@ export function NativeTokenPackModal({ onClose, onPurchase, purchasing, error }:
               }}
             >
               <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#306770' }}>{pack.label}</span>
-              <span style={{ fontSize: 12, color: '#888' }}>{purchasing === pack.id ? 'Purchasing…' : 'Buy'}</span>
+              <span style={{ fontSize: 12, color: '#888' }}>{purchasing === pack.id ? 'Purchasing…' : (prices[pack.id] || 'Buy')}</span>
             </button>
           ))}
         </div>
@@ -152,6 +165,8 @@ export function NativeTokenPackModal({ onClose, onPurchase, purchasing, error }:
 interface Plan {
   name: string
   price: number
+  /** Replaces "$price" when set, e.g. the App Store's localized price in the phone app. */
+  priceLabel?: string
   period: string
   description: string
   features: string[]
@@ -259,7 +274,7 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
               {plan.description}
             </p>
             <div style={{ marginBottom: 20, position: 'relative' }}>
-              <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 44, color: '#fff', lineHeight: 1 }}>${plan.price}</span>
+              <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 44, color: '#fff', lineHeight: 1 }}>{plan.priceLabel ?? `$${plan.price}`}</span>
               <span style={{ fontSize: 13, color: 'rgba(180,215,220,0.7)', marginLeft: 5 }}>{plan.period}</span>
             </div>
             <button
@@ -304,7 +319,7 @@ function PlanCard({ plan, index, pageVisible, onCheckout, loading }: {
             {plan.description}
           </p>
           <div style={{ marginBottom: 28 }}>
-            <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 50, color: '#306770', lineHeight: 1 }}>${plan.price}</span>
+            <span style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 50, color: '#306770', lineHeight: 1 }}>{plan.priceLabel ?? `$${plan.price}`}</span>
             <span style={{ fontSize: 13, color: '#7A7A7A', marginLeft: 4 }}>{plan.period}</span>
           </div>
           <button
@@ -418,6 +433,7 @@ const PlansPage = ({
   const [nativeSuccess, setNativeSuccess] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(false)
   const faqSection = useInView(0.1)
+  const storePrices = useStorePrices()
 
   useEffect(() => {
     const t = requestAnimationFrame(() => {
@@ -489,7 +505,10 @@ const PlansPage = ({
     {
       name: 'Free Plan',
       price: 1,
-      period: '/ per 3 tokens',
+      // In the app, tokens come in fixed packs priced by the App Store.
+      ...(storePrices[TOKEN_PACK_PRODUCTS[0].id]
+        ? { priceLabel: storePrices[TOKEN_PACK_PRODUCTS[0].id], period: `/ ${TOKEN_PACK_PRODUCTS[0].tokens} tokens` }
+        : { period: '/ per 3 tokens' }),
       description: 'Only pay for what you need.',
       features: ['Token-based usage', 'No monthly commitment', 'Flexible as you grow'],
       cta: 'Get Tokens',
@@ -497,6 +516,7 @@ const PlansPage = ({
     {
       name: 'Pro',
       price: 19,
+      priceLabel: storePrices[SUBSCRIPTION_PRODUCTS.pro],
       period: '/ mo',
       description: 'Our most popular plan for active job seekers.',
       features: ['100 tokens per month', '20 recruiter emails/day', 'Priority matching', 'AI resume tailoring', 'Cover letter generator'],
@@ -508,6 +528,7 @@ const PlansPage = ({
     {
       name: 'Premium',
       price: 49,
+      priceLabel: storePrices[SUBSCRIPTION_PRODUCTS.premium],
       period: '/ mo',
       description: 'Maximum tools for serious career growth.',
       features: ['200 tokens per month', '30 recruiter emails/day', 'Everything in Pro', 'Career coach access', 'Interview prep'],

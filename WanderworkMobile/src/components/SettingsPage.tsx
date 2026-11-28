@@ -5,7 +5,8 @@ import { updateJobSeeker, uploadCandidateCoverLetter, uploadCandidateResume, typ
 import { createCheckoutSession, openCustomerPortal, type Plan as StripePlan } from '../api/stripe'
 import { getExtensionKey, regenerateExtensionKey } from '../api/extension'
 import { getNativePlatform, isNative } from '../native'
-import { purchaseSubscription, restorePurchases, withNativePurchase } from '../native-iap'
+import { useStorePrices } from './PlansPage'
+import { purchaseSubscription, restorePurchases, withNativePurchase, SUBSCRIPTION_PRODUCTS } from '../native-iap'
 
 function renderMarkdown(text: string) {
   const lines = text.split('\n')
@@ -126,6 +127,8 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
     return getSavedJson('wanderworkNotifications', { jobAlerts: true, weeklyDigest: true })
   })
   const [upgradeLoading, setUpgradeLoading] = useState<StripePlan | null>(null)
+  // App Store prices in the phone app, so the plan cards match what Apple charges.
+  const storePrices = useStorePrices()
   const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(false)
   const [extKey, setExtKey] = useState<string | null>(null)
@@ -505,7 +508,8 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                 >
                   Upgrade Plan
                 </button>
-                <button
+                {/* The Chrome extension is a desktop tool, so the phone app doesn't offer it. */}
+                {!isNative && <button
                   onClick={() => { onPageChange('extension'); if (!extKey) loadExtKey() }}
                   className="px-4 py-2 rounded-[10px] text-left text-[14px] transition-colors"
                   style={{
@@ -515,7 +519,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                   }}
                 >
                   Extension
-                </button>
+                </button>}
               </nav>
             </div>
           </div>
@@ -832,6 +836,14 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                 <h2 className="text-[24px] font-semibold mb-6" style={{ color: '#306770' }}>Payment Methods</h2>
 
                 <div className="flex flex-col gap-6">
+                  {/* In the phone app, subscriptions are billed by Apple or Google only (App Store rule 3.1.1). */}
+                  {isNative && (
+                    <p className="text-[14px]" style={{ color: '#787878' }}>
+                      Subscriptions bought in this app are billed to your {getNativePlatform() === 'ios' ? 'Apple ID' : 'Google Play account'}.
+                      You can change or cancel your plan in your {getNativePlatform() === 'ios' ? 'App Store account settings' : 'Google Play subscriptions'}.
+                    </p>
+                  )}
+                  {!isNative && <>
                   <div>
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: '#306770' }}>Payment Provider</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -895,6 +907,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       </button>
                     </div>
                   </div>
+                  </>}
 
                   <button
                     className="px-4 py-2 rounded-[10px] border transition-colors"
@@ -925,7 +938,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     {isNative ? 'Manage Subscription' : `+ Add ${paymentProvider === 'stripe' ? 'Stripe' : 'PayPal'} Payment Method`}
                   </button>
 
-                  <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
+                  {!isNative && <div className="border-t" style={{ borderColor: '#DCDCDC', paddingTop: '24px' }}>
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: '#306770' }}>Billing Address</h3>
                     <input
                       type="text"
@@ -933,7 +946,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                       className="w-full px-4 py-2 rounded-[10px] border text-[14px]"
                       style={{ borderColor: '#DCDCDC', color: '#787878' }}
                     />
-                  </div>
+                  </div>}
                 </div>
               </div>
             )}
@@ -973,7 +986,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                     <div style={{ background: 'linear-gradient(135deg, #112e33 0%, #1e5560 55%, #306770 100%)', padding: '22px 24px 20px', position: 'relative', overflow: 'hidden' }}>
                       <div style={{ position: 'absolute', top: -20, right: -20, width: 72, height: 72, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
                       <h3 className="text-[18px] font-bold mb-1 relative" style={{ color: '#fff', fontFamily: 'Manrope' }}>Pro</h3>
-                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>$19<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
+                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>{storePrices[SUBSCRIPTION_PRODUCTS.pro] || '$19'}<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
                     </div>
                     <div className="flex flex-col flex-1 p-6 bg-white">
                       <ul className="flex flex-col gap-2 mb-5 text-[12px] flex-1" style={{ color: '#4B6A73' }}>
@@ -1001,7 +1014,7 @@ const SettingsPage = ({ onBack, currentPage, onPageChange, data, onCandidateUpda
                         POPULAR
                       </div>
                       <h3 className="text-[18px] font-bold mb-1 relative" style={{ color: '#fff', fontFamily: 'Manrope' }}>Premium</h3>
-                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>$49<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
+                      <p className="text-[26px] font-bold relative" style={{ color: '#fff', fontFamily: 'Manrope', lineHeight: 1 }}>{storePrices[SUBSCRIPTION_PRODUCTS.premium] || '$49'}<span style={{ fontSize: '13px', fontWeight: 'normal', color: 'rgba(180,215,220,0.7)', marginLeft: 3 }}>/mo</span></p>
                     </div>
                     <div className="flex flex-col flex-1 p-6 bg-white">
                       <ul className="flex flex-col gap-2 mb-5 text-[12px] flex-1" style={{ color: '#4B6A73' }}>

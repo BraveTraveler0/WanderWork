@@ -75,6 +75,28 @@ export async function purchaseTokenPack(productId: string): Promise<MakePurchase
   return purchaseProduct(productId)
 }
 
+let pricesPromise: Promise<Record<string, string>> | null = null
+
+/**
+ * The real, localized prices from the App Store / Play Store (via RevenueCat),
+ * keyed by product id, e.g. { wanderwork_pro_monthly: '$19.99' }. Shown instead of
+ * the web prices so what the app displays always matches what the store charges.
+ * Empty when purchases aren't set up yet; callers fall back to their own text.
+ */
+export function getStorePrices(): Promise<Record<string, string>> {
+  if (!isNative || !configured) return Promise.resolve({})
+  pricesPromise ||= Purchases.getOfferings()
+    .then((offerings) => {
+      const prices: Record<string, string> = {}
+      for (const offering of Object.values(offerings.all)) {
+        for (const pkg of offering.availablePackages) prices[pkg.product.identifier] = pkg.product.priceString
+      }
+      return prices
+    })
+    .catch(() => { pricesPromise = null; return {} })
+  return pricesPromise
+}
+
 export async function restorePurchases(): Promise<{ customerInfo: CustomerInfo }> {
   return Purchases.restorePurchases()
 }
