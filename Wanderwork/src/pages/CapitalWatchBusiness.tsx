@@ -56,7 +56,7 @@ const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[$,
 
 function Team({ business, onChanged }: { business: Business; onChanged?: () => void }) {
   const [shared, setShared] = useState(Boolean(business.sharedView));
-  const [people, setPeople] = useState<{ members: { id: string; email: string; name: string }[]; pendingInvites: string[] } | null>(null);
+  const [people, setPeople] = useState<{ members: { id: string; email: string; name: string; owner?: boolean }[]; pendingInvites: string[]; youAreOwner?: boolean } | null>(null);
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const load = () => api(`/businesses/${business._id}/members`).then(setPeople).catch(() => {});
@@ -87,35 +87,48 @@ function Team({ business, onChanged }: { business: Business; onChanged?: () => v
   async function remove(who: string) {
     try { await send(`/businesses/${business._id}/members/${encodeURIComponent(who)}`, "DELETE"); load(); } catch (err) { setMsg((err as Error).message); }
   }
+  async function makeOwner(memberId: string, label: string) {
+    if (!window.confirm(`Make ${label} the owner? They'll control invites, removals and the shared team view, and you won't.`)) return;
+    try { setMsg((await send(`/businesses/${business._id}/owner`, "POST", { memberId })).message); load(); } catch (err) { setMsg((err as Error).message); }
+  }
+  // Older servers don't say; then nobody is shown as owner-only.
+  const owner = people?.youAreOwner !== false;
+  const ownerName = people?.members.find((m) => m.owner);
 
   return (
     <Section title="Team">
       <p className="text-sm text-gray-500 mb-3">Everyone here works on the same business profile, applications and Outbox.</p>
       <label className="flex items-start gap-2 text-sm mb-4 cursor-pointer">
-        <input type="checkbox" checked={shared} onChange={(e) => toggleShared(e.target.checked)} className="accent-black mt-1" />
+        <input type="checkbox" checked={shared} disabled={!owner} onChange={(e) => toggleShared(e.target.checked)} className="accent-black mt-1 disabled:opacity-50" />
         <span>
           <span className="font-bold">Shared team view</span>
-          <span className="block text-gray-500">On: when anyone saves, dismisses or discards something, it changes for the whole team. Off: each person keeps their own lists.</span>
+          <span className="block text-gray-500">On: when anyone saves, dismisses or discards something, it changes for the whole team. Off: each person keeps their own lists.{!owner && " Only the owner can change this."}</span>
         </span>
       </label>
       {people?.members.map((m) => (
         <div key={m.id} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm">
-          <span>{m.name ? `${m.name} · ` : ""}{m.email}</span>
-          {people.members.length > 1 && <button type="button" onClick={() => remove(m.id)} className="text-gray-400 hover:text-black" aria-label={`Remove ${m.email}`}><X size={14} /></button>}
+          <span className="min-w-0 break-words">{m.name ? `${m.name} · ` : ""}{m.email}{m.owner && <span className="ml-2 text-[10px] font-bold uppercase tracking-wide border border-black px-1.5 py-0.5">Owner</span>}</span>
+          {owner && !m.owner && people.members.length > 1 && (
+            <span className="flex items-center gap-3 shrink-0 ml-2">
+              <button type="button" onClick={() => makeOwner(m.id, m.name || m.email)} className="text-xs underline text-gray-500 hover:text-black">Make owner</button>
+              <button type="button" onClick={() => remove(m.id)} className="text-gray-400 hover:text-black" aria-label={`Remove ${m.email}`}><X size={14} /></button>
+            </span>
+          )}
         </div>
       ))}
       {people?.pendingInvites.map((e) => (
         <div key={e} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm text-gray-500">
-          <span>{e} (invited)</span>
-          <button type="button" onClick={() => remove(e)} className="text-gray-400 hover:text-black" aria-label={`Cancel invite for ${e}`}><X size={14} /></button>
+          <span className="min-w-0 break-words">{e} (invited)</span>
+          {owner && <button type="button" onClick={() => remove(e)} className="text-gray-400 hover:text-black" aria-label={`Cancel invite for ${e}`}><X size={14} /></button>}
         </div>
       ))}
-      <form onSubmit={invite} className="flex gap-2 mt-3">
+      {!owner && <p className="text-sm text-gray-500 mt-3">Only the owner{ownerName ? ` (${ownerName.name || ownerName.email})` : ""} can invite or remove people.</p>}
+      {owner && <form onSubmit={invite} className="flex gap-2 mt-3">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" className={input} />
         <button type="submit" disabled={!email.trim()} className="border border-black px-3 flex items-center gap-1 text-sm hover:bg-black hover:text-white disabled:opacity-40">
           <UserPlus size={14} /> Invite
         </button>
-      </form>
+      </form>}
       {msg && <div className="text-sm mt-2">{msg}</div>}
     </Section>
   );

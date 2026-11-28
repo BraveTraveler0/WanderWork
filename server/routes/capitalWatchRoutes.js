@@ -271,11 +271,24 @@ router.post('/me/password', loginIpLimiter, async (req, res) => {
   }
 })
 
+// The owner controls the team (invites, removals, the shared team view). Older
+// businesses have no ownerId: there the first member, who created it, is the owner.
+const ownerIdOf = (business) => String(business.ownerId || business.memberIds?.[0] || '')
+const isOwner = (business, member) => ownerIdOf(business) === String(member._id)
+// When the owner leaves a shared business, the next person on it becomes the owner.
+async function passOwnership(business, leavingId) {
+  if (ownerIdOf(business) !== String(leavingId)) return null
+  const next = business.memberIds.find((id) => String(id) !== String(leavingId))
+  if (next) await Business.updateOne({ _id: business._id }, { $set: { ownerId: next } })
+  return next || null
+}
+
 // Deletes the account and every business that no one else shares.
 router.delete('/me', async (req, res) => {
   try {
-    const mine = await Business.find({ memberIds: req.member._id }).select('memberIds').lean()
+    const mine = await Business.find({ memberIds: req.member._id }).select('memberIds ownerId').lean()
     const solo = mine.filter((b) => b.memberIds.length <= 1).map((b) => b._id)
+    for (const b of mine) if (b.memberIds.length > 1) await passOwnership(b, req.member._id)
     await Promise.all([
       Decision.deleteMany({ business: { $in: solo } }),
       OutboundEmail.deleteMany({ business: { $in: solo } }),
@@ -339,7 +352,7 @@ router.post('/businesses', async (req, res) => {
     if (count >= auth.limitsFor(req.member).businesses) return fail(res, 400, 'You have reached the limit of business profiles.')
     const fields = profileFromBody(req.body)
     if (!fields.name) return fail(res, 400, 'Give the business a name.')
-    const business = await Business.create({ ...fields, memberIds: [req.member._id] })
+    const business = await Business.create({ ...fields, memberIds: [req.member._id], ownerId: req.member._id })
     res.status(201).json(business)
   } catch (err) {
     serverError(res, err)
@@ -349,6 +362,12 @@ router.post('/businesses', async (req, res) => {
 router.patch('/businesses/:id', async (req, res) => {
   const fields = profileFromBody(req.body)
   if (fields.name === '') return fail(res, 400, 'The business needs a name.')
+  // Anyone on the team can edit the profile; only the owner switches the shared team view.
+  if (fields.sharedView !== undefined) {
+    const current = await businessForMember(req.member, req.params.id)
+    if (!current) return fail(res, 404, 'Business not found.')
+    if (!isOwner(current, req.member)) return fail(res, 403, 'Only the owner can change the shared team view.')
+  }
   const business = await Business.findOneAndUpdate(
     { _id: req.params.id, memberIds: req.member._id },
     { $set: fields },
@@ -365,9 +384,11 @@ router.delete('/businesses/:id', async (req, res) => {
   const business = await businessForMember(req.member, req.params.id)
   if (!business) return fail(res, 404, 'Business not found.')
   if (business.memberIds.length > 1) {
+    const newOwner = await passOwnership(business, req.member._id)
     await Business.updateOne({ _id: business._id }, { $pull: { memberIds: req.member._id } })
     await Decision.deleteMany({ business: business._id, member: req.member._id })
-    return res.json({ message: 'You left this business.' })
+    const who = newOwner && await Member.findById(newOwner).select('email name').lean()
+    return res.json({ message: who ? `You left this business. ${who.name || who.email} is now the owner.` : 'You left this business.' })
   }
   await Promise.all([
     Decision.deleteMany({ business: business._id }),
@@ -381,7 +402,27 @@ router.get('/businesses/:id/members', async (req, res) => {
   const business = await businessForMember(req.member, req.params.id)
   if (!business) return fail(res, 404, 'Business not found.')
   const members = await Member.find({ _id: { $in: business.memberIds } }).select('email name').lean()
-  res.json({ members: members.map((m) => ({ id: String(m._id), email: m.email, name: m.name })), pendingInvites: business.pendingInvites || [] })
+  const ownerId = ownerIdOf(business)
+  // Owner first, then everyone else in the order they joined.
+  const order = new Map(business.memberIds.map((id, i) => [String(id), String(id) === ownerId ? -1 : i]))
+  res.json({
+    members: members
+      .sort((a, b) => order.get(String(a._id)) - order.get(String(b._id)))
+      .map((m) => ({ id: String(m._id), email: m.email, name: m.name, owner: String(m._id) === ownerId })),
+    pendingInvites: business.pendingInvites || [],
+    youAreOwner: ownerId === String(req.member._id),
+  })
+})
+
+// Hands the business to another teammate. Owner only.
+router.post('/businesses/:id/owner', async (req, res) => {
+  const business = await businessForMember(req.member, req.params.id)
+  if (!business) return fail(res, 404, 'Business not found.')
+  if (!isOwner(business, req.member)) return fail(res, 403, 'Only the owner can do that.')
+  const to = String(req.body?.memberId || '')
+  if (!business.memberIds.some((id) => String(id) === to)) return fail(res, 400, 'Choose someone on this team.')
+  await Business.updateOne({ _id: business._id }, { $set: { ownerId: new mongoose.Types.ObjectId(to) } })
+  res.json({ message: 'Ownership handed over.' })
 })
 
 // Share a business with a teammate. They get an email; the business shows up for
@@ -396,6 +437,7 @@ const plainName = (s) => String(s || '').replace(/https?:\/\/\S*|www\.\S*|\b\S+\
 router.post('/businesses/:id/members', signInIpLimiter, inviteLimiter, async (req, res) => {
   const business = await businessForMember(req.member, req.params.id)
   if (!business) return fail(res, 404, 'Business not found.')
+  if (!isOwner(business, req.member)) return fail(res, 403, 'Only the owner can invite people. Ask them to add your teammate.')
   const email = normalizeEmail(req.body?.email)
   if (!EMAIL_RE.test(email)) return fail(res, 400, 'Enter a valid email address.')
   if ((business.memberIds.length + (business.pendingInvites || []).length) >= 10) return fail(res, 400, 'A business can have up to 10 people.')
@@ -422,7 +464,10 @@ router.delete('/businesses/:id/members/:who', async (req, res) => {
   const business = await businessForMember(req.member, req.params.id)
   if (!business) return fail(res, 404, 'Business not found.')
   const who = req.params.who
+  // Only the owner removes people or cancels invites. Anyone can leave with "Leave this business".
+  if (!isOwner(business, req.member)) return fail(res, 403, 'Only the owner can remove people.')
   if (mongoose.isValidObjectId(who)) {
+    if (who === ownerIdOf(business)) return fail(res, 400, 'The owner can\'t be removed. Hand ownership to someone else first, or leave the business.')
     if (business.memberIds.length <= 1) return fail(res, 400, 'A business needs at least one person. Delete it instead.')
     await Business.updateOne({ _id: business._id }, { $pull: { memberIds: new mongoose.Types.ObjectId(who) } })
     await Decision.deleteMany({ business: business._id, member: new mongoose.Types.ObjectId(who) })

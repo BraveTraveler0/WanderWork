@@ -5,6 +5,9 @@ const mongoose = require('mongoose')
 // share a business see the same list.
 const businessSchema = new mongoose.Schema({
   memberIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'CapitalWatch.Member', index: true },
+  // Who controls the team: invites, removals, the shared team view. Unset on older
+  // businesses, where the first member (the creator) is the owner.
+  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'CapitalWatch.Member' },
   // Teammates invited by email who haven't signed in yet; attached when they do.
   pendingInvites: { type: [String], default: [], index: true },
 
