@@ -165,6 +165,8 @@ sign-up screens (`src/components/AppleAuthButton.tsx`); the server verifies it a
    deleting an account also revokes the person's Apple sign-in, which Apple
    requires.
 
+**To release:** see [RELEASING.md](RELEASING.md). Builds are made in Xcode on the MacinCloud Mac with the Aonverse Apple team; Codemagic below is the backup.
+
 ## Building for the App Store without a Mac
 
 iOS apps can only be built on a Mac, so `codemagic.yaml` (repo root) builds on
